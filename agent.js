@@ -44,7 +44,7 @@ export default async function runAgent(pageUrl, deviceType) {
   const model =  new ChatGoogleGenerativeAI({
     modelName: "gemini-1.5-pro",
     // maxOutputTokens: 4096,
-    apiKey: 'AIzaSyC4HbI7JEfpYjpNLQBlvEARrhJ-xvkQkak',
+    apiKey: '<your api key>', // TODO: replace with your own
   });
 
   // Initialize memory to persist state between graph runs
