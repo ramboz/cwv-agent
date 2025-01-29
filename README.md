@@ -9,6 +9,8 @@ First install all dependencies:
 npm install
 ```
 
+:warning: Add your own Gemini API key to agent.js L47
+
 Then run the script via:
 ```sh
 node index.js <url> <device>
