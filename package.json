@@ -1,0 +1,28 @@
+{
+  "name": "cwv-agent",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@langchain/core": "^0.3.36",
+    "@langchain/google-genai": "^0.1.6",
+    "@langchain/langgraph": "^0.2.41",
+    "langchain": "^0.3.12",
+    "psi": "^4.1.0",
+    "puppeteer": "^24.1.0",
+    "puppeteer-har": "^1.1.2",
+    "request-promise-native": "^1.0.9",
+    "zod": "^3.24.1"
+  },
+  "type": "module",
+  "devDependencies": {
+    "@babel/eslint-parser": "7.26.5",
+    "eslint": "8.57.1",
+    "eslint-config-airbnb-base": "15.0.0"
+  }
+}
