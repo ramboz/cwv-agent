@@ -9,7 +9,7 @@ const cpuThrottling = {
   mobile: 4
 };
 const networkThrottling = {
-  desktop: {},
+  desktop: null,
   mobile: PredefinedNetworkConditions['Slow 4G'],
 };
 const viewports = {
