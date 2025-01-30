@@ -14,8 +14,9 @@ export default async function runAgent(pageUrl, deviceType) {
   console.log('PSI token size: ~', estimateTokenSize(psiAudit));
 
   const llm =  new ChatGoogleGenerativeAI({
-    // modelName: 'gemini-1.5-pro',
-    modelName: 'gemini-2.0-flash-thinking-exp-01-21',
+    modelName: 'gemini-1.5-pro',
+    // modelName: 'gemini-2.0-flash',
+    // modelName: 'gemini-2.0-flash-thinking-exp',
     apiKey: process.env.GOOGLE_GEMINI_API_KEY,
   });
 
