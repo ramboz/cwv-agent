@@ -2,7 +2,7 @@ import puppeteer from 'puppeteer';
 import { PredefinedNetworkConditions } from 'puppeteer';
 import PuppeteerHar from 'puppeteer-har';
 import request_client from 'request-promise-native';
-
+import { estimateTokenSize } from '../utils.js';
 
 const cpuThrottling = {
   desktop: 1,
@@ -47,8 +47,11 @@ export default async function collectHar(pageUrl, deviceType) {
     }).then((response) => {
       const request_url = new URL(request.url());
       const response_body = response.body;
-      if (request_url.origin === domain && (request_url.href === pageUrl || request_url.href.endsWith('.js') || request_url.href.endsWith('.css'))) {
-        console.debug('Adding', request_url.pathname, 'with size', response_body.length, 'Bytes');
+      if (request_url.origin === domain
+        && (request_url.href === pageUrl
+          || request_url.href.endsWith('.html')
+          || (request_url.href.endsWith('.js') && !request_url.href.endsWith('.min.js'))
+          || (request_url.href.endsWith('.css') && !request_url.href.endsWith('.min.css')))) {
         requestMap[request_url] = response_body;
       }
       request.continue();
@@ -56,14 +59,22 @@ export default async function collectHar(pageUrl, deviceType) {
       request.abort();
     });
   });
+
   // Enable DevTools protocol
   const client = await page.target().createCDPSession();
   await client.send('Performance.enable');
   await har.start();
   await page.goto(pageUrl, {
+    timeout: 120_000,
     waitUntil: 'networkidle2',
   });
-  await new Promise(resolve => setTimeout(resolve, 30000));
+  await new Promise(resolve => setTimeout(resolve, 30_000));
+
+  console.log('Estimating code size...');
+  console.table(
+    Object.entries(requestMap).map(([url, content]) => ({ url, tokens: estimateTokenSize(content) }))
+  );
+
   const harFile = await har.stop();
   await browser.close();
   console.debug('Done collecting HAR file, including collecting code for', Object.keys(requestMap).length, 'resources');

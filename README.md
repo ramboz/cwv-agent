@@ -9,7 +9,10 @@ First install all dependencies:
 npm install
 ```
 
-:warning: Add your own Gemini API key to agent.js L47
+Create a `.env` file and add your Gemini API key:
+```
+GOOGLE_GEMINI_API_KEY=...
+```
 
 Then run the script via:
 ```sh
