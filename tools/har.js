@@ -2,7 +2,7 @@ import puppeteer from 'puppeteer';
 import { PredefinedNetworkConditions } from 'puppeteer';
 import PuppeteerHar from 'puppeteer-har';
 import request_client from 'request-promise-native';
-import { estimateTokenSize } from '../utils.js';
+import { cacheResults, estimateTokenSize } from '../utils.js';
 
 const cpuThrottling = {
   desktop: 1,
@@ -64,6 +64,7 @@ export default async function collectHar(pageUrl, deviceType) {
   const client = await page.target().createCDPSession();
   await client.send('Performance.enable');
   await har.start();
+
   await page.goto(pageUrl, {
     timeout: 120_000,
     waitUntil: 'networkidle2',
@@ -74,9 +75,13 @@ export default async function collectHar(pageUrl, deviceType) {
   console.table(
     Object.entries(requestMap).map(([url, content]) => ({ url, tokens: estimateTokenSize(content) }))
   );
+  Object.entries(requestMap).map(([url, content]) => {
+    cacheResults(url, 'code', content);
+  });
 
   const harFile = await har.stop();
   await browser.close();
+  cacheResults(pageUrl, 'har', harFile);
   console.debug('Done collecting HAR file, including collecting code for', Object.keys(requestMap).length, 'resources');
   return { requests: requestMap, har: harFile };
 };
