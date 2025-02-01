@@ -9,9 +9,10 @@ First install all dependencies:
 npm install
 ```
 
-Create a `.env` file and add your Gemini API key:
+Create a `.env` file and add your API keys:
 ```
 GOOGLE_GEMINI_API_KEY=...
+GOOGLE_PAGESPEED_INSIGHTS_API_KEY=...
 ```
 
 Then run the script via:
