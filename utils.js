@@ -2,6 +2,10 @@ import fs from 'fs';
 
 const OUTPUT_DIR = './.cache';
 
+function getFilePrefix(urlString, deviceType, type) {
+  return `${OUTPUT_DIR}/${urlString.replace('https://', '').replace(/[^A-Za-z0-9-]/g, '-')}.${deviceType}.${type}`
+}
+
 function ensureDir(dir) {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir);
@@ -14,19 +18,30 @@ export function estimateTokenSize(obj) {
 }
 
 // Save some results in the cache on the file system
-export function cacheResults(urlString, type, results) {
+export function cacheResults(urlString, deviceType, type, results) {
   ensureDir(OUTPUT_DIR);
   const url = new URL(urlString);
   if (type === 'code') {
     ensureDir(`${OUTPUT_DIR}/${url.hostname}`);
-    const filename = url.pathname !== '/'
+    let filename = url.pathname !== '/'
       ? url.pathname.replace(/\//g, '--').replace(/(^-+|-+$)/, '')
-      : 'index.html';
+      : 'index';
+    const [, ext] = filename.split('/').pop().split('.');
+    if (!ext) {
+      filename += '.html';
+    }
     fs.writeFileSync(`${OUTPUT_DIR}/${url.hostname}/${filename}`, results);
     return;
   }
   fs.writeFileSync(
-    `${OUTPUT_DIR}/${urlString.replace('https://', '').replace(/[^A-Za-z0-9-]/g, '-')}.${type}.json`,
+    `${getFilePrefix(urlString, deviceType, type)}.json`,
     JSON.stringify(results, null, 2),
   );
+}
+
+export function getSummaryLogger(urlString, deviceType, type) {
+  const filePath = `${getFilePrefix(urlString, deviceType, type)}.summary.txt`;
+  return fs.createWriteStream(filePath, {
+    flags: 'w+'
+  });
 }

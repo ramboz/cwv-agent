@@ -1,8 +1,10 @@
+import beautify from 'js-beautify';
+import { parse } from 'node-html-parser';
 import puppeteer from 'puppeteer';
 import { PredefinedNetworkConditions } from 'puppeteer';
 import PuppeteerHar from 'puppeteer-har';
-import request_client from 'request-promise-native';
-import { cacheResults, estimateTokenSize } from '../utils.js';
+import { cacheResults, estimateTokenSize, getSummaryLogger } from '../utils.js';
+
 
 const cpuThrottling = {
   desktop: 1,
@@ -26,6 +28,32 @@ const viewports = {
     deviceScaleFactor: 1.75,
   }
 };
+const userAgent = {
+  desktop: 'Spacecat/1.0',
+  mobile: 'Spacecat/1.0',
+}
+
+async function summarizeHtmlHead(pageUrl, deviceType, log) {
+  log('Markup for the head section of the HTML:');
+  log('');
+  const resp = await fetch(pageUrl, {
+    headers: {
+      'User-Agent': userAgent[deviceType],
+    }
+  });
+  const html = await resp.text();
+  const root = parse(html);
+  log(beautify.html(root.querySelector('head').outerHTML, { preserve_newlines: false }));
+}
+
+
+async function summarizeFirstSection(page, log) {
+  log('Markup for the 1st section:');
+  log('');
+  const data = await page.evaluate(() => document.querySelector('main .section').outerHTML);
+  log(beautify.html(data, { preserve_newlines: false }));
+}
+
 
 export default async function collectHar(pageUrl, deviceType) {
   console.debug('Collecting HAR for', pageUrl, 'on', deviceType);
@@ -36,28 +64,28 @@ export default async function collectHar(pageUrl, deviceType) {
   await page.emulateCPUThrottling(cpuThrottling[deviceType]);
   await page.emulateNetworkConditions(networkThrottling[deviceType]);
   await page.setRequestInterception(true);
+  await page.setUserAgent(userAgent[deviceType]);
   const har = new PuppeteerHar(page);
 
   const domain = new URL(pageUrl).origin;
   // Intercept requests so we can gather the 
-  page.on('request', (request) => {
-    request_client({
-      uri: request.url(),
-      resolveWithFullResponse: true,
-    }).then((response) => {
-      const request_url = new URL(request.url());
-      const response_body = response.body;
+  page.on('request', async (request) => {
+    const request_url = new URL(request.url());
+    try {
       if (request_url.origin === domain
         && (request_url.href === pageUrl
-          || request_url.href.endsWith('.html')
-          || (request_url.href.endsWith('.js') && !request_url.href.endsWith('.min.js'))
-          || (request_url.href.endsWith('.css') && !request_url.href.endsWith('.min.css')))) {
-        requestMap[request_url] = response_body;
+          || request_url.pathname.endsWith('.html')
+          || (request_url.pathname.endsWith('.js') && !request_url.pathname.endsWith('.min.js'))
+          || (request_url.pathname.endsWith('.css') && !request_url.pathname.endsWith('.min.css')))) {
+        const resp = await fetch(request.url());
+        const body = await resp.text();
+        requestMap[request_url] = body;
       }
       request.continue();
-    }).catch(() => {
+    } catch (err) {
+      console.error('Failed to fetch', request_url.href, err);
       request.abort();
-    });
+    }
   });
 
   // Enable DevTools protocol
@@ -76,12 +104,21 @@ export default async function collectHar(pageUrl, deviceType) {
     Object.entries(requestMap).map(([url, content]) => ({ url, tokens: estimateTokenSize(content) }))
   );
   Object.entries(requestMap).map(([url, content]) => {
-    cacheResults(url, 'code', content);
+    cacheResults(url, deviceType, 'code', content);
   });
 
   const harFile = await har.stop();
+
+  // Summarize
+  const logger = getSummaryLogger(pageUrl, deviceType, 'har');
+  await summarizeHtmlHead(pageUrl, deviceType, (...str) => logger.write(str.join(' ') + '\n'));
+  logger.write('\n');
+  await summarizeFirstSection(page, (...str) => logger.write(str.join(' ') + '\n'));
+  logger.end();
+
   await browser.close();
-  cacheResults(pageUrl, 'har', harFile);
+  cacheResults(pageUrl, deviceType, 'har', harFile);
+
   console.debug('Done collecting HAR file, including collecting code for', Object.keys(requestMap).length, 'resources');
   return { requests: requestMap, har: harFile };
 };

@@ -29,7 +29,7 @@ snippets that a developer can easily integrate. You also clearly know when a sit
 optimized and you will not offer any suggestions that are not meaningful or would make code
 maintenance harder.
 
-A site that already has a 100 lighthouse performance score and gooe core web vitals doesn't need
+A site that already has a 100 lighthouse performance score and good core web vitals doesn't need
 any further optimization.
 
 For your analysis, you rely on the following artifacts that are gathered during the page load:

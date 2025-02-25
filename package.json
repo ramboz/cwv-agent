@@ -14,11 +14,12 @@
     "@langchain/google-vertexai": "^0.1.8",
     "@langchain/langgraph": "^0.2.41",
     "dotenv": "^16.4.7",
+    "js-beautify": "^1.15.3",
     "langchain": "^0.3.12",
+    "node-html-parser": "^7.0.1",
     "psi": "^4.1.0",
     "puppeteer": "^24.1.0",
     "puppeteer-har": "^1.1.2",
-    "request-promise-native": "^1.0.9",
     "zod": "^3.24.1"
   },
   "type": "module",
