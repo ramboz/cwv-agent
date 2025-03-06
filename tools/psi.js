@@ -54,7 +54,7 @@ function summarizePSIOpportunities(psi, log) {
     if (['uses-long-cache-ttl'].includes(o.id)) {
       items?.sort((a, b) => b.wastedBytes - a.wastedBytes);
     }
-    items?.slice(0, 10).forEach((i) => {
+    items?.slice && items.slice(0, 10).forEach((i) => {
       const label = (i.url && i.url.replace(/\?.*/, '')) || i.entity || i.node?.selector || i.groupLabel || i;
       const value = Math.round(i.total || i.score || i.blockingTime || i.duration || i.wastedBytes || i.totalBytes || 0);
       if (value) {
