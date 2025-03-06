@@ -45,3 +45,8 @@ export function getSummaryLogger(urlString, deviceType, type) {
     flags: 'w+'
   });
 }
+
+export function readCache(urlString, deviceType, type) {
+  const filePath = `${getFilePrefix(urlString, deviceType, type)}.json`;
+  return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+}

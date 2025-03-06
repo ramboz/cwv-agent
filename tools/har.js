@@ -131,6 +131,11 @@ export default async function collectHar(pageUrl, deviceType) {
         resolve(entryList.getEntries());
       }).observe({ type: 'longtask', buffered: true });
     }));
+    entries.push(...await new Promise((resolve) => {
+      new PerformanceObserver(entryList => {
+        resolve(entryList.getEntries());
+      }).observe({ type: 'event', buffered: true });
+    }));
     return JSON.stringify(entries, null, 2);
   });
   cacheResults(pageUrl, deviceType, 'perf', rawPerfEntries);

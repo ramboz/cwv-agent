@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 import collectArtifacts from './collect.js';
+import merge from './tools/merge.js';
 // import runAgent from './agent.js';
 
 dotenv.config();
@@ -20,7 +21,13 @@ if (action === 'analyze') {
   // const result = await runAgent(pageUrl, deviceType);
   // console.log(result.messages?.at(-1)?.content || result.content || result);
   // console.log(result.usage_metadata);  
-} else {
+} else if (action === 'collect') {
   await collectArtifacts(pageUrl, deviceType);
   console.log('Done. Check the `.cache` folder');  
+} else if (action === 'merge') {
+  merge(pageUrl, deviceType);
+  console.log('Done. Check the `.cache` folder');  
+} else {
+  console.error('Invalid action:', action);
+  process.exit(1);
 }
