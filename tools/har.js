@@ -99,7 +99,7 @@ export default async function collectHar(pageUrl, deviceType) {
   });
   await new Promise(resolve => setTimeout(resolve, 30_000));
 
-  const rawPerfEntries = await page.evaluate(async () => {
+  const perfEntries = await page.evaluate(async () => {
     const entries = window.performance.getEntries();
     entries.push(...await new Promise((resolve) => {
       new PerformanceObserver(entryList => {
@@ -138,7 +138,7 @@ export default async function collectHar(pageUrl, deviceType) {
     }));
     return JSON.stringify(entries, null, 2);
   });
-  cacheResults(pageUrl, deviceType, 'perf', rawPerfEntries);
+  cacheResults(pageUrl, deviceType, 'perf', perfEntries);
 
   console.log('Estimating code size...');
   console.table(
@@ -161,5 +161,5 @@ export default async function collectHar(pageUrl, deviceType) {
   cacheResults(pageUrl, deviceType, 'har', harFile);
 
   console.debug('Done collecting HAR file, including collecting code for', Object.keys(requestMap).length, 'resources');
-  return { requests: requestMap, har: harFile };
+  return { resources: requestMap, har: harFile, perfEntries };
 };

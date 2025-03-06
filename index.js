@@ -1,6 +1,10 @@
 import dotenv from 'dotenv';
 import collectArtifacts from './collect.js';
+<<<<<<< HEAD
 import merge from './tools/merge.js';
+=======
+import rules from './rules/index.js';
+>>>>>>> ce4afd5 (feat: add automatic rule evaluations)
 // import runAgent from './agent.js';
 
 dotenv.config();
@@ -22,7 +26,16 @@ if (action === 'analyze') {
   // console.log(result.messages?.at(-1)?.content || result.content || result);
   // console.log(result.usage_metadata);  
 } else if (action === 'collect') {
-  await collectArtifacts(pageUrl, deviceType);
+  const {
+    har,
+    psi,
+    resources,
+    perfEntries,
+  } = await collectArtifacts(pageUrl, deviceType);
+  const results = await Promise.all(rules.map((r) => r({}, psi, har, perfEntries, resources)));
+  results
+    .filter((r) => !r.passing)
+    .forEach((r) => console.log('Failed', r.message, ':', r.recommendation));
   console.log('Done. Check the `.cache` folder');  
 } else if (action === 'merge') {
   merge(pageUrl, deviceType);
