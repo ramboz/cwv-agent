@@ -87,7 +87,7 @@ export default async function collectHar(pageUrl, deviceType) {
       request.abort();
     }
   });
-
+  
   // Enable DevTools protocol
   const client = await page.target().createCDPSession();
   await client.send('Performance.enable');

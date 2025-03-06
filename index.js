@@ -28,8 +28,9 @@ if (action === 'analyze') {
     psi,
     resources,
     perfEntries,
+    crux,
   } = await collectArtifacts(pageUrl, deviceType);
-  const results = await Promise.all(rules.map((r) => r({}, psi, har, perfEntries, resources)));
+  const results = await Promise.all(rules.map((r) => r({}, crux, psi, har, perfEntries, resources)));
   results
     .filter((r) => !r.passing)
     .forEach((r) => console.log('Failed', r.message, ':', r.recommendation));

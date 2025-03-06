@@ -1,4 +1,4 @@
-export default function evaluate(summary, psi, har, perfEntries, resources) {
+export default function evaluate(summary, crux, psi, har, perfEntries, resources) {
   return {
     category: 'lcp',
     message: '>100kb pre-lcp assets',
