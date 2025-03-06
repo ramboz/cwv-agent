@@ -273,6 +273,9 @@ export default function merge(siteURL, type) {
   const data = getData(har, perf);
 
   data.sort((a, b) => a.start - b.start);
+  data.forEach((d, i) => {
+    d.id = i;
+  });
 
   const merged = {
     url: siteURL,
