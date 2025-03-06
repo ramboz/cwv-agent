@@ -103,12 +103,27 @@ export default async function collectHar(pageUrl, deviceType) {
     const entries = window.performance.getEntries();
     entries.push(...await new Promise((resolve) => {
       new PerformanceObserver(entryList => {
-        resolve(entryList.getEntries());
+        const entries = entryList.getEntries();
+        resolve(entries.map((e) => {
+          return {
+            ...JSON.parse(JSON.stringify(e)),
+            element: e.element.outerHTML
+          };
+        }));
       }).observe({ type: 'largest-contentful-paint', buffered: true });
     }));
     entries.push(...await new Promise((resolve) => {
       new PerformanceObserver(entryList => {
-        resolve(entryList.getEntries());
+        const entries = entryList.getEntries();
+        resolve(entries.map((e) => {
+          return {
+            ...JSON.parse(JSON.stringify(e)),
+            sources: e.sources.map((s) => ({
+              ...JSON.parse(JSON.stringify(s)),
+              node: s.node?.outerHTML,
+            }))
+          };
+        }));
       }).observe({ type: 'layout-shift', buffered: true });
     }));
     entries.push(...await new Promise((resolve) => {
