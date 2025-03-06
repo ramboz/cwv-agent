@@ -1,10 +1,7 @@
 import dotenv from 'dotenv';
 import collectArtifacts from './collect.js';
-<<<<<<< HEAD
 import merge from './tools/merge.js';
-=======
 import rules from './rules/index.js';
->>>>>>> ce4afd5 (feat: add automatic rule evaluations)
 // import runAgent from './agent.js';
 
 dotenv.config();
