@@ -272,6 +272,8 @@ export default function merge(siteURL, type) {
   const perf = readCache(siteURL, type, 'perf');
   const data = getData(har, perf);
 
+  data.sort((a, b) => a.start - b.start);
+
   const merged = {
     url: siteURL,
     type: type,

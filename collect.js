@@ -7,12 +7,12 @@ export default async function collectArtifacts(pageUrl, deviceType) {
   const { requests, har, perfEntries } = await collectHar(pageUrl, deviceType);
   console.log('Code token size: ~', estimateTokenSize(requests));
   console.log('HAR token size: ~', estimateTokenSize(har));
-  const psi = await collectPsi(pageUrl, deviceType);
-  console.log('PSI token size: ~', estimateTokenSize(psi));
+  // const psi = await collectPsi(pageUrl, deviceType);
+  // console.log('PSI token size: ~', estimateTokenSize(psi));
 
   return {
     har,
-    psi,
+    // psi,
     requests,
     perfEntries,
   };

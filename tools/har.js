@@ -100,42 +100,55 @@ export default async function collectHar(pageUrl, deviceType) {
   await new Promise(resolve => setTimeout(resolve, 30_000));
 
   const perfEntries = await page.evaluate(async () => {
+    console.log('Evaluating performance entries');
+
+    const clone = (obj) => {
+      return JSON.parse(JSON.stringify(obj));
+    };
+  
+    const appendEntries = async (entries, type, cb) => {
+      const res = await new Promise((resolve) => {
+        // resolve the promise after 5 seconds (in case of no entries)
+        window.setTimeout(() => {
+          resolve([]);
+        }, 5_000);
+        return new PerformanceObserver(entryList => {
+          const list = entryList.getEntries();
+          resolve(list.map((e) => {
+            try {
+              return cb(e);
+            } catch (err) {
+              console.error('Failed to clone', e, err);
+              return {};
+            }
+          }));
+        }).observe({ type, buffered: true });
+      });
+      res.forEach(e => entries.push(e));
+    };
+
     const entries = window.performance.getEntries();
-    entries.push(...await new Promise((resolve) => {
-      new PerformanceObserver(entryList => {
-        const entries = entryList.getEntries();
-        resolve(entries.map((e) => {
-          return {
-            ...JSON.parse(JSON.stringify(e)),
-            element: e.element.outerHTML
-          };
-        }));
-      }).observe({ type: 'largest-contentful-paint', buffered: true });
+
+    await appendEntries(entries, 'largest-contentful-paint', (e) => ({
+      ...clone(e),
+      element: e.element?.outerHTML
     }));
-    entries.push(...await new Promise((resolve) => {
-      new PerformanceObserver(entryList => {
-        const entries = entryList.getEntries();
-        resolve(entries.map((e) => {
-          return {
-            ...JSON.parse(JSON.stringify(e)),
-            sources: e.sources.map((s) => ({
-              ...JSON.parse(JSON.stringify(s)),
-              node: s.node?.outerHTML,
-            }))
-          };
-        }));
-      }).observe({ type: 'layout-shift', buffered: true });
+
+    await appendEntries(entries, 'layout-shift', (e) => ({
+      ...clone(e),
+      sources: e.sources?.map((s) => ({
+        ...clone(s),
+        node: s.node?.outerHTML,
+      })) || []
     }));
-    entries.push(...await new Promise((resolve) => {
-      new PerformanceObserver(entryList => {
-        resolve(entryList.getEntries());
-      }).observe({ type: 'longtask', buffered: true });
+
+    await appendEntries(entries, 'longtask', (e) => ({
+      ...clone(e),
+      scripts: e.scripts?.map((s) => ({
+        ...clone(s),
+      })) || []
     }));
-    entries.push(...await new Promise((resolve) => {
-      new PerformanceObserver(entryList => {
-        resolve(entryList.getEntries());
-      }).observe({ type: 'event', buffered: true });
-    }));
+
     return JSON.stringify(entries, null, 2);
   });
   cacheResults(pageUrl, deviceType, 'perf', perfEntries);
