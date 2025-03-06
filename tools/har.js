@@ -99,6 +99,27 @@ export default async function collectHar(pageUrl, deviceType) {
   });
   await new Promise(resolve => setTimeout(resolve, 30_000));
 
+  const rawPerfEntries = await page.evaluate(async () => {
+    const entries = window.performance.getEntries();
+    entries.push(...await new Promise((resolve) => {
+      new PerformanceObserver(entryList => {
+        resolve(entryList.getEntries());
+      }).observe({ type: 'largest-contentful-paint', buffered: true });
+    }));
+    entries.push(...await new Promise((resolve) => {
+      new PerformanceObserver(entryList => {
+        resolve(entryList.getEntries());
+      }).observe({ type: 'layout-shift', buffered: true });
+    }));
+    entries.push(...await new Promise((resolve) => {
+      new PerformanceObserver(entryList => {
+        resolve(entryList.getEntries());
+      }).observe({ type: 'longtask', buffered: true });
+    }));
+    return JSON.stringify(entries, null, 2);
+  });
+  cacheResults(pageUrl, deviceType, 'perf', rawPerfEntries);
+
   console.log('Estimating code size...');
   console.table(
     Object.entries(requestMap).map(([url, content]) => ({ url, tokens: estimateTokenSize(content) }))

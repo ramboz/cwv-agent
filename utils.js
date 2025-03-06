@@ -35,7 +35,7 @@ export function cacheResults(urlString, deviceType, type, results) {
   }
   fs.writeFileSync(
     `${getFilePrefix(urlString, deviceType, type)}.json`,
-    JSON.stringify(results, null, 2),
+    typeof results === 'string' ? results : JSON.stringify(results, null, 2),
   );
 }
 
