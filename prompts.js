@@ -71,25 +71,54 @@ You know the following about AEM EDS.
 - Do not preload/preconnect any third-party resource that is not in the critical path for the LCP. Instead, let them load async in "loadLazy" or "loadDelayed"
  
 ## Analysis Process
-You perform your analysis in 3 phases:
- 
-Phase 1: Initial Assessment
+You perform your analysis in multiple phases:
+
+Phase 1: CrUX Data Analysis
+   - Analyze Chrome User Experience Report (CrUX) field data for the URL
+   - Evaluate historical Core Web Vitals trends from real users
+   - Identify distribution patterns for LCP, CLS, and INP metrics
+   - Compare performance across device types (mobile vs. desktop)
+   - Determine if there are specific user segments experiencing poor performance
+   - Identify pages with similar templates that perform better
+   - Set realistic improvement targets based on field data percentiles
+   - Note regional variations in performance if present
+
+Phase 2: PageSpeed Assessment
    - Evaluate PSI/Lighthouse mobile results
    - Identify key bottlenecks for each metric
-   - Map the critical rendering path
    - Establish baseline performance measurements
+   - Record current values for LCP, CLS, and INP
+   - Note any immediate red flags in the results
  
-Phase 2: Markup Analysis
-   - Examine provided HTML head and first viewport section
-   - Identify the LCP element
-   - Analyze resource loading sequence
-   - Find opportunities in resource hints and critical CSS
- 
-Phase 3: Code Review
+Phase 3: HAR File Analysis
+   - Examine network waterfall for resource loading sequence and timing
+   - Identify critical path resources that block rendering
+   - Analyze request/response headers for optimization opportunities
+   - Pinpoint third-party resources causing delays
+   - Identify connection setup overhead (DNS, TCP, TLS) for key domains
+   - Examine resource priorities and their impact on loading sequence
+   - Detect TTFB issues that might indicate server-side performance problems
+   - Look for render-blocking resources that could be deferred or optimized
+   - Analyze resource sizes and compression efficiency
+   - Identify cache misses or short cache durations
+
+Phase 4: Markup Analysis
+   - Examine provided HTML for the page
+   - Identify the LCP element and verify its loading attributes
+   - Review resource hints (preload, preconnect, prefetch) implementation
+   - Analyze critical CSS strategy and render-blocking resources
+   - Evaluate HTML structure and its impact on rendering sequence
+   - Examine script loading strategies (async, defer, modules)
+   - Check for proper image attributes (width, height, loading, fetchpriority)
+
+Phase 5: Code Review
    - Analyze provided JS/CSS for optimization opportunities
-   - Evaluate rendering sequence and execution patterns
-   - Identify inefficient code patterns
-   - Suggest specific code improvements
+   - Evaluate rendering sequence and execution patterns in scripts.js
+   - Identify load phase assignments (eager, lazy, delayed) for resources
+   - Examine JS patterns that might cause long tasks
+   - Review CSS for render-blocking issues and optimization opportunities
+   - Identify inefficient code patterns and suggest specific improvements
+   - Analyze event listener implementations for INP impact
  
 ## Deliverable Format
 Present your findings as:
@@ -99,33 +128,61 @@ Present your findings as:
    - Implementation complexity (Easy/Medium/Hard)
    - Affected metric(s)
    - Expected improvement range
-3. Detailed technical recommendations with code examples where applicable, and in a form appropriate for creating pull requests (including a title, a description and a "diff"-like code sample)
+3. Detailed technical recommendations, organized by CWV metric, with code examples where applicable, and in a form appropriate for creating pull requests (including a title, a description and a "diff"-like code sample)
 4. Implementation roadmap highlighting quick wins vs. strategic improvements
  
 Phase 1 will start with the next message.`;
 
-export const includeHAR = (har) => `
-The HAR JSON object for the page load is as follows:
-${JSON.stringify(har, null, 2)}
+function step(n) {
+   if (n === 1) {
+      return 'Starting with phase 1,';
+   }
+   return `Continuing with phase ${n},`
+}
+
+export const cruxStep = (n, crux) => `
+${step(n)} here is the detailed CrUX data for the page (in JSON format):
+
+${JSON.stringify(crux, null, 2)}
 `;
 
-export const includePSI = (psi) => `
-The PSI audit JSON object for the page load is as follows:
+export const psiStep = (n, psi) => `
+${step(n)} here is the full PSI audit in JSON for the page load.
+
 ${JSON.stringify(psi, null, 2)}
 `;
 
-export const includeCode = (requests) =>`
-And here are the source codes for the important files on the page (the name for each file is given
-to you as a comment before its content):
-${Object.entries(requests).map(([key, value]) => `// File: ${key}\n${value}\n\n`).join('\n')}
+export const harStep = (n, har) => `
+${step(n)} here is the HAR JSON object for the page:
+
+${JSON.stringify(har, null, 2)}
 `;
 
+export const perfStep = (n, perfEntries) => `
+${step(n)} here are the performance entries for the page:
+
+${JSON.stringify(perfEntries, null, 2)}
+`;
+
+export const htmlStep = (n, pageUrl, resources) => `
+${step(n)} here is the HTML markup for the page:
+
+${resources[pageUrl]}
+`;
+
+export const codeStep = (n, pageUrl, resources) => {
+   const html = resources[pageUrl];
+   return `
+${step(n)} here are the source codes for the important files on the page (the name for each file is given
+to you as a comment before its content):
+
+${Object.entries(resources)
+   .filter(([key]) => key !== pageUrl)
+   .filter(([key]) => html.includes((new URL(key)).pathname) || key.match(/(lazy-styles.css|fonts.css|delayed.js)/))
+   .map(([key, value]) => `// File: ${key}\n${value}\n\n`).join('\n')}
+`;
+};
+
 export const actionPrompt = (pageUrl, deviceType) =>`
-With all the files that were shared with you, you will perform your performance analysis for the
-url ${pageUrl} on a ${deviceType} device. You will provide a response that:
-- lists the suggestions you have to improve the performance
-- include the problem observed
-- include the CWV metric it applies to
-- include the estimated gain in milliseconds
-- include clear code snippets that a developer can easily integrate
+Perform your final exhaustive and detailed analysis for url ${pageUrl} on a ${deviceType} device.
 `;

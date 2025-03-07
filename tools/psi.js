@@ -1,5 +1,5 @@
 import psi from 'psi';
-import { cacheResults, getSummaryLogger } from '../utils.js';
+import { cacheResults, getSummaryLogger, getCachedResults } from '../utils.js';
 
 const abbreviations = {
   CUMULATIVE_LAYOUT_SHIFT_SCORE: 'CLS',
@@ -65,6 +65,11 @@ function summarizePSIOpportunities(psi, log) {
 }
 
 export default async function collectPsi(pageUrl, deviceType) {
+  const cache = getCachedResults(pageUrl, deviceType, 'psi');
+  if (cache) {
+    return cache;
+  }
+
   console.debug('Generating PageSpeed Insights audit for', pageUrl, 'on', deviceType);
   const psiAudit = await psi(pageUrl, {
     key: process.env.GOOGLE_PAGESPEED_INSIGHTS_API_KEY,

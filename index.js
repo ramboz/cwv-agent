@@ -3,6 +3,8 @@ import collectArtifacts from './collect.js';
 import merge from './tools/merge.js';
 import rules from './rules/index.js';
 // import runAgent from './agent.js';
+import runPrompt from './multishot-prompt.js';
+import { cacheResults } from './utils.js';
 
 dotenv.config();
 
@@ -18,10 +20,15 @@ const deviceType = args[2] || 'mobile';
 console.log('Generating suggestions for', pageUrl, 'on', deviceType, '...');
 
 
-if (action === 'analyze') {
+if (action === 'agent') {
   // const result = await runAgent(pageUrl, deviceType);
   // console.log(result.messages?.at(-1)?.content || result.content || result);
   // console.log(result.usage_metadata);  
+} else if (action === 'prompt') {
+  const result = await runPrompt(pageUrl, deviceType);
+  cacheResults(pageUrl, deviceType, 'report', result);
+  console.log(result.messages?.at(-1)?.content || result.content || result);
+  console.log(result.usage_metadata);  
 } else if (action === 'collect') {
   const {
     har,

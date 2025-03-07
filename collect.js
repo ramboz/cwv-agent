@@ -10,12 +10,12 @@ export default async function collectArtifacts(pageUrl, deviceType) {
   console.log('HAR token size: ~', estimateTokenSize(har));
   const crux = await collectCrux(pageUrl, deviceType);
   console.log('CrUX token size: ~', estimateTokenSize(crux));
-  // const psi = await collectPsi(pageUrl, deviceType);
-  // console.log('PSI token size: ~', estimateTokenSize(psi));
+  const psi = await collectPsi(pageUrl, deviceType);
+  console.log('PSI token size: ~', estimateTokenSize(psi));
 
   return {
     har,
-    //psi,
+    psi,
     resources,
     perfEntries,
     crux,

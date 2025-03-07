@@ -3,7 +3,7 @@ import { parse } from 'node-html-parser';
 import puppeteer from 'puppeteer';
 import { PredefinedNetworkConditions } from 'puppeteer';
 import PuppeteerHar from 'puppeteer-har';
-import { cacheResults, estimateTokenSize, getSummaryLogger } from '../utils.js';
+import { cacheResults, estimateTokenSize, getSummaryLogger, getCachedResults } from '../utils.js';
 
 
 const cpuThrottling = {
@@ -68,6 +68,7 @@ export default async function collectHar(pageUrl, deviceType) {
   const har = new PuppeteerHar(page);
 
   const domain = new URL(pageUrl).origin;
+
   // Intercept requests so we can gather the 
   page.on('request', async (request) => {
     const request_url = new URL(request.url());
@@ -91,7 +92,11 @@ export default async function collectHar(pageUrl, deviceType) {
   // Enable DevTools protocol
   const client = await page.target().createCDPSession();
   await client.send('Performance.enable');
-  await har.start();
+
+  let harFile = getCachedResults(pageUrl, deviceType, 'har');
+  if (!harFile) {
+    await har.start();
+  }
 
   await page.goto(pageUrl, {
     timeout: 120_000,
@@ -99,59 +104,63 @@ export default async function collectHar(pageUrl, deviceType) {
   });
   await new Promise(resolve => setTimeout(resolve, 30_000));
 
-  const perfEntries = await page.evaluate(async () => {
-    console.log('Evaluating performance entries');
 
-    const clone = (obj) => {
-      return JSON.parse(JSON.stringify(obj));
-    };
-  
-    const appendEntries = async (entries, type, cb) => {
-      const res = await new Promise((resolve) => {
-        // resolve the promise after 5 seconds (in case of no entries)
-        window.setTimeout(() => {
-          resolve([]);
-        }, 5_000);
-        return new PerformanceObserver(entryList => {
-          const list = entryList.getEntries();
-          resolve(list.map((e) => {
-            try {
-              return cb(e);
-            } catch (err) {
-              console.error('Failed to clone', e, err);
-              return {};
-            }
-          }));
-        }).observe({ type, buffered: true });
-      });
-      res.forEach(e => entries.push(e));
-    };
+  let perfEntries = getCachedResults(pageUrl, deviceType, 'perf');
+  if (!perfEntries) {
+    const perfEntries = await page.evaluate(async () => {
+      console.log('Evaluating performance entries');
 
-    const entries = window.performance.getEntries();
+      const clone = (obj) => {
+        return JSON.parse(JSON.stringify(obj));
+      };
+    
+      const appendEntries = async (entries, type, cb) => {
+        const res = await new Promise((resolve) => {
+          // resolve the promise after 5 seconds (in case of no entries)
+          window.setTimeout(() => {
+            resolve([]);
+          }, 5_000);
+          return new PerformanceObserver(entryList => {
+            const list = entryList.getEntries();
+            resolve(list.map((e) => {
+              try {
+                return cb(e);
+              } catch (err) {
+                console.error('Failed to clone', e, err);
+                return {};
+              }
+            }));
+          }).observe({ type, buffered: true });
+        });
+        res.forEach(e => entries.push(e));
+      };
 
-    await appendEntries(entries, 'largest-contentful-paint', (e) => ({
-      ...clone(e),
-      element: e.element?.outerHTML
-    }));
+      const entries = window.performance.getEntries();
 
-    await appendEntries(entries, 'layout-shift', (e) => ({
-      ...clone(e),
-      sources: e.sources?.map((s) => ({
-        ...clone(s),
-        node: s.node?.outerHTML,
-      })) || []
-    }));
+      await appendEntries(entries, 'largest-contentful-paint', (e) => ({
+        ...clone(e),
+        element: e.element?.outerHTML
+      }));
 
-    await appendEntries(entries, 'longtask', (e) => ({
-      ...clone(e),
-      scripts: e.scripts?.map((s) => ({
-        ...clone(s),
-      })) || []
-    }));
+      await appendEntries(entries, 'layout-shift', (e) => ({
+        ...clone(e),
+        sources: e.sources?.map((s) => ({
+          ...clone(s),
+          node: s.node?.outerHTML,
+        })) || []
+      }));
 
-    return JSON.stringify(entries, null, 2);
-  });
-  cacheResults(pageUrl, deviceType, 'perf', perfEntries);
+      await appendEntries(entries, 'longtask', (e) => ({
+        ...clone(e),
+        scripts: e.scripts?.map((s) => ({
+          ...clone(s),
+        })) || []
+      }));
+
+      return JSON.stringify(entries, null, 2);
+    });
+    cacheResults(pageUrl, deviceType, 'perf', perfEntries);
+  }
 
   console.log('Estimating code size...');
   console.table(
@@ -161,7 +170,9 @@ export default async function collectHar(pageUrl, deviceType) {
     cacheResults(url, deviceType, 'code', content);
   });
 
-  const harFile = await har.stop();
+  if (!harFile) {
+    harFile = await har.stop();
+  }
 
   // Summarize
   const logger = getSummaryLogger(pageUrl, deviceType, 'har');

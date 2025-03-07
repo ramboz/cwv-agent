@@ -17,6 +17,17 @@ export function estimateTokenSize(obj) {
   return Math.ceil(JSON.stringify(obj).length / 4);
 }
 
+export function getCachedResults(urlString, deviceType, type) {
+  if (type === 'code' && fs.existsSync(`${OUTPUT_DIR}/${url.hostname}/${filename}`)) {
+    return fs.readFileSync(`${OUTPUT_DIR}/${url.hostname}/${filename}`, { encoding: 'utf8' });
+  }
+  else if (fs.existsSync(`${getFilePrefix(urlString, deviceType, type)}.json`)) {
+    const content = fs.readFileSync(`${getFilePrefix(urlString, deviceType, type)}.json`, { encoding: 'utf8' });
+    return JSON.parse(content);
+  }
+  return null;
+}
+
 // Save some results in the cache on the file system
 export function cacheResults(urlString, deviceType, type, results) {
   ensureDir(OUTPUT_DIR);
