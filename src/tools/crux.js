@@ -1,9 +1,11 @@
 import { cacheResults, getCachedResults } from '../utils.js';
 
-export default async function collectCrux(pageUrl, deviceType) {
-  const cache = getCachedResults(pageUrl, deviceType, 'crux');
-  if (cache) {
-    return cache;
+export default async function collectCrux(pageUrl, deviceType, skipCache) {
+  if (!skipCache) {
+    const cache = getCachedResults(pageUrl, deviceType, 'crux');
+    if (cache) {
+      return cache;
+    }
   }
 
   const resp = await fetch(`https://chromeuxreport.googleapis.com/v1/records:queryRecord?key=${process.env.GOOGLE_CRUX_API_KEY}`, {

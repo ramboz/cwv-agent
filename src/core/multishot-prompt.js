@@ -10,7 +10,8 @@ import {
   htmlStep,
   codeStep,
   actionPrompt,
-} from './prompts.js';
+} from '../prompts.js';
+import { detectAEMVersion } from '../tools/aem.js';
 
 export default async function runAgent(pageUrl, deviceType) {
     const {
@@ -20,6 +21,9 @@ export default async function runAgent(pageUrl, deviceType) {
       crux,
       perfEntries,
     } = await collectArtifacts(pageUrl, deviceType);
+
+    const cms = detectAEMVersion(resources[pageUrl]);
+    console.log('AEM Version:', cms);
   
     // Perform data collection before running to model, so we don't waste calls if an error occurs
     const llm =  new ChatGoogleGenerativeAI({
@@ -30,7 +34,7 @@ export default async function runAgent(pageUrl, deviceType) {
     });
   
     const result = await llm.invoke([
-      new SystemMessage(initializeSystem),
+      new SystemMessage(initializeSystem(cms)),
       new HumanMessage(cruxStep(1, crux)),
       new HumanMessage(psiStep(2, psi)),
       new HumanMessage(harStep(3, har)),

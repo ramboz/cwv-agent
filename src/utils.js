@@ -61,3 +61,23 @@ export function readCache(urlString, deviceType, type) {
   const filePath = `${getFilePrefix(urlString, deviceType, type)}.json`;
   return JSON.parse(fs.readFileSync(filePath, 'utf8'));
 }
+
+export async function getNormalizedUrl(urlString) {
+  let normalizedUrl;
+  const headers = {
+    // PSI mobile user agent
+    'User-Agent': 'Mozilla/5.0 (Linux; Android 11; moto g power (2022)) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36',
+  };
+  let resp = await fetch(urlString, { headers, method: 'HEAD' });
+  if (!resp.ok) {
+    resp = await fetch(urlString, { headers });
+    if (!resp.ok) {
+      throw new Error(`HTTP error! status: ${resp.status}`);
+    } else {
+      normalizedUrl = resp.headers.get('Location');
+    }
+  } else {
+    normalizedUrl = resp.url;
+  }
+  return normalizedUrl;
+}

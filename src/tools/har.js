@@ -50,12 +50,12 @@ async function summarizeHtmlHead(pageUrl, deviceType, log) {
 async function summarizeFirstSection(page, log) {
   log('Markup for the 1st section:');
   log('');
-  const data = await page.evaluate(() => document.querySelector('main .section').outerHTML);
+  const data = await page.evaluate(() => document.querySelector('body > main .section, body [class*="hero"], body').outerHTML);
   log(beautify.html(data, { preserve_newlines: false }));
 }
 
 
-export default async function collectHar(pageUrl, deviceType) {
+export default async function collectHar(pageUrl, deviceType, skipCache) {
   console.debug('Collecting HAR for', pageUrl, 'on', deviceType);
   const requestMap = {};
   const browser = await puppeteer.launch({ headless: true });
@@ -76,11 +76,13 @@ export default async function collectHar(pageUrl, deviceType) {
       if (request_url.origin === domain
         && (request_url.href === pageUrl
           || request_url.pathname.endsWith('.html')
-          || (request_url.pathname.endsWith('.js') && !request_url.pathname.endsWith('.min.js'))
-          || (request_url.pathname.endsWith('.css') && !request_url.pathname.endsWith('.min.css')))) {
+          || (request_url.pathname.endsWith('.js')
+            && (request_url.pathname.startsWith('/etc.clientlibs/') || !request_url.pathname.endsWith('.min.js')))
+          || (request_url.pathname.endsWith('.css')
+            && (request_url.pathname.includes('/etc.clientlibs/') || !request_url.pathname.endsWith('.min.css'))))) {
         const resp = await fetch(request.url());
         const body = await resp.text();
-        requestMap[request_url] = body;
+        requestMap[request_url.href] = body;
       }
       request.continue();
     } catch (err) {
@@ -94,7 +96,7 @@ export default async function collectHar(pageUrl, deviceType) {
   await client.send('Performance.enable');
 
   let harFile = getCachedResults(pageUrl, deviceType, 'har');
-  if (!harFile) {
+  if (!harFile || skipCache) {
     await har.start();
   }
 
@@ -104,9 +106,13 @@ export default async function collectHar(pageUrl, deviceType) {
   });
   await new Promise(resolve => setTimeout(resolve, 30_000));
 
+  if (requestMap[pageUrl].includes('Access Denied')) {
+    throw new Error('Access Denied: ' + pageUrl);
+  }
+
 
   let perfEntries = getCachedResults(pageUrl, deviceType, 'perf');
-  if (!perfEntries) {
+  if (!perfEntries || skipCache) {
     const perfEntries = await page.evaluate(async () => {
       console.log('Evaluating performance entries');
 
@@ -170,7 +176,7 @@ export default async function collectHar(pageUrl, deviceType) {
     cacheResults(url, deviceType, 'code', content);
   });
 
-  if (!harFile) {
+  if (!harFile || skipCache) {
     harFile = await har.stop();
   }
 

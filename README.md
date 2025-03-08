@@ -17,18 +17,51 @@ GOOGLE_PAGESPEED_INSIGHTS_API_KEY=...
 
 Then run the script via:
 ```sh
-node index.js <action> <url> [<device>]
+node index.js --action <action> --url <url> [--device <device>] [--skip-cache]
 ```
 
-where:
-- `action` either `collect` to just fetch the relevant artifacts, or `analyze` to also run the LLM on those files
-- `url` is the page you want to test, like `https://www.aem.live`
-- `device` is the device type you want to optimize for. Either `mobile` or `desktop` (defaults to `mobile`)
+or for batch processing:
+```sh
+node index.js --action <action> --urls <path-to-json-file> [--device <device>] [--skip-cache]
+```
+
+### Options
+
+```
+Options:
+  --action, -a  Action to perform
+                [string] [choices: "collect", "prompt", "merge", "agent"] [default: "collect"]
+  --url, -u     URL to analyze                                            [string]
+  --urls        Path to JSON file containing URLs to analyze              [string]
+  --device, -d  Device type
+                [string] [choices: "mobile", "desktop"] [default: "mobile"]
+  --skip-cache, -s  Skip using cached data and force new collection       [boolean] [default: false]
+  --help        Show help                                                 [boolean]
+```
+
+Either `--url` or `--urls` must be provided.
+
+### Batch Processing
+
+To analyze multiple URLs at once, create a JSON file with an array of URLs:
+
+```json
+[
+  "https://example.com",
+  "https://example.org",
+  "https://example.net"
+]
+```
+
+Then run:
+```sh
+node index.js --action prompt --urls urls.json --device mobile
+```
 
 ### Collecting the artifacts
 
 ```sh
-node index.js collect <url> [<device>]
+node index.js --action collect --url <url> [--device <device>]
 ```
 
 This will automatically collect:
@@ -39,8 +72,18 @@ This will automatically collect:
 ### Running the analysis
 
 ```sh
-node index.js analyze <url> [<device>]
+node index.js --action prompt --url <url> [--device <device>]
 ```
 
 Collects all the artefacts and then prompts the LLM (Gemini 1.5 Pro) for the performance analysis
 and recommendations.
+
+### Cache Management
+
+By default, the tool caches results to avoid unnecessary API calls and speed up repeated analyses.
+For the `prompt` action, it will use cached reports if available.
+
+To force new data collection and ignore cached data:
+```sh
+node index.js --action prompt --url <url> --skip-cache
+```

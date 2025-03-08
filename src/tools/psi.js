@@ -10,6 +10,11 @@ const abbreviations = {
 }
 
 function summarizeCWV(psi, log) {
+  if (!psi.data.loadingExperience.metrics) {
+    log('No Core Web Vitals data available');
+    return;
+  }
+
   log('Core Web Vitals:');
   Object.entries(psi.data.loadingExperience.metrics).forEach(([k, v]) => {
     log('-', abbreviations[k], ':', v.category, '(', v.distributions.map((d) => {
@@ -24,7 +29,7 @@ function summarizeCWV(psi, log) {
 
 function summarizeLCP(psi, log) {
   log('LCP Element:');
-  const lcpImage = psi.data.lighthouseResult.audits['prioritize-lcp-image'].details.debugData.initiatorPath[0].url;
+  const lcpImage = psi.data.lighthouseResult.audits['prioritize-lcp-image'].details?.debugData?.initiatorPath[0].url;
   const lcpRequest = lcpImage ? psi.data.lighthouseResult.audits['network-requests'].details.items.find((i) => i.url === lcpImage) : null;
   if (lcpImage) {
     log('- Image Url:', lcpImage);
@@ -64,10 +69,12 @@ function summarizePSIOpportunities(psi, log) {
   });
 }
 
-export default async function collectPsi(pageUrl, deviceType) {
-  const cache = getCachedResults(pageUrl, deviceType, 'psi');
-  if (cache) {
-    return cache;
+export default async function collectPsi(pageUrl, deviceType, skipCache) {
+  if (!skipCache) {
+    const cache = getCachedResults(pageUrl, deviceType, 'psi');
+    if (cache) {
+      return cache;
+    }
   }
 
   console.debug('Generating PageSpeed Insights audit for', pageUrl, 'on', deviceType);

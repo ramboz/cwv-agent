@@ -4,7 +4,7 @@ import { ChatVertexAI } from "@langchain/google-vertexai";
 import { readFile } from 'fs/promises'
 import dotenv from 'dotenv';
 import { z } from "zod";
-import { initializeSystem } from './prompts.js';
+import { initializeSystem } from '../prompts.js';
 
 dotenv.config();
 

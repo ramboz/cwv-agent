@@ -1,0 +1,8 @@
+.cache
+.git
+.gitignore
+.vscode
+.vscodeignore
+.vscodeignore
+.env
+credentials.json
