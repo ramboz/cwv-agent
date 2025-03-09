@@ -3,7 +3,7 @@ import fs from 'fs';
 const OUTPUT_DIR = './.cache';
 
 function getFilePrefix(urlString, deviceType, type) {
-  return `${OUTPUT_DIR}/${urlString.replace('https://', '').replace(/[^A-Za-z0-9-]/g, '-')}.${deviceType}.${type}`
+  return `${OUTPUT_DIR}/${urlString.replace('https://', '').replace(/[^A-Za-z0-9-]/g, '-').replace(/\//g, '--').replace(/(^-+|-+$)/, '')}.${deviceType}.${type}`
 }
 
 function ensureDir(dir) {
@@ -43,11 +43,17 @@ export function cacheResults(urlString, deviceType, type, results) {
     }
     fs.writeFileSync(`${OUTPUT_DIR}/${url.hostname}/${filename}`, results);
     return;
+  } else if (type === 'report' && typeof results === 'string') {
+    fs.writeFileSync(
+      `${getFilePrefix(urlString, deviceType, type)}.md`,
+      results,
+    );
+  } else {
+    fs.writeFileSync(
+      `${getFilePrefix(urlString, deviceType, type)}.json`,
+      typeof results === 'string' ? results : JSON.stringify(results, null, 2),
+    );
   }
-  fs.writeFileSync(
-    `${getFilePrefix(urlString, deviceType, type)}.json`,
-    typeof results === 'string' ? results : JSON.stringify(results, null, 2),
-  );
 }
 
 export function getSummaryLogger(urlString, deviceType, type) {
@@ -68,15 +74,19 @@ export async function getNormalizedUrl(urlString) {
     // PSI mobile user agent
     'User-Agent': 'Mozilla/5.0 (Linux; Android 11; moto g power (2022)) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36',
   };
+  // Try a HEAD request first
   let resp = await fetch(urlString, { headers, method: 'HEAD' });
   if (!resp.ok) {
+    // If that fails, try a GET request
     resp = await fetch(urlString, { headers });
     if (!resp.ok) {
       throw new Error(`HTTP error! status: ${resp.status}`);
     } else {
+      // If the response is a redirect, use the Location header, otherwise use the normalized URL
       normalizedUrl = resp.headers.get('Location') || resp.url;
     }
   } else {
+    // If the response is not a redirect, use the normalized URL
     normalizedUrl = resp.url;
   }
   return normalizedUrl;

@@ -20,6 +20,7 @@ export async function handlePromptAction(pageUrl, deviceType, skipCache) {
     console.log('Generating new report...');
     result = await runPrompt(pageUrl, deviceType, skipCache);
     cacheResults(pageUrl, deviceType, 'report', result);
+    cacheResults(pageUrl, deviceType, 'report', result.content);
   }
   
   return result;
