@@ -136,20 +136,20 @@ const reportLongAnimationFrame = (entry) => {
   const {
     startTime,
     duration,
-    target,
     scripts = [],
   } = entry;
 
   let url = '';
-  let name = 'Could not find invoker script';
-  const invoker = scripts.length ? scripts[scripts.length - 1].invoker : null;
-  if (invoker) {
+  let name = 'Inline script';
+  const lastScript = scripts[scripts.length - 1];
+  if (lastScript) {
+    const { invoker, invokerType, sourceURL } = lastScript;
     try {
-      const u = new URL(invoker);
-      url = invoker;
+      const u = new URL(sourceURL || invoker);
+      url = u.toString();
       name = '';
     } catch (e) {
-      name = scripts[scripts.length - 1].invoker;
+      name = `${invokerType}: ${invoker}`;
     }
   }
   
@@ -158,9 +158,7 @@ const reportLongAnimationFrame = (entry) => {
     name,
     url,
     type: 'long-animation-frame',
-    duration,
-    issues: [`long-animation-frame: ${duration}ms`],
-    element: target || '',
+    duration
   };
 };
 
@@ -174,8 +172,6 @@ const reportTBT = (entry) => {
     name,
     type: 'TBT',
     duration,
-    issues: [`TBT: ${duration}ms`],
-
   };
 };
 
@@ -280,4 +276,5 @@ export default function merge(siteURL, type) {
     data: data,
   };
   cacheResults(siteURL, type, 'report', merged);
+  return merged;
 }
