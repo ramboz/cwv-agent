@@ -3,8 +3,6 @@ import { cacheResults } from '../utils.js';
 export default function evaluate({ report }) {
   report.data.sort((a, b) => a.endTime - b.endTime);
 
-  cacheResults('https://www.alex-test.com', 'mobile', 'cls', report);
-
   const clss = report.data.filter(e => e.type === 'CLS');
 
   if (clss.length > 0) {
@@ -25,8 +23,6 @@ export default function evaluate({ report }) {
         return null;
       }
       processed.add(previous.id);
-
-      console.log('cls', previous);
 
       const source = sources[sources.length - 1];
       const { node } = source;
