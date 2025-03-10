@@ -8,7 +8,7 @@ export function parseArguments() {
       describe: 'Action to perform',
       type: 'string',
       default: 'collect',
-      choices: ['collect', 'prompt', 'merge', 'agent']
+      choices: ['collect', 'prompt', 'merge', 'agent', 'rules']
     })
     .option('url', {
       alias: 'u',

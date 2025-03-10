@@ -3,7 +3,7 @@ import merge from '../tools/merge.js';
 import rules from '../rules/index.js';
 // import runAgent from './agent.js';
 import runPrompt from './multishot-prompt.js';
-import { cacheResults, getCachedResults, getNormalizedUrl } from '../utils.js';
+import { cacheResults, getCachedResults, getNormalizedUrl, readCache } from '../utils.js';
 
 export async function handlePromptAction(pageUrl, deviceType, skipCache) {
   // Check cache first if not skipping
@@ -34,8 +34,22 @@ export async function handleCollectAction(pageUrl, deviceType, skipCache) {
     crux,
   } = await collectArtifacts(pageUrl, deviceType, skipCache);
   
-  const results = await Promise.all(rules.map((r) => r({}, crux, psi, har, perfEntries, resources)));
+  const results = await Promise.all(rules.map((r) => r({ url: pageUrl, type: deviceType }, crux, psi, har, perfEntries, resources)));
   
+  return {
+    failedRules: results.filter(r => !r.passing)
+  };
+}
+
+export async function handleRulesAction(pageUrl, deviceType) {
+  // const crux = await readCache(pageUrl, deviceType, 'crux');
+  // const psi = await readCache(pageUrl, deviceType, 'psi');
+  const har = await readCache(pageUrl, deviceType, 'har');
+  const perfEntries = await readCache(pageUrl, deviceType, 'perf');
+  // const resources = await readCache(pageUrl, deviceType, 'resources');
+  const report = await readCache(pageUrl, deviceType, 'report');
+  // const results = await Promise.all(rules.map((r) => r({}, crux, psi, har, perfEntries, resources, report)));
+  const results = await Promise.all(rules.map((r) => r({ url: pageUrl, type: deviceType }, null,null, har, perfEntries, null, report)));
   return {
     failedRules: results.filter(r => !r.passing)
   };
@@ -74,6 +88,12 @@ export async function processUrl(pageUrl, action, deviceType, skipCache) {
         
       case 'collect':
         result = await handleCollectAction(normalizedUrl, deviceType, skipCache);
+        result.failedRules.forEach(r => console.log('Failed', r.message, ':', r.recommendation));
+        console.log('Done. Check the `.cache` folder');
+        break;
+
+      case 'rules':
+        result = await handleRulesAction(normalizedUrl, deviceType);
         result.failedRules.forEach(r => console.log('Failed', r.message, ':', r.recommendation));
         console.log('Done. Check the `.cache` folder');
         break;
