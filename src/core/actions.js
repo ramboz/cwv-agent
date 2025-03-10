@@ -25,6 +25,11 @@ export async function handlePromptAction(pageUrl, deviceType, skipCache) {
   return result;
 }
 
+async function applyRules(pageUrl, deviceType, crux, psi, har, perfEntries, resources, report) {
+  const results = await Promise.all(rules.map((r) => r({ url: pageUrl, type: deviceType }, crux, psi, har, perfEntries, resources, report)));
+  return results.flat().filter(r => r);
+}
+
 export async function handleCollectAction(pageUrl, deviceType, skipCache) {
   const {
     har,
@@ -33,9 +38,10 @@ export async function handleCollectAction(pageUrl, deviceType, skipCache) {
     perfEntries,
     crux,
   } = await collectArtifacts(pageUrl, deviceType, skipCache);
+
+  const report = merge(pageUrl, deviceType);
   
-  const results = await Promise.all(rules.map((r) => r({ url: pageUrl, type: deviceType }, crux, psi, har, perfEntries, resources)));
-  
+  const results = await applyRules(pageUrl, deviceType, crux, psi, har, perfEntries, resources, report);
   return {
     failedRules: results.filter(r => !r.passing)
   };
@@ -48,8 +54,9 @@ export async function handleRulesAction(pageUrl, deviceType) {
   const perfEntries = await readCache(pageUrl, deviceType, 'perf');
   // const resources = await readCache(pageUrl, deviceType, 'resources');
   const report = await readCache(pageUrl, deviceType, 'report');
-  // const results = await Promise.all(rules.map((r) => r({}, crux, psi, har, perfEntries, resources, report)));
-  const results = await Promise.all(rules.map((r) => r({ url: pageUrl, type: deviceType }, null,null, har, perfEntries, null, report)));
+
+  // const results = await applyRules(pageUrl, deviceType, crux, psi, har, perfEntries, resources, report);
+  const results = await applyRules(pageUrl, deviceType, null, null, har, perfEntries, null, report);
   return {
     failedRules: results.filter(r => !r.passing)
   };
