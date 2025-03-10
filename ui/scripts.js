@@ -3,6 +3,7 @@
   /* display */
   const formatTime = (x) => (x !== 0 ? Math.round(x) : 0);
   const formatSize = (x) => (x !== 0 ? (Math.round(x / 1000)) : 0);
+  const formatSizeKB = (x) => (x !== 0 ? x : 0);
   const formatTimeMS = (x) => `${formatTime(x)}ms`;
 
   const jsonSyntaxHighlight = (json) => {
@@ -128,8 +129,8 @@
       if (cols.includes('end')) rowElement.innerHTML += `<td class="hlx-col hlx-s hlx-right hlx-col-end">${formatTime(end)}</td>`;
       if (cols.includes('url')) rowElement.innerHTML += `<td class="hlx-col hlx-xl hlx-col-url">${url ? `<a href="${url}" target="_blank">${urlDislay}</a>` : `${urlDislay}`}</td>`;
       if (cols.includes('type')) rowElement.innerHTML += `<td class="hlx-col hlx-m hlx-center hlx-col-type"><span title="${name || ''}" class="hlx-badge">${type === 'mark' || type === 'paint' ? name : type}</span></td>`;
-      if (cols.includes('size')) rowElement.innerHTML += `<td class="hlx-col hlx-s hlx-right hlx-col-size">${size !== undefined ? formatSize(size) : ''}</td>`;
-      if (cols.includes('totalSize')) rowElement.innerHTML += `<td class="hlx-col hlx-s hlx-right hlx-col-totalSize">${totalSize !== undefined ? formatSize(totalSize) : ''}</td>`;
+      if (cols.includes('size')) rowElement.innerHTML += `<td class="hlx-col hlx-s hlx-right hlx-col-size">${size !== undefined ? formatSizeKB(size) : ''}</td>`;
+      if (cols.includes('totalSize')) rowElement.innerHTML += `<td class="hlx-col hlx-s hlx-right hlx-col-totalSize">${totalSize !== undefined ? formatSizeKB(totalSize) : ''}</td>`;
       if (cols.includes('duration')) rowElement.innerHTML += `<td class="hlx-col hlx-s hlx-right hlx-col-duration">${duration !== undefined ? formatTime(duration) : ''}</td>`;
       // if (cols.includes('preview')) rowElement.innerHTML += `<td class="hlx-col hlx-m hlx-center hlx-col-preview" title="${previewTitle}">${preview}</td>`;
       // if (cols.includes('details')) rowElement.innerHTML += `<td class="hlx-col hlx-m hlx-wrap hlx-col-details"><a href="#" data-details="${encodeURIComponent(JSON.stringify(details, null, 2))}">Details</a></td>`;
@@ -262,7 +263,7 @@
             totalSize += size;
             entry.totalSize = totalSize;
           }
-          entry.before100kb = Math.round(totalSize) < 101000;
+          entry.before100kb = Math.round(totalSize) < 101;
           return entry;
         });
       },
@@ -385,7 +386,6 @@
   const main = async () => {
     cleanup();
     const data = await getPerformanceReport();
-    // console.table(data);
     display(data);
     data.sort((a, b) => a.start - b.start);
     window.PERFORMANCE_REPORT_DATA = {
