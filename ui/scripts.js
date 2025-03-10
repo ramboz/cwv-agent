@@ -193,7 +193,7 @@
     filters.querySelectorAll('.hlx-filters input').forEach((checkbox) => {
       checkbox.addEventListener('change', () => {
         const type = checkbox.parentElement.parentElement.classList[0];
-        applyFilter(type, checkbox.checked, document.querySelector('hlx-perf-report').shadowRoot.querySelector('.hlx-grid'));
+        applyFilter(type, checkbox.checked, document.querySelector('.hlx-grid'));
       });
     });
 
@@ -269,16 +269,6 @@
       },
     },
   };
-
-  if (!customElements.get('hlx-perf-report')) {
-    class PerfReport extends HTMLElement {
-      constructor() {
-        super();
-        this.attachShadow({ mode: 'open' });
-      }
-    }
-    customElements.define('hlx-perf-report', PerfReport);
-  }
 
   const display = (data) => {
     const component = document.createElement('div');
