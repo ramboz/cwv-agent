@@ -4,6 +4,7 @@ const THRESHOLDS = {
 };
 
 export default function evaluate(summary, crux, psi, har, perfEntries, resources, report) {
+  report.data.sort((a, b) => a.startTime - b.startTime);
   const lcpResource = report.data.findLast(r => r.type === 'LCP');
   const totalSizeBeforeLCP = report.data.slice(0, lcpResource.id).reduce((acc, r) => acc + (r.size || 0), 0);
   if (totalSizeBeforeLCP > THRESHOLDS[summary.type]) {
