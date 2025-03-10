@@ -1,6 +1,6 @@
 const THRESHOLD = 90;
 
-export default function evaluate(summary, crux, psi, har, perfEntries, resources, report) {
+export default function evaluate({ report }) {
   report.data.sort((a, b) => a.endTime - b.endTime);
 
   const tbts = report.data.filter(e => e.type === 'TBT');
@@ -23,7 +23,6 @@ export default function evaluate(summary, crux, psi, har, perfEntries, resources
         return null;
       }
       processed.add(previous.id);
-      console.log('tbt', e, previous);
       
       return {
         category: 'tbt',

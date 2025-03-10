@@ -1,6 +1,6 @@
 const THRESHOLD = 90;
 
-export default function evaluate(summary, crux, psi, har, perfEntries, resources, report) {
+export default function evaluate({ report }) {
   report.data.sort((a, b) => a.startTime - b.startTime);
   const lafs = report.data.filter(e => e.type === 'long-animation-frame' && e.duration > THRESHOLD);
 
