@@ -93,7 +93,7 @@ node index.js --action prompt --url <url> --skip-cache
 To visualize a report, start your favorite http server, like:
 
 ```
-npx live-server
+npx live-server --mount=/.cache:./.cache
 ```
 
 Then open the ui and pass the `report` url:
