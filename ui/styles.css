@@ -1,0 +1,291 @@
+:root {
+  --hlx-color-dialog: rgba(26, 26, 26, 1);
+  --hlx-color-100kb: rgba(150, 0, 0, 0.1);
+
+  --hlx-color-link: white;
+  --hlx-color-hover: #136ff6;
+
+  --hlx-color-tbt: #eb7655;
+  --hlx-color-inp: #ab4555;
+  --hlx-color-laf: #ab4555;
+  --hlx-color-lcp: #279766;
+  --hlx-color-paint: #b73;
+  --hlx-color-cls: rgba(231, 196, 104, 0.7);
+  --hlx-color-marker: #4fc0d2;
+}
+
+.hlx-container {
+  position: fixed;
+  inset: 0;
+  z-index: 9999999999;
+  overflow-y: scroll;
+  width: 100%;
+  height: 100%;
+  background-color: var(--hlx-color-dialog);
+  margin: 1px;
+
+  font-family: sans-serif;
+  font-size: 14px;
+  color: white;
+}
+
+.hlx-header {
+  padding: 10px;
+  background-color: var(--hlx-color-dialog);
+}
+
+.hlx-header h1 {
+  font-size: 20px;
+  line-height: 1;
+  margin-bottom: 10px;
+  font-weight: bold;
+}
+
+.hlx-header .hlx-report-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  color: white;
+  background-color: transparent;
+  padding: 4px;
+}
+
+a:any-link {
+  color: var(--hlx-color-link);
+}
+
+a:hover {
+  text-decoration: underline;
+  color: var(--hlx-color-hover);
+}
+
+.hlx-views {
+  padding: 10px 2px;
+}
+
+.hlx-filters {
+  display: flex;
+  gap: 14px;
+  margin-left: 6px;
+}
+
+.hlx-filters input {
+  border: 0;
+  padding: 0;
+  margin: 0 8px 0 2px;
+  accent-color: white;
+}
+
+.hlx-row.hlx-hidden {
+  display: none;
+}
+
+.hlx-grid {
+  margin: 10px;
+  table-layout: fixed;
+  font-family: sans-serif;
+  font-size: 14px;
+  color: white;
+}
+
+.hlx-row {
+  border-top: 1px solid black;
+  line-height: 1.8;
+}
+
+div > .hlx-row:first-of-type {
+  font-weight: bold;
+  font-size: 15px;
+}
+
+.hlx-row:last-child {
+  border-bottom: 1px solid black;
+}
+
+.hlx-col-header {
+  flex: 1;
+  padding: 2px 5px;
+  white-space: nowrap;
+}
+
+.hlx-col {
+  flex: 1;
+  padding: 2px 5px;
+}
+
+.hlx-col {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hlx-col.hlx-wrap pre {
+  overflow: auto;
+  margin: 0;
+}
+
+.hlx-col.hlx-wrap pre span {
+  white-space: normal;
+}
+
+.hlx-right {
+  text-align: right;
+}
+
+.hlx-center {
+  text-align: center;
+}
+
+.hlx-xs {
+  width: 15px;
+}
+
+.hlx-s {
+  width: 30px;
+}
+
+.hlx-m {
+  width: 10%;
+}
+
+.hlx-l {
+  width: 20%;
+}
+
+.hlx-xl {
+  max-width: 500px;
+}
+
+.hlx-before-100kb {
+  background-color: var(--hlx-color-100kb);
+}
+
+.hlx-tbt {
+  color: var(--hlx-color-tbt);
+}
+
+.hlx-inp {
+  color: var(--hlx-color-inp);
+}
+
+.hlx-laf {
+  color: var(--hlx-color-laf);
+}
+
+.hlx-badge,
+.hlx-penalty,
+.hlx-col-preview {
+  cursor: default;
+}
+
+.hlx-ok {
+  margin-right: 10px;
+}
+
+.hlx-tbt .hlx-badge {
+  background-color: var(--hlx-color-tbt);
+  color: white;
+  padding: 4px 8px;
+  text-align: center;
+  border-radius: 5px;
+  font-weight: bold;
+}
+
+.hlx-inp .hlx-badge {
+  background-color: var(--hlx-color-inp);
+  color: white;
+  padding: 4px 8px;
+  text-align: center;
+  border-radius: 5px;
+  font-weight: bold;
+}
+
+.hlx-laf .hlx-badge {
+  background-color: var(--hlx-color-laf);
+  color: white;
+  padding: 4px 8px;
+  text-align: center;
+  border-radius: 5px;
+  font-weight: bold;
+}
+
+.hlx-cls {
+  color: var(--hlx-color-cls);
+}
+
+.hlx-row.hlx-cls-end {
+  border-bottom: 4px solid var(--hlx-color-cls);
+}
+
+.hlx-row.hlx-cls-start {
+  border-top: 4px solid var(--hlx-color-cls);
+}
+
+.hlx-row.hlx-cls-start,
+.hlx-row.hlx-cls-end,
+.hlx-row.hlx-cls-suspect {
+  border-left: 4px solid var(--hlx-color-cls);
+  border-right: 4px solid var(--hlx-color-cls);
+}
+
+.hlx-cls .hlx-badge {
+  background-color: var(--hlx-color-cls);
+  color: white;
+  padding: 4px 8px;
+  text-align: center;
+  border-radius: 5px;
+  font-weight: bold;
+}
+
+.hlx-lcp {
+  color: var(--hlx-color-lcp);
+}
+
+.hlx-lcp .hlx-badge {
+  background-color: var(--hlx-color-lcp);
+  color: white;
+  padding: 4px 8px;
+  text-align: center;
+  border-radius: 5px;
+  font-weight: bold;
+}
+
+.hlx-paint {
+  color: var(--hlx-color-paint);
+}
+
+.hlx-paint .hlx-badge {
+  background-color: var(--hlx-color-paint);
+  color: white;
+  padding: 4px 8px;
+  text-align: center;
+  border-radius: 5px;
+  font-weight: bold;
+}
+
+.hlx-mark {
+  color: var(--hlx-color-marker);
+}
+
+.hlx-mark .hlx-badge {
+  background-color: var(--hlx-color-marker);
+  color: white;
+  padding: 4px 8px;
+  text-align: center;
+  border-radius: 5px;
+  font-weight: bold;
+}
+
+.hlx-col-details pre {
+  color: white;
+}
+
+.hlx-col-url a {
+  display: inline;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hlx-col-preview {
+  max-width: 500px;
+}

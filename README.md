@@ -87,3 +87,17 @@ To force new data collection and ignore cached data:
 ```sh
 node index.js --action prompt --url <url> --skip-cache
 ```
+
+### Visualization
+
+To visualize a report, start your favorite http server, like:
+
+```
+npx live-server
+```
+
+Then open the ui and pass the `report` url:
+
+```
+open http://127.0.0.1:8080/ui/index.html?report=/.cache/host.device.report.json
+```
