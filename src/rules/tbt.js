@@ -26,8 +26,8 @@ export default function evaluate({ report }) {
       
       return {
         category: 'tbt',
-        message: `${duration}ms blocking time - Most likely caused by ${previous.entryType} (${previous.url}) loaded as ${previous.type}`,
-        recommendation: 'Remove blocking time',
+        message: `${duration}ms blocking time`,
+        recommendation: `Remove blocking time: most likely caused by ${previous.entryType} (${previous.url}) loaded as ${previous.type}`,
         passing: false,
       };
     }).filter(Boolean);

@@ -113,6 +113,7 @@ const reportLCP = (entry) => {
 const reportCLS = (entry) => {
   const {
     startTime,
+    value,
   } = entry;
   const name = 'CLS'; // length === 1 ? 'CLS' : `CLS ${index + 1} / ${length}`;
   const sources = entry.sources.map((source) => {
@@ -126,9 +127,11 @@ const reportCLS = (entry) => {
   });
   return {
     start: formatTime(startTime),
+    end: formatTime(startTime),
     name,
     type: 'CLS',
     sources,
+    value: value.toFixed(3),
   };
 };
 
