@@ -74,7 +74,7 @@ export async function getNormalizedUrl(urlString) {
     if (!resp.ok) {
       throw new Error(`HTTP error! status: ${resp.status}`);
     } else {
-      normalizedUrl = resp.headers.get('Location');
+      normalizedUrl = resp.headers.get('Location') || resp.url;
     }
   } else {
     normalizedUrl = resp.url;
