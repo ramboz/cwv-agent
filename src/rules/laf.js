@@ -1,8 +1,8 @@
 const THRESHOLD = 90;
 
 export default function evaluate({ report }) {
-  report.data.sort((a, b) => a.start - b.start);
-  const lafs = report.data.filter(e => e.type === 'long-animation-frame' && e.duration > THRESHOLD);
+  const { data } = report;
+  const lafs = data.filter(e => e.type === 'long-animation-frame' && e.duration > THRESHOLD);
 
   if (lafs.length > 0) {
     return lafs.map((e) => {

@@ -1,19 +1,20 @@
 const THRESHOLD = 90;
 
 export default function evaluate({ report }) {
-  report.data.sort((a, b) => a.end - b.end);
+  // use dataSortedByEnd to get the previous entries by end time
+  const { dataSortedByEnd: data } = report;
 
-  const tbts = report.data.filter(e => e.type === 'TBT');
+  const tbts = data.filter(e => e.type === 'TBT');
 
   if (tbts.length > 0) {
     const processed = new Set();
     return tbts.map((e) => {
       const { id, duration, start } = e;
       let type, previous;
-      let previousIndex = report.data.findIndex(e => e.id === id) - 1;
+      let previousIndex = data.findIndex(e => e.id === id) - 1;
       do {
         if (previousIndex > 0) {
-          previous = report.data[previousIndex--];
+          previous = data[previousIndex--];
           type = previous.type;
         }
       } while (type === 'TBT' && previous);

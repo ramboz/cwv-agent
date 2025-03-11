@@ -26,6 +26,11 @@ export async function handlePromptAction(pageUrl, deviceType, skipCache) {
 }
 
 async function applyRules({ pageUrl, deviceType, crux, psi, har, perfEntries, resources, report }) {
+  // Sort report.data by start time
+  report.data.sort((a, b) => a.start - b.start);
+  // Clone report.data and sort by end time
+  report.dataSortedByEnd = report.data.slice().sort((a, b) => a.end - b.end);
+
   const results = await Promise.all(rules.map((r) => r({ summary: { url: pageUrl, type: deviceType }, crux, psi, har, perfEntries, resources, report })));
   return results.flat().filter(r => r);
 }
