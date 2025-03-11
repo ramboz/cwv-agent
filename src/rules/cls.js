@@ -26,14 +26,15 @@ export default function evaluate({ report }) {
 
       const source = sources[sources.length - 1];
       const { node } = source;
-      let recommendation = `Fix width and height before element is loaded. Root cause seems to be the LCP element.`;
+      let recommendation = `Fix width and height before element is loaded - root cause seems to be the LCP element`;
       if (previous.entryType === 'resource') {
-        recommendation = `Fix width and height before element is loaded. Root cause seems to be ${previous.entryType} (${previous.url}) loaded as ${previous.type}`;
+        recommendation = `Fix width and height before element is loaded - Root cause seems to be ${previous.entryType} (${previous.url}) loaded as ${previous.type}`;
       }
       return {
         category: 'cls',
-        message: `CLS (${value}) - Element ${node} moves.`,
+        message: `CLS (${value}) - Element moves.`,
         recommendation,
+        element: node,
         passing: false,
       };
     }).filter(Boolean);

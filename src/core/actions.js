@@ -96,12 +96,14 @@ export async function processUrl(pageUrl, action, deviceType, skipCache) {
       case 'collect':
         result = await handleCollectAction(normalizedUrl, deviceType, skipCache);
         result.failedRules.forEach(r => console.log('Failed', r.message, ':', r.recommendation));
+        cacheResults(normalizedUrl, deviceType, 'recommendations', result);
         console.log('Done. Check the `.cache` folder');
         break;
 
       case 'rules':
         result = await handleRulesAction(normalizedUrl, deviceType);
         result.failedRules.forEach(r => console.log('Failed', r.message, ':', r.recommendation));
+        cacheResults(normalizedUrl, deviceType, 'recommendations', result);
         console.log('Done. Check the `.cache` folder');
         break;
         

@@ -12,6 +12,7 @@ export default function evaluate({ summary, report }) {
       category: 'lcp',
       message: `>${THRESHOLDS[summary.type]}kb on ${summary.type} pre-lcp assets`,
       recommendation: `${totalSizeBeforeLCP}kb loaded before the LCP - remove resources loaded before the LCP to reduce the size of the initial page load and speed up the LCP.`,
+      element: lcpResource.element,
       passing: false,
     };
   }
@@ -19,6 +20,7 @@ export default function evaluate({ summary, report }) {
     category: 'lcp',
     message: `<${THRESHOLDS[summary.type]}kb on ${summary.type} pre-lcp assets`,
     recommendation: 'LCP is good!',
+    element: lcpResource.element,
     passing: true,
   };
 }

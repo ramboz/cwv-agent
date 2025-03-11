@@ -9,7 +9,8 @@ export default function evaluate({ report }) {
       const { url, name, duration } = e;
       return {
         category: 'long-animation-frame',
-        message: `Long animation frames in ${url || name}: ${duration}ms`,
+        message: `${duration}ms animation frame`,
+        element: url || name,
         recommendation: 'Remove long animation frames to improve performance',
         passing: false,
       };
