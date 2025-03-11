@@ -3,12 +3,17 @@
         const div = document.createElement('div');
         div.className = `recommendation ${rec.passing ? 'passing' : 'failed'}`;
         
-        const html = `
+        let html = `
             <div class="recommendation-category">${rec.category.toUpperCase()} / @${rec.time.toFixed(0)}ms</div>
             <div class="recommendation-message">${rec.message}</div>
             ${rec.recommendation ? `<div class="recommendation-text">${rec.recommendation}</div>` : ''}
             ${rec.element ? `<div class="recommendation-element"><textarea disabled>${rec.element}</textarea></div>` : ''}
         `;
+        if (rec.elements) {
+            rec.elements.forEach((element) => {
+                html += `<div class="recommendation-element"><textarea disabled>${element}</textarea></div>`;
+            });
+        }
         
         div.innerHTML = html;
         return div;

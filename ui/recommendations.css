@@ -37,6 +37,10 @@ a:hover {
 }
 
 .recommendation {
+    display: grid;
+    grid-template-columns: 300px 300px 1fr;
+    gap: 16px;
+    align-items: start;
     border-left: 4px solid var(--hlx-color-lcp);
     margin: 10px 0;
     padding: 10px;
@@ -51,7 +55,18 @@ a:hover {
     color: var(--hlx-color-marker);
 }
 
+.recommendation-message {
+    grid-column: 2;
+}
+
+.recommendation-text {
+    grid-column: 2;
+    color: #888;
+    margin-top: 8px;
+}
+
 .recommendation-element {
+    grid-column: 3;
     font-family: monospace;
     background: rgba(0,0,0,0.2);
     padding: 8px;
@@ -70,8 +85,9 @@ a:hover {
 }
 
 .recommendation-time {
+    grid-column: 3;
     color: var(--hlx-color-marker);
     font-size: 0.9em;
-    margin-top: 4px;
     font-family: monospace;
+    text-align: right;
 } 

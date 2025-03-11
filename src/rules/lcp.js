@@ -18,7 +18,7 @@ export default function evaluate({ report }) {
         recommendation: `Having multiple LCPs might lead to performance issues as the loading sequence might be optimized for the first LCP.`,
         passing: false,
         time: start,
-        element,
+        elements: lcps.map(l => l.element),
       });
     }
     if (lcp.end > THRESHOLDS.average) {
