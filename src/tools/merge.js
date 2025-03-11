@@ -131,7 +131,7 @@ const reportCLS = (entry) => {
     name,
     type: 'CLS',
     sources,
-    value: value.toFixed(3),
+    value: value.toFixed(5),
   };
 };
 
