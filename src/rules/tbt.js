@@ -1,14 +1,14 @@
 const THRESHOLD = 90;
 
 export default function evaluate({ report }) {
-  report.data.sort((a, b) => a.endTime - b.endTime);
+  report.data.sort((a, b) => a.end - b.end);
 
   const tbts = report.data.filter(e => e.type === 'TBT');
 
   if (tbts.length > 0) {
     const processed = new Set();
     return tbts.map((e) => {
-      const { id, duration } = e;
+      const { id, duration, start } = e;
       let type, previous;
       let previousIndex = report.data.findIndex(e => e.id === id) - 1;
       do {
@@ -29,6 +29,7 @@ export default function evaluate({ report }) {
         message: `${duration}ms blocking time`,
         recommendation: `Remove blocking time: most likely caused by ${previous.entryType} (${previous.url}) loaded as ${previous.type}`,
         passing: false,
+        time: start,
       };
     }).filter(Boolean);
   }

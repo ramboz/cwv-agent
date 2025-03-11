@@ -1,0 +1,77 @@
+@import 'colors.css';
+
+.hlx-container {
+  position: fixed;
+  inset: 0;
+  z-index: 9999999999;
+  overflow-y: scroll;
+  width: 100%;
+  height: 100%;
+  background-color: var(--hlx-color-dialog);
+  margin: 1px;
+
+  font-family: sans-serif;
+  font-size: 14px;
+  color: white;
+}
+
+.hlx-header {
+  padding: 10px;
+  background-color: var(--hlx-color-dialog);
+}
+
+.hlx-header h1 {
+  font-size: 20px;
+  line-height: 1;
+  margin-bottom: 10px;
+  font-weight: bold;
+}
+
+a:any-link {
+  color: var(--hlx-color-link);
+}
+
+a:hover {
+  text-decoration: underline;
+  color: var(--hlx-color-hover);
+}
+
+.recommendation {
+    border-left: 4px solid var(--hlx-color-lcp);
+    margin: 10px 0;
+    padding: 10px;
+}
+
+.recommendation.failed {
+    border-left-color: var(--hlx-color-tbt);
+}
+
+.recommendation-category {
+    font-weight: bold;
+    color: var(--hlx-color-marker);
+}
+
+.recommendation-element {
+    font-family: monospace;
+    background: rgba(0,0,0,0.2);
+    padding: 8px;
+    margin: 8px 0;
+    overflow-x: auto;
+}
+
+.recommendation-element textarea {
+    width: 1000px;
+    height: 80px;
+    font-family: monospace;
+    background: rgba(0,0,0,0.2);
+    padding: 8px;
+    border: none;
+    color: var(--hlx-color-marker);
+}
+
+.recommendation-time {
+    color: var(--hlx-color-marker);
+    font-size: 0.9em;
+    margin-top: 4px;
+    font-family: monospace;
+} 

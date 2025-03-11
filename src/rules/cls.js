@@ -1,14 +1,14 @@
 import { cacheResults } from '../utils.js';
 
 export default function evaluate({ report }) {
-  report.data.sort((a, b) => a.endTime - b.endTime);
+  report.data.sort((a, b) => a.end - b.end);
 
   const clss = report.data.filter(e => e.type === 'CLS');
 
   if (clss.length > 0) {
     const processed = new Set();
     return clss.map((e) => {
-      const { id, sources, value } = e;
+      const { id, sources, value, start } = e;
       let type, previous;
       let previousIndex = report.data.findIndex(e => e.id === id) - 1;
       do {
@@ -36,6 +36,7 @@ export default function evaluate({ report }) {
         recommendation,
         element: node,
         passing: false,
+        time: start,
       };
     }).filter(Boolean);
   }

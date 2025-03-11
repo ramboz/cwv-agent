@@ -282,13 +282,8 @@
     header.classList.add('hlx-header');
     header.innerHTML = `
       <h1>Performance report</h1>
-      <button class="hlx-report-close">X</button>
     `;
     container.appendChild(header);
-
-    container.querySelector('.hlx-report-close').addEventListener('click', () => {
-      container.remove();
-    });
 
     document.body.prepend(component);
 

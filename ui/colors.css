@@ -1,0 +1,15 @@
+:root {
+  --hlx-color-dialog: rgba(26, 26, 26, 1);
+  --hlx-color-100kb: rgba(150, 0, 0, 0.1);
+
+  --hlx-color-link: white;
+  --hlx-color-hover: #136ff6;
+
+  --hlx-color-tbt: #eb7655;
+  --hlx-color-inp: #ab4555;
+  --hlx-color-laf: #ab4555;
+  --hlx-color-lcp: #279766;
+  --hlx-color-paint: #b73;
+  --hlx-color-cls: rgba(231, 196, 104, 0.7);
+  --hlx-color-marker: #4fc0d2;
+} 
