@@ -365,7 +365,7 @@ export async function collect(pageUrl, deviceType, skipCache) {
       return JSON.stringify(entries, null, 2);
     });
     cacheResults(pageUrl, deviceType, 'perf', JSON.parse(perfEntries, null, 2));
-    perfEntriesSummary = summarizePerformanceEntries(harFile);
+    perfEntriesSummary = summarizePerformanceEntries(perfEntries);
     cacheResults(pageUrl, deviceType, 'perf', summary);
   }
 
