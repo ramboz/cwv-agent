@@ -17,10 +17,15 @@ export async function handlePromptAction(pageUrl, deviceType, skipCache) {
   
   // If no cached result or skipping cache, run the prompt
   if (!result) {
-    console.log('Generating new report...');
     result = await runPrompt(pageUrl, deviceType, skipCache);
-    cacheResults(pageUrl, deviceType, 'report', result);
-    cacheResults(pageUrl, deviceType, 'report', result.content);
+    if (result instanceof Error) {
+      console.error('❌ Failed to generate report for', pageUrl);
+    }
+    else {
+      cacheResults(pageUrl, deviceType, 'report', result);
+      cacheResults(pageUrl, deviceType, 'report', result.content);
+      console.log('✅ CWV report generated.');
+    }
   }
   
   return result;
@@ -93,10 +98,6 @@ export async function processUrl(pageUrl, action, deviceType, skipCache) {
     switch (action) {
       case 'prompt':
         result = await handlePromptAction(normalizedUrl, deviceType, skipCache);
-        console.log(result.messages?.at(-1)?.content || result.kwargs?.content || result.content || result);
-        if (result.kwargs?.usage_metadata || result.usage_metadata) {
-          console.log(result.kwargs?.usage_metadata || result.usage_metadata);
-        }
         break;
         
       case 'collect':
@@ -115,7 +116,6 @@ export async function processUrl(pageUrl, action, deviceType, skipCache) {
         
       case 'merge':
         result = await handleMergeAction(normalizedUrl, deviceType);
-        console.log('Done. Check the `.cache` folder');
         break;
         
       case 'agent':

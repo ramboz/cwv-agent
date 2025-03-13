@@ -29,7 +29,7 @@ async function main() {
     
     // Small delay between processing URLs
     if (urls.length > 1) {
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(resolve => setTimeout(resolve, 60_000)); // 1min
     }
   }
 }
