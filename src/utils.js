@@ -43,9 +43,9 @@ export function cacheResults(urlString, deviceType, type, results) {
     }
     fs.writeFileSync(`${OUTPUT_DIR}/${url.hostname}/${filename}`, results);
     return;
-  } else if (type === 'report' && typeof results === 'string') {
+  } else if (typeof results === 'string') {
     fs.writeFileSync(
-      `${getFilePrefix(urlString, deviceType, type)}.md`,
+      `${getFilePrefix(urlString, deviceType, type)}.summary.md`,
       results,
     );
   } else {
@@ -80,7 +80,7 @@ export async function getNormalizedUrl(urlString) {
     // If that fails, try a GET request
     resp = await fetch(urlString, { headers });
     if (!resp.ok) {
-      throw new Error(`HTTP error! status: ${resp.status}`);
+      throw new Error(`HTTP error! status: ${resp.status}`, resp);
     } else {
       // If the response is a redirect, use the Location header, otherwise use the normalized URL
       normalizedUrl = resp.headers.get('Location') || resp.url;

@@ -15,6 +15,7 @@
     "@langchain/langgraph": "^0.2.41",
     "dotenv": "^16.4.7",
     "js-beautify": "^1.15.3",
+    "js-tiktoken": "^1.0.19",
     "langchain": "^0.3.12",
     "node-html-parser": "^7.0.1",
     "psi": "^4.1.0",

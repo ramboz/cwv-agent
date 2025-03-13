@@ -293,7 +293,7 @@ Present your findings as:
    - Implementation complexity (Easy/Medium/Hard)
    - Affected metric(s)
    - Expected improvement range
-3. Detailed technical recommendations, organized by CWV metric, with code examples where applicable, and in a form appropriate for creating pull requests (including a title, a description and a "diff"-like code sample)
+3. An explicit section for "Detailed technical recommendations", organized with subheadings for the CWV metrics (LCP, CLS, INP), with code examples where applicable, and in a form appropriate for creating pull requests (including a title, a description and a "diff"-like code sample)
 4. Implementation roadmap highlighting quick wins vs. strategic improvements
  
 Phase 1 will start with the next message.`;
@@ -311,10 +311,22 @@ ${step(n)} here is the detailed CrUX data for the page (in JSON format):
 ${JSON.stringify(crux, null, 2)}
 `;
 
+export const cruxSummaryStep = (n, cruxSummary) => `
+${step(n)} here is the summarized CrUX data for the page:
+
+${cruxSummary}
+`;
+
 export const psiStep = (n, psi) => `
 ${step(n)} here is the full PSI audit in JSON for the page load.
 
 ${JSON.stringify(psi, null, 2)}
+`;
+
+export const psiSummaryStep = (n, psiSummary) => `
+${step(n)} here is the summarized PSI audit for the page load.
+
+${psiSummary}
 `;
 
 export const harStep = (n, har) => `
@@ -323,10 +335,22 @@ ${step(n)} here is the HAR JSON object for the page:
 ${JSON.stringify(har, null, 2)}
 `;
 
+export const harSummaryStep = (n, harSummary) => `
+${step(n)} here is the summarized HAR data for the page:
+
+${harSummary}
+`;
+
 export const perfStep = (n, perfEntries) => `
 ${step(n)} here are the performance entries for the page:
 
 ${JSON.stringify(perfEntries, null, 2)}
+`;
+
+export const perfSummaryStep = (n, perfEntriesSummary) => `
+${step(n)} here are summarized performance entries for the page load:
+
+${perfEntriesSummary}
 `;
 
 export const htmlStep = (n, pageUrl, resources) => `
@@ -335,7 +359,7 @@ ${step(n)} here is the HTML markup for the page:
 ${resources[pageUrl]}
 `;
 
-export const codeStep = (n, pageUrl, resources) => {
+export const codeStep = (n, pageUrl, resources, threshold = 100000) => {
    const html = resources[pageUrl];
    return `
 ${step(n)} here are the source codes for the important files on the page (the name for each file is given
@@ -344,7 +368,7 @@ to you as a comment before its content):
 ${Object.entries(resources)
    .filter(([key]) => key !== pageUrl)
    .filter(([key]) => html.includes((new URL(key)).pathname) || key.match(/(lazy-styles.css|fonts.css|delayed.js)/))
-   .filter(([value]) => estimateTokenSize(value) < 100000) // do not bloat context with too large files
+   .filter(([,value]) => estimateTokenSize(value) < threshold) // do not bloat context with too large files
    .map(([key, value]) => `// File: ${key}\n${value}\n\n`).join('\n')}
 `;
 };

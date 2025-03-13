@@ -1,75 +1,153 @@
 import psi from 'psi';
-import { cacheResults, getSummaryLogger, getCachedResults } from '../utils.js';
+import { cacheResults, getCachedResults } from '../utils.js';
 
-const abbreviations = {
-  CUMULATIVE_LAYOUT_SHIFT_SCORE: 'CLS',
-  EXPERIMENTAL_TIME_TO_FIRST_BYTE: 'TTFB',
-  FIRST_CONTENTFUL_PAINT_MS: 'FCP',
-  INTERACTION_TO_NEXT_PAINT: 'INP',
-  LARGEST_CONTENTFUL_PAINT_MS: 'LCP',
-}
-
-function summarizeCWV(psi, log) {
-  if (!psi.data.loadingExperience.metrics) {
-    log('No Core Web Vitals data available');
-    return;
+function checkMetric(audit, goodThreshold, needsImprovementThreshold, metricName) {
+  if (!audit || audit.scoreDisplayMode === 'notApplicable' || audit.scoreDisplayMode === 'informational' || audit.scoreDisplayMode === 'manual') {
+    return ''; // Skip if not applicable or informational
   }
 
-  log('Core Web Vitals:');
-  Object.entries(psi.data.loadingExperience.metrics).forEach(([k, v]) => {
-    log('-', abbreviations[k], ':', v.category, '(', v.distributions.map((d) => {
-      const percentage = `${Math.round(d.proportion * 100)}%`;
-      if (d.min & d.max) return `${d.min}-${d.max}: ${percentage}`;
-      if (d.min) return `>${d.min}: ${percentage}`;
-      if (d.max) return `<${d.max}: ${percentage}`;
-      return '';
-    }).join(', '), ', 75th percentile', v.percentile, ')');
-  });
+  needsImprovementThreshold = needsImprovementThreshold === undefined ? goodThreshold * 2 : needsImprovementThreshold;
+
+  const value = audit.numericValue;
+  if (value > needsImprovementThreshold) {
+    return `* **${metricName}:** ${audit.displayValue} (Poor)\n`;
+  } else if (value > goodThreshold) {
+    return `* **${metricName}:** ${audit.displayValue} (Needs Improvement)\n`;
+  }
+  return ''; // Return empty string for 'Good'
 }
 
-function summarizeLCP(psi, log) {
-  log('LCP Element:');
-  const lcpImage = psi.data.lighthouseResult.audits['prioritize-lcp-image'].details?.debugData?.initiatorPath[0].url;
-  const lcpRequest = lcpImage ? psi.data.lighthouseResult.audits['network-requests'].details.items.find((i) => i.url === lcpImage) : null;
-  if (lcpImage) {
-    log('- Image Url:', lcpImage);
-  } else {
-    log('- HTML Snippet:', psi.data.lighthouseResult.audits['largest-contentful-paint-element'].details.items[0].items[0].node.snippet);
+// Function to recursively list resources in the chain
+function listChainResources(report, node) {
+  if (node && node.request && node.request.url) {
+    report += `        * ${node.request.url}\n`;
   }
-  log('- CSS Selector:', psi.data.lighthouseResult.audits['largest-contentful-paint-element'].details.items[0].items[0].node.selector);
-  if (lcpRequest) {
-    log('- Mime Type:', lcpRequest.mimeType);
-    log('- Priority:', lcpRequest.priority);
-    log('- Size:', lcpRequest.transferSize);
-  }
-  log('- Timings:');
-  psi.data.lighthouseResult.audits['largest-contentful-paint-element'].details.items[1].items.forEach((t) => {
-    log('    -', t.phase, ':', Math.round(t.timing));
-  });
-}
-
-function summarizePSIOpportunities(psi, log) {
-  log('Top PageSpeed Insights Opportunities:');
-  const opportunities = Object.values(psi.data.lighthouseResult.audits)
-    .filter((a) => a.score < 1 && a.score !== null);
-  opportunities.sort((a, b) => a.score - b.score);
-  opportunities.slice(0, 10).forEach((o) => {
-    log('-', o.title, ':', o.displayValue || '');
-    const items = o.details?.items;
-    if (['uses-long-cache-ttl'].includes(o.id)) {
-      items?.sort((a, b) => b.wastedBytes - a.wastedBytes);
+  if (node && node.children) {
+    for (const key in node.children) {
+      listChainResources(node.children[key]);
     }
-    items?.slice && items.slice(0, 10).forEach((i) => {
-      const label = (i.url && i.url.replace(/\?.*/, '')) || i.entity || i.node?.selector || i.groupLabel || i;
-      const value = Math.round(i.total || i.score || i.blockingTime || i.duration || i.wastedBytes || i.totalBytes || 0);
-      if (value) {
-        log('    -', label, ':', value);
-      }
-    });
-  });
+  }
 }
 
-export default async function collectPsi(pageUrl, deviceType, skipCache) {
+export function summarize(psiData) {
+  if (!psiData?.data?.lighthouseResult?.audits) {
+    return 'No valid PageSpeed Insights data available.';
+  }
+
+  const audits = psiData.data.lighthouseResult.audits;
+
+  let report = `**Bottlenecks:**\n\n`;
+  let length = report.length;
+  let hasBottlenecks = false;
+
+  // Helper function for Core Web Vitals and other key metrics (no URL/form factor)
+
+  // Core Web Vitals
+  report += checkMetric(audits['largest-contentful-paint'], 2500, 4000, 'Largest Contentful Paint (LCP)');
+  report += checkMetric(audits['first-contentful-paint'], 1800, 3000, 'First Contentful Paint (FCP)');
+  report += checkMetric(audits['total-blocking-time'], 200, 600, 'Total Blocking Time (TBT)'); // Use TBT, not INP
+  report += checkMetric(audits['cumulative-layout-shift'], 0.1, 0.25, 'Cumulative Layout Shift (CLS)');
+  report += checkMetric(audits['speed-index'], 3400, 5800, 'Speed Index'); // Add Speed Index
+  if (report.length > length) {
+    hasBottlenecks = true;
+  }
+
+  // Other audits (prioritize those with 'opportunity' details and wastedBytes/wastedMs)
+  const prioritizedAudits = [
+    'uses-optimized-images',
+    'uses-modern-image-formats',
+    'uses-text-compression',
+    'render-blocking-resources',
+    'unminified-css',
+    'unminified-javascript',
+    'unused-css-rules',
+    'unused-javascript',
+    'uses-responsive-images',
+    'efficient-animated-content',
+    'third-party-summary',
+    'duplicated-javascript',
+    'legacy-javascript',
+    'viewport',
+    'server-response-time',
+    'redirects',
+    'uses-rel-preconnect',
+    'prioritize-lcp-image',
+    'unsized-images'
+  ];
+
+  for (const auditId of prioritizedAudits) {
+    const audit = audits[auditId];
+    if (!audit || audit.scoreDisplayMode === 'notApplicable' || audit.scoreDisplayMode === 'informational'  || audit.scoreDisplayMode === 'manual') {
+      continue;
+    }
+
+    if (audit.score !== null && audit.score < 1) {
+      hasBottlenecks = true;
+      report += `* **${audit.title}:** ${audit.displayValue}`;
+
+      if (audit.details && audit.details.overallSavingsMs) {
+        report += ` (Potential savings of ${audit.details.overallSavingsMs}ms)`;
+      }
+      if (audit.details && audit.details.overallSavingsBytes) {
+        report += ` (Potential savings of ${Math.round(audit.details.overallSavingsBytes / 1024)} KiB)`;
+      }
+      report += '\n';
+    }
+  }
+
+
+  // LCP Element Details (if available)
+  const lcpElementAudit = audits['largest-contentful-paint-element'];
+  if (lcpElementAudit && lcpElementAudit.details && lcpElementAudit.details.items && lcpElementAudit.details.items.length > 0) {
+    const lcpItem = lcpElementAudit.details.items[0];
+    if (lcpItem && lcpItem.items && lcpItem.items[0] && lcpItem.items[0].node) {
+      const node = lcpItem.items[0].node;
+      hasBottlenecks = true;
+      report += `* **LCP Element:**\n`;
+      report += `    * Snippet: \`${node.snippet}\`\n`;
+      report += `    * Selector: \`${node.selector}\`\n`;
+
+      // Extract image URL if present
+      if (node.nodeLabel && node.nodeLabel.includes('url(')) {
+        const urlRegex = /url\(['']?(.*?)['']?\)/;
+        const match = node.nodeLabel.match(urlRegex);
+        if (match && match[1]) {
+          report += `    * Image URL: \`${match[1]}\`\n`;
+        }
+      }
+
+      if (node.boundingRect) {
+        report += `    * Size: ${node.boundingRect.width}px x ${node.boundingRect.height}px\n`;
+        report += `    * Position: Top: ${node.boundingRect.top}px, Left: ${node.boundingRect.left}px\n`;
+      }
+    }
+  }
+
+  // Critical Request Chains (simplified, focusing on the longest chain and listing resources)
+  const criticalChainsAudit = audits['critical-request-chains'];
+  if (criticalChainsAudit && criticalChainsAudit.details && criticalChainsAudit.details.longestChain) {
+    const longestChain = criticalChainsAudit.details.longestChain;
+    hasBottlenecks = true;
+    report += `* **Longest Critical Request Chain:**\n`;
+    report += `    * Duration: ${Math.round(longestChain.duration)}ms\n`;
+    report += `    * Transfer Size: ${Math.round(longestChain.transferSize / 1024)} KiB\n`;
+    report += `    * Length: ${longestChain.length} requests\n`;
+    report += `    * Resources:\n`;
+
+    // Start with the root
+    listChainResources(report, criticalChainsAudit.details.chains[Object.keys(criticalChainsAudit.details.chains)[0]]);
+  }
+
+
+  // Add a 'No bottlenecks' message if everything is good
+  if (!hasBottlenecks) {
+    report += '* No significant bottlenecks found based on provided audits. Overall performance is good.\n';
+  }
+
+  return report;
+}
+
+export async function collect(pageUrl, deviceType, skipCache) {
   if (!skipCache) {
     const cache = getCachedResults(pageUrl, deviceType, 'psi');
     if (cache) {
@@ -77,23 +155,14 @@ export default async function collectPsi(pageUrl, deviceType, skipCache) {
     }
   }
 
-  console.debug('Generating PageSpeed Insights audit for', pageUrl, 'on', deviceType);
   const psiAudit = await psi(pageUrl, {
     key: process.env.GOOGLE_PAGESPEED_INSIGHTS_API_KEY,
     strategy: deviceType
   });
 
   cacheResults(pageUrl, deviceType, 'psi', psiAudit);
+  const summary = summarize(psiAudit);
+  cacheResults(pageUrl, deviceType, 'psi', summary);
 
-  // Summarize
-  const logger = getSummaryLogger(pageUrl, deviceType, 'psi');
-  summarizeCWV(psiAudit, (...str) => logger.write(str.join(' ') + '\n'));
-  logger.write('\n');
-  summarizeLCP(psiAudit, (...str) => logger.write(str.join(' ') + '\n'));
-  logger.write('\n');
-  summarizePSIOpportunities(psiAudit, (...str) => logger.write(str.join(' ') + '\n'));
-  logger.end();
-
-  console.debug('Done generating PSI audit');
-  return psiAudit;
+  return { full: psiAudit, summary };
 }

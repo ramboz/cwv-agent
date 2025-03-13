@@ -1,9 +1,10 @@
 /**
  * Detects the AEM implementation type from HTML source code
+ * @param {string} headers - The headers of the page
  * @param {string} htmlSource - The HTML source code of the page
  * @return {string|null} - 'eds', 'cs', 'ams', or null if undetermined
  */
-export function detectAEMVersion(htmlSource) {
+export function detectAEMVersion(headers, htmlSource) {
   if (!htmlSource || typeof htmlSource !== 'string') {
     return null;
   }

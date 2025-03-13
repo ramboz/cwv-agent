@@ -1,9 +1,7 @@
-import beautify from 'js-beautify';
-import { parse } from 'node-html-parser';
 import puppeteer from 'puppeteer';
 import { PredefinedNetworkConditions } from 'puppeteer';
 import PuppeteerHar from 'puppeteer-har';
-import { cacheResults, estimateTokenSize, getSummaryLogger, getCachedResults } from '../utils.js';
+import { cacheResults, estimateTokenSize, getCachedResults } from '../utils.js';
 
 
 const cpuThrottling = {
@@ -33,30 +31,226 @@ const userAgent = {
   mobile: 'Spacecat/1.0',
 }
 
-async function summarizeHtmlHead(pageUrl, deviceType, log) {
-  log('Markup for the head section of the HTML:');
-  log('');
-  const resp = await fetch(pageUrl, {
-    headers: {
-      'User-Agent': userAgent[deviceType],
+export function summarizePerformanceEntries(performanceEntries) {
+  let markdownOutput = `# Performance Analysis (Focused)\n\n`;
+
+  performanceEntries.forEach((entry) => {
+    const entryType = entry.entryType;
+
+    switch (entryType) {
+      case 'navigation':
+        markdownOutput += `## Navigation Timing (Highlights)\n\n`;
+        markdownOutput += `*   **Duration:** ${entry.duration.toFixed(2)} ms\n`;
+        markdownOutput += `*   **DOM Interactive:** ${entry.domInteractive} ms\n`;
+        markdownOutput += `*   **DOM Content Loaded End:** ${entry.domContentLoadedEventEnd} ms\n`;
+        markdownOutput += `*   **DOM Complete:** ${entry.domComplete} ms\n`;
+        markdownOutput += `*   **Load Event End:** ${entry.loadEventEnd} ms\n`;
+        if (entry.serverTiming && entry.serverTiming.length > 0) {
+          markdownOutput += `*   **Server Timing (Navigation):**\n`;
+          entry.serverTiming.forEach(timing => {
+            markdownOutput += `    *   ${timing.name}: ${timing.description} (${timing.duration}ms)\n`;
+          });
+        }
+        markdownOutput += `\n`;
+        break;
+
+      case 'long-animation-frame':
+        markdownOutput += `## Long Animation Frames (Highlights)\n\n`;
+        markdownOutput += `### Long Animation Frame at ${entry.startTime.toFixed(2)} ms (Duration: ${entry.duration} ms, Blocking: ${entry.blockingDuration} ms)\n`;
+        markdownOutput += `*   Blocking Duration: **${entry.blockingDuration} ms**\n`; // Highlight blocking duration
+        if (entry.scripts && entry.scripts.length > 0) {
+          markdownOutput += `*   **Suspect Scripts:**\n`;
+          entry.scripts.forEach(script => {
+            markdownOutput += `    *   Script: ${script.name} (Duration: ${script.duration} ms)\n`;
+            markdownOutput += `        *   Invoker: ${script.invoker}\n`;
+          });
+        }
+        markdownOutput += `\n`;
+        break;
+
+      case 'resource':
+        const resourceDurationThreshold = 1000; // 1 second threshold for "slow" resources
+        const decodedBodySizeThreshold = 1000000; // 1MB threshold for large decoded body size
+
+        let isPerformanceIssue = false;
+        if (entry.renderBlockingStatus === 'blocking') {
+          isPerformanceIssue = true;
+        }
+        if (entry.duration > resourceDurationThreshold) {
+          isPerformanceIssue = true;
+        }
+        if (entry.decodedBodySize > decodedBodySizeThreshold) {
+          isPerformanceIssue = true;
+        }
+        if (entry.serverTiming && entry.serverTiming.some(timing => timing.name === 'cdn-cache' && timing.description === 'MISS')) {
+          isPerformanceIssue = true; // CDN Cache MISS is a potential issue
+        }
+
+        if (isPerformanceIssue) {
+          markdownOutput += `## Resource Timing Issues\n\n`;
+          markdownOutput += `### Potentially Problematic Resource: ${entry.name}\n`;
+          markdownOutput += `*   **Initiator Type:** ${entry.initiatorType}\n`;
+          markdownOutput += `*   **Duration:** ${entry.duration.toFixed(2)} ms **(Long Load Time)**\n`; // Highlight long duration
+          markdownOutput += `*   **Render Blocking Status:** ${entry.renderBlockingStatus} **(Render Blocking)**\n`; // Highlight if blocking
+          markdownOutput += `*   **Transfer Size:** ${entry.transferSize} bytes\n`;
+          markdownOutput += `*   **Decoded Body Size:** ${entry.decodedBodySize} bytes`;
+          if (entry.decodedBodySize > decodedBodySizeThreshold) {
+            markdownOutput += ` **(Large Decoded Size: ${(entry.decodedBodySize / 1024 / 1024).toFixed(2)} MB)**`; // Highlight large decoded size
+          }
+          markdownOutput += `\n`;
+
+          if (entry.serverTiming && entry.serverTiming.length > 0) {
+            markdownOutput += `*   **Server Timing:**\n`;
+            entry.serverTiming.forEach(timing => {
+              markdownOutput += `    *   ${timing.name}: ${timing.description} (${timing.duration}ms)`;
+              if (timing.name === 'cdn-cache' && timing.description === 'MISS') {
+                markdownOutput += ` **(CDN Cache Miss)**`; // Highlight cache miss
+              }
+              markdownOutput += `\n`;
+            });
+          }
+          markdownOutput += `\n`;
+        }
+        break;
+
+
+      case 'layout-shift':
+        if (entry.value > 0.1) { //Layout shifts with value > 0.1 are considered significant
+          markdownOutput += `## Significant Layout Shifts\n\n`;
+          markdownOutput += `### Layout Shift at ${entry.startTime.toFixed(2)} ms (Value: ${entry.value.toFixed(4)})\n`;
+          markdownOutput += `*   Value: **${entry.value.toFixed(4)}** (Significant Shift)\n`; // Highlight value
+          markdownOutput += `*   Had Recent Input: ${entry.hadRecentInput}\n`;
+          if (entry.sources && entry.sources.length > 0) {
+            markdownOutput += `*   Sources:\n`;
+            entry.sources.forEach(source => {
+              markdownOutput += `    *   Node: ${source.node}\n`;
+              markdownOutput += `        *   Previous Rect: ${JSON.stringify(source.previousRect)}\n`;
+              markdownOutput += `        *   Current Rect: ${JSON.stringify(source.currentRect)}\n`;
+            });
+          }
+          markdownOutput += `\n`;
+        }
+        break;
+
+      case 'longtask':
+        if (entry.duration > 100) { // Longtasks > 100ms are considered significant
+          markdownOutput += `## Long Tasks (Highlights)\n\n`;
+          markdownOutput += `### Long Task at ${entry.startTime.toFixed(2)} ms (Duration: **${entry.duration} ms**)\n`; //Highlight long duration
+          markdownOutput += `\n`;
+        }
+        break;
+
+      case 'largest-contentful-paint':
+        markdownOutput += `## Largest Contentful Paint (LCP)\n\n`; // Keep LCP as it's a key metric
+        markdownOutput += `*   **Start Time:** ${entry.startTime.toFixed(2)} ms\n`;
+        markdownOutput += `*   **Render Time:** ${entry.renderTime.toFixed(2)} ms\n`;
+        markdownOutput += `*   **Load Time:** ${entry.loadTime.toFixed(2)} ms\n`;
+        markdownOutput += `*   **Size:** ${entry.size} bytes\n`;
+        markdownOutput += `*   **URL:** ${entry.url}\n`;
+        markdownOutput += `*   **Element:** ${entry.element}\n`;
+        markdownOutput += `\n`;
+        break;
+
+      default:
+          // Optionally handle other entry types or ignore them
+          break;
     }
   });
-  const html = await resp.text();
-  const root = parse(html);
-  log(beautify.html(root.querySelector('head').outerHTML, { preserve_newlines: false }));
+
+  return markdownOutput;
 }
 
+export function summarizeHAR(harData) {
+  if (!harData?.log?.entries) {
+    return 'No valid HTTP Archive data available.';
+  }
 
-async function summarizeFirstSection(page, log) {
-  log('Markup for the 1st section:');
-  log('');
-  const data = await page.evaluate(() => document.querySelector('body > main .section, body [class*="hero"], body').outerHTML);
-  log(beautify.html(data, { preserve_newlines: false }));
+  const entries = harData.log.entries;
+  let report = '**Additional Bottlenecks from HAR Data:**\n\n';
+  let hasBottlenecks = false;
+
+  // 1. Large Transfer Sizes (Top 5, > 100KB)
+  const largeFiles = entries
+    .filter(entry => entry.response && entry.response._transferSize > 100 * 1024) // > 100KB
+    .sort((a, b) => b.response._transferSize - a.response._transferSize)
+    .slice(0, 5); // Limit to top 5
+
+  if (largeFiles.length > 0) {
+    hasBottlenecks = true;
+    report += '* **Large File Transfers:**\n';
+    largeFiles.forEach(entry => {
+      report += `    * ${entry.request.url} (${Math.round(entry.response._transferSize / 1024)} KB)\n`;
+    });
+  }
+
+  // 2. Long Blocking Times (> 10ms)
+  const longBlocking = entries
+    .filter(entry => entry.timings && entry.timings.blocked > 10)
+    .sort((a, b) => b.timings.blocked - a.timings.blocked);
+
+  if (longBlocking.length > 0) {
+    hasBottlenecks = true;
+    report += '* **Significant Blocking Times (DNS, Connect, SSL):**\n';
+    longBlocking.forEach(entry => {
+      report += `    * ${entry.request.url}:  Blocked: ${Math.round(entry.timings.blocked)}ms`;
+      if (entry.timings.dns > 0) {
+        report += `, DNS: ${Math.round(entry.timings.dns)}ms`;
+      }
+      if (entry.timings.connect > 0) {
+        report += `, Connect: ${Math.round(entry.timings.connect)}ms`;
+      }
+      if (entry.timings.ssl > 0) {
+        report += `, SSL: ${Math.round(entry.timings.ssl)}ms`;
+      }
+      report += '\n';
+    });
+  }
+
+   // 3. Long Wait Times (> 500ms) - TTFB.  Separate this from blocking.
+  const longTTFB = entries
+    .filter(entry => entry.timings && entry.timings.wait > 500)
+    .sort((a, b) => b.timings.wait - a.timings.wait);
+
+  if (longTTFB.length > 0) {
+    hasBottlenecks = true;
+    report += '* **High Time to First Byte (TTFB) - Server Response Times:**\n';
+    longTTFB.forEach(entry => {
+      report += `    * ${entry.request.url}: ${Math.round(entry.timings.wait)}ms\n`;
+    });
+  }
+
+    // 4. HTTP/1.1 Connections (Identify resources *not* using HTTP/2 or HTTP/3)
+  const http1Resources = entries.filter(entry => entry.response && entry.response.httpVersion.toLowerCase().startsWith('http/1.1'));
+
+   if (http1Resources.length > 0) {
+     hasBottlenecks = true;
+     report += '* **Resources using HTTP/1.1 (not HTTP/2 or HTTP/3):**\n';
+     http1Resources.forEach(entry => {
+       report += `   * ${entry.request.url}\n`;
+     });
+   }
+
+
+  // 5. Redirects
+  const redirects = entries.filter(entry => entry.response && (entry.response.status === 301 || entry.response.status === 302 || entry.response.status === 307 || entry.response.status === 308));
+  if(redirects.length > 0) {
+    hasBottlenecks = true;
+    report += `* **Redirects:**\n`;
+    redirects.forEach(entry => {
+      report += `    * ${entry.request.url} -> ${entry.response.redirectURL} (Status: ${entry.response.status})\n`;
+    });
+
+  }
+
+  //No significant bottlenecks found
+  if (!hasBottlenecks) {
+    report += '* No significant bottlenecks found based on provided HAR data.\n';
+  }
+
+  return report;
 }
 
-
-export default async function collectHar(pageUrl, deviceType, skipCache) {
-  console.debug('Collecting HAR for', pageUrl, 'on', deviceType);
+export async function collect(pageUrl, deviceType, skipCache) {
   const requestMap = {};
   const browser = await puppeteer.launch({ headless: true });
   const page = await browser.newPage();
@@ -68,6 +262,7 @@ export default async function collectHar(pageUrl, deviceType, skipCache) {
   const har = new PuppeteerHar(page);
 
   const domain = new URL(pageUrl).origin;
+  let mainHeaders;
 
   // Intercept requests so we can gather the 
   page.on('request', async (request) => {
@@ -83,6 +278,9 @@ export default async function collectHar(pageUrl, deviceType, skipCache) {
         const resp = await fetch(request.url());
         const body = await resp.text();
         requestMap[request_url.href] = body;
+        if (request_url.href === pageUrl) {
+          mainHeaders = resp.headers;
+        }
       }
       request.continue();
     } catch (err) {
@@ -112,6 +310,7 @@ export default async function collectHar(pageUrl, deviceType, skipCache) {
 
 
   let perfEntries = getCachedResults(pageUrl, deviceType, 'perf');
+  let perfEntriesSummary;
   if (!perfEntries || skipCache) {
     const perfEntries = await page.evaluate(async () => {
       console.log('Evaluating performance entries');
@@ -165,13 +364,15 @@ export default async function collectHar(pageUrl, deviceType, skipCache) {
 
       return JSON.stringify(entries, null, 2);
     });
-    cacheResults(pageUrl, deviceType, 'perf', perfEntries);
+    cacheResults(pageUrl, deviceType, 'perf', JSON.parse(perfEntries, null, 2));
+    perfEntriesSummary = summarizePerformanceEntries(harFile);
+    cacheResults(pageUrl, deviceType, 'perf', summary);
   }
 
-  console.log('Estimating code size...');
-  console.table(
-    Object.entries(requestMap).map(([url, content]) => ({ url, tokens: estimateTokenSize(content) }))
-  );
+  // console.log('Estimating code size...');
+  // console.table(
+  //   Object.entries(requestMap).map(([url, content]) => ({ url, tokens: estimateTokenSize(content) }))
+  // );
   Object.entries(requestMap).map(([url, content]) => {
     cacheResults(url, deviceType, 'code', content);
   });
@@ -180,16 +381,10 @@ export default async function collectHar(pageUrl, deviceType, skipCache) {
     harFile = await har.stop();
   }
 
-  // Summarize
-  const logger = getSummaryLogger(pageUrl, deviceType, 'har');
-  await summarizeHtmlHead(pageUrl, deviceType, (...str) => logger.write(str.join(' ') + '\n'));
-  logger.write('\n');
-  await summarizeFirstSection(page, (...str) => logger.write(str.join(' ') + '\n'));
-  logger.end();
-
   await browser.close();
   cacheResults(pageUrl, deviceType, 'har', harFile);
+  const harSummary = summarizeHAR(harFile);
+  cacheResults(pageUrl, deviceType, 'har', summary);
 
-  console.debug('Done collecting HAR file, including collecting code for', Object.keys(requestMap).length, 'resources');
-  return { resources: requestMap, har: harFile, perfEntries };
+  return { resources: requestMap, har: harFile, harSummary, perfEntries, perfEntriesSummary, mainHeaders };
 };
