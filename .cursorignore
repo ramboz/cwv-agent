@@ -5,4 +5,4 @@
 .vscodeignore
 .vscodeignore
 .env
-credentials.json
+credentials*.json
