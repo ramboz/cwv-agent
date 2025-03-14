@@ -6,4 +6,5 @@ export default [
   (await import('./lcp.js')).default,
   (await import('./loading-sequence-fonts.js')).default,
   (await import('./loading-sequence-size.js')).default,
+  (await import('./loading-sequence-3rdparty.js')).default,
 ];
