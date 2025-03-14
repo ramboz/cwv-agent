@@ -76,11 +76,9 @@ const reportResources = (entry, matchingHar) => {
     issues = title.join(', ');
   }
 
-  let size = transferSize;
-  if (size === 0 && matchingHar) {
-    size = matchingHar.response.bodySize;
-  }
-
+  const size = transferSize || matchingHar?.response?.bodySize || 0;
+  const mimeType = matchingHar?.response?.content?.mimeType || '';
+  
   const d = {
     start: formatTime(startTime),
     end: formatTime(responseEnd),
@@ -89,6 +87,7 @@ const reportResources = (entry, matchingHar) => {
     entryType,
     duration: formatTime(duration),
     size: formatSize(size),
+    mimeType,
     issues,
   };
 

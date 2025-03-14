@@ -4,4 +4,5 @@ export default [
   (await import('./tbt.js')).default,
   (await import('./cls.js')).default,
   (await import('./lcp.js')).default,
+  (await import('./loading-sequence-fonts.js')).default,
 ];
