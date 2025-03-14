@@ -384,7 +384,7 @@ export async function collect(pageUrl, deviceType, skipCache) {
   await browser.close();
   cacheResults(pageUrl, deviceType, 'har', harFile);
   const harSummary = summarizeHAR(harFile);
-  cacheResults(pageUrl, deviceType, 'har', summary);
+  cacheResults(pageUrl, deviceType, 'har', harSummary);
 
   return { resources: requestMap, har: harFile, harSummary, perfEntries, perfEntriesSummary, mainHeaders };
 };
