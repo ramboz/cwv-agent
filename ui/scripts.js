@@ -29,8 +29,8 @@
     });
   };
 
-  const applyFilter = (type, show, el) => {
-    const rows = el.querySelectorAll(`.${type}`);
+  const applyFilter = (entryType, show, el) => {
+    const rows = el.querySelectorAll(`.${entryType}`);
     rows.forEach((row) => {
       if (show) {
         row.classList.remove('hlx-hidden');
@@ -42,7 +42,7 @@
 
   const generateGrid = (
     data,
-    cols = ['index', 'start', 'end', 'url', 'type', 'size', 'totalSize', 'duration', 'preview', 'details'],
+    cols = ['index', 'start', 'end', 'url', 'entryType', 'size', 'totalSize', 'duration', 'preview', 'details'],
     defaultFilters = ['navigation', 'resource', 'lcp', 'tbt', 'inp', 'long-animation-frame', 'cls', 'paint', 'mark'],
     sortedBy = 'start',
   ) => {
@@ -56,7 +56,7 @@
     if (cols.includes('start')) head.innerHTML += `<th class="hlx-col-header hlx-s hlx-right">Start${sortedBy === 'start' ? '&darr;' : ''}</th>`;
     if (cols.includes('end')) head.innerHTML += `<th class="hlx-col-header hlx-s hlx-right">End${sortedBy === 'end' ? '&darr;' : ''}</th>`;
     if (cols.includes('url')) head.innerHTML += '<th class="hlx-col-header hlx-xl">URL</th>';
-    if (cols.includes('type')) head.innerHTML += '<th class="hlx-col-header hlx-m hlx-center">Type</th>';
+    if (cols.includes('entryType')) head.innerHTML += '<th class="hlx-col-header hlx-m hlx-center">Type</th>';
     if (cols.includes('size')) head.innerHTML += '<th class="hlx-col-header hlx-s hlx-right">Size KB</th>';
     if (cols.includes('totalSize')) head.innerHTML += '<th class="hlx-col-header hlx-s hlx-right">Total KB</th>';
     if (cols.includes('duration')) head.innerHTML += '<th class="hlx-col-header hlx-s hlx-right">Duration</th>';
@@ -72,7 +72,7 @@
     data.forEach((row) => {
       const {
         // eslint-disable-next-line max-len
-        url, type, size, totalSize, duration, /*details, */ start, end, name, before100kb, entryType, css,
+        url, mimeType, size, totalSize, duration, /*details, */ start, end, name, before100kb, entryType, css,
       } = row;
       let urlDislay = url;
       if (url) {
@@ -85,21 +85,21 @@
         urlDislay = name;
       }
       const classes = [];
-      if (type === 'LCP') {
+      if (entryType === 'LCP') {
         classes.push('hlx-lcp');
-      } else if (type === 'CLS') {
+      } else if (entryType === 'CLS') {
         classes.push('hlx-cls');
-      } else if (type === 'TBT') {
+      } else if (entryType === 'TBT') {
         classes.push('hlx-tbt');
-      } else if (type === 'INP') {
+      } else if (entryType === 'INP') {
         classes.push('hlx-inp');
-      } else if (type === 'long-animation-frame') {
+      } else if (entryType === 'long-animation-frame') {
         classes.push('hlx-laf');
-      } else if (type === 'paint') {
+      } else if (entryType === 'paint') {
         classes.push('hlx-paint');
-      } else if (type === 'mark') {
+      } else if (entryType === 'mark') {
         classes.push('hlx-mark');
-      } else if (type === 'navigation') {
+      } else if (entryType === 'navigation') {
         classes.push('hlx-navigation');
       } else {
         classes.push('hlx-resource');
@@ -128,7 +128,7 @@
       if (cols.includes('start')) rowElement.innerHTML += `<td class="hlx-col hlx-s hlx-right hlx-col-start">${formatTime(start)}</td>`;
       if (cols.includes('end')) rowElement.innerHTML += `<td class="hlx-col hlx-s hlx-right hlx-col-end">${formatTime(end)}</td>`;
       if (cols.includes('url')) rowElement.innerHTML += `<td class="hlx-col hlx-xl hlx-col-url">${url ? `<a href="${url}" target="_blank">${urlDislay}</a>` : `${urlDislay}`}</td>`;
-      if (cols.includes('type')) rowElement.innerHTML += `<td class="hlx-col hlx-m hlx-center hlx-col-type"><span title="${name || ''}" class="hlx-badge">${type === 'mark' || type === 'paint' ? name : type}</span></td>`;
+      if (cols.includes('entryType')) rowElement.innerHTML += `<td class="hlx-col hlx-m hlx-center hlx-col-type"><span title="${name || ''}" class="hlx-badge">${entryType === 'mark' || entryType === 'paint' ? name : entryType}</span></td>`;
       if (cols.includes('size')) rowElement.innerHTML += `<td class="hlx-col hlx-s hlx-right hlx-col-size">${size !== undefined ? formatSizeKB(size) : ''}</td>`;
       if (cols.includes('totalSize')) rowElement.innerHTML += `<td class="hlx-col hlx-s hlx-right hlx-col-totalSize">${totalSize !== undefined ? formatSizeKB(totalSize) : ''}</td>`;
       if (cols.includes('duration')) rowElement.innerHTML += `<td class="hlx-col hlx-s hlx-right hlx-col-duration">${duration !== undefined ? formatTime(duration) : ''}</td>`;
@@ -204,19 +204,19 @@
     LCP: {
       filters: ['navigation', 'resource', 'lcp', 'mark', 'paint'],
       defaultFilters: ['navigation', 'resource', 'lcp', 'paint'],
-      cols: ['index', 'start', 'end', 'url', 'type', 'size', 'totalSize', 'preview'],
+      cols: ['index', 'start', 'end', 'url', 'entryType', 'size', 'totalSize', 'preview'],
       sortedBy: 'end',
       data: (d) => {
         const sorted = VIEWS.all.data(d, true);
-        const lastIndex = sorted.findLastIndex((entry) => entry.type === 'LCP');
+        const lastIndex = sorted.findLastIndex((entry) => entry.entryType === 'LCP');
         if (lastIndex === -1) return sorted;
         return sorted.slice(0, lastIndex + 1);
       },
     },
     CLS: {
-      filters: ['resource', 'cls', 'mark', 'paint'],
-      defaultFilters: ['resource', 'cls'],
-      cols: ['end', 'url', 'type', 'preview'],
+      filters: ['resource', 'CLS', 'mark', 'paint'],
+      defaultFilters: ['resource', 'CLS'],
+      cols: ['end', 'url', 'entryType', 'preview'],
       sortedBy: 'end',
       data: (data) => {
         data.sort((a, b) => a.end - b.end);
@@ -224,7 +224,7 @@
         let count = 0;
         for (let i = data.length - 1; i >= 0; i -= 1) {
           const entry = data[i];
-          if (entry.entryType === 'cls') {
+          if (entry.entryType === 'CLS') {
             // found CLS entry
             entry.css = 'hlx-cls-end';
             running = true;
@@ -342,7 +342,7 @@
 
     return json.data.map((entry) => {
       const {
-        start, end, name, url, type, duration, details, entryType, size, issues,
+        start, end, name, url, duration, details, entryType, size, issues,
       } = entry;
       const ret = {};
 
@@ -350,8 +350,7 @@
       if (end) ret.end = Math.round(end); else ret.end = ret.start;
       if (name) ret.name = name;
       if (url) ret.url = url;
-      if (type) ret.type = type;
-      if (entryType) ret.entryType = entryType; else ret.entryType = type.toLowerCase();
+      if (entryType) ret.entryType = entryType;
       if (duration !== undefined) ret.duration = Math.round(duration);
       if (size !== undefined) ret.size = size;
       // if (issues !== undefined) ret.issues = issues;
@@ -376,14 +375,13 @@
     window.PERFORMANCE_REPORT_DATA = {
       url: window.location.href,
       type: window.matchMedia("(max-width: 800px)").matches ? 'mobile' : 'desktop',
-      data: data.map(({ start, end, name, url, type, duration, issues, entryType, size }) => {
+      data: data.map(({ start, end, name, url, duration, issues, entryType, size }) => {
         const ret = {
           start, end, entryType
         };
         if (name) ret.name = name;
         if (issues) ret.issues = issues;
         if (url) ret.url = url;
-        if (type) ret.type = type;
         if(duration) ret.duration = duration;
         if(size) ret.size = size;
         return ret;

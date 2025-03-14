@@ -5,7 +5,7 @@ const THRESHOLDS = {
 
 export default function evaluate({ report }) {
   const { data } = report;
-  const lcps = data.filter(r => r.type === 'LCP');
+  const lcps = data.filter(r => r.entryType === 'LCP');
   
   const results = [];
   if (lcps.length > 0) {

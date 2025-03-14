@@ -39,7 +39,7 @@ const reportNavigation = (entry) => {
     start: formatTime(startTime),
     end: formatTime(responseEnd),
     url: name,
-    type: initiatorType,
+    initiatorType,
     entryType,
     duration: formatTime(duration),
     size: formatSize(transferSize),
@@ -83,7 +83,7 @@ const reportResources = (entry, matchingHar) => {
     start: formatTime(startTime),
     end: formatTime(responseEnd),
     url: name,
-    type: initiatorType,
+    initiatorType,
     entryType,
     duration: formatTime(duration),
     size: formatSize(size),
@@ -104,7 +104,7 @@ const reportLCP = (entry) => {
     start: formatTime(startTime),
     name,
     url,
-    type: 'LCP',
+    entryType: 'LCP',
     element,
   };
 };
@@ -128,7 +128,7 @@ const reportCLS = (entry) => {
     start: formatTime(startTime),
     end: formatTime(startTime),
     name,
-    type: 'CLS',
+    entryType: 'CLS',
     sources,
     value: value.toFixed(5),
   };
@@ -159,7 +159,7 @@ const reportLongAnimationFrame = (entry) => {
     start: formatTime(startTime),
     name,
     url,
-    type: 'long-animation-frame',
+    entryType: 'long-animation-frame',
     duration
   };
 };
@@ -172,7 +172,7 @@ const reportTBT = (entry) => {
   return {
     start: formatTime(startTime),
     name,
-    type: 'TBT',
+    entryType: 'TBT',
     duration,
   };
 };
@@ -193,7 +193,7 @@ const reportINP = (entry) => {
   return {
     start: formatTime(startTime),
     name,
-    type: 'INP',
+    entryType: 'INP',
     duration,
     issues: [`INP: ${inputDelay}ms input delay, ${processingTime}ms processing time, ${presentationDelay}ms presentation delay`],
     element: target || '',
@@ -214,7 +214,7 @@ const reportGeneric = (entry) => {
     start: formatTime(startTime),
     name,
     entryType,
-    type: initiatorType || entryType,
+    initiatorType,
   };
 
   if (endTime) {
