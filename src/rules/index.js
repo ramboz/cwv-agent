@@ -5,4 +5,5 @@ export default [
   (await import('./cls.js')).default,
   (await import('./lcp.js')).default,
   (await import('./loading-sequence-fonts.js')).default,
+  (await import('./loading-sequence-size.js')).default,
 ];
