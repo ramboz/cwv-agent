@@ -287,7 +287,7 @@ Phase 5: Code Review
  
 ## Deliverable Format
 Present your findings as:
-1. Executive summary with key metrics and impact estimates
+1. Executive summary with the url that was tested, key metrics and impact estimates
 2. Prioritized recommendations table with:
    - Impact rating (High/Medium/Low)
    - Implementation complexity (Easy/Medium/Hard)

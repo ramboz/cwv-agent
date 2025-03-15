@@ -1,6 +1,7 @@
 import puppeteer from 'puppeteer';
 import { PredefinedNetworkConditions } from 'puppeteer';
 import PuppeteerHar from 'puppeteer-har';
+import { Agent } from 'undici';
 import { cacheResults, estimateTokenSize, getCachedResults } from '../utils.js';
 
 
@@ -250,7 +251,7 @@ export function summarizeHAR(harData) {
   return report;
 }
 
-export async function collect(pageUrl, deviceType, skipCache) {
+export async function collect(pageUrl, deviceType, { skipCache, skipTlsCheck }) {
   const requestMap = {};
   const browser = await puppeteer.launch({ headless: true });
   const page = await browser.newPage();
@@ -261,21 +262,33 @@ export async function collect(pageUrl, deviceType, skipCache) {
   await page.setUserAgent(userAgent[deviceType]);
   const har = new PuppeteerHar(page);
 
-  const domain = new URL(pageUrl).origin;
+  const { hostname, pathname } = new URL(pageUrl);
   let mainHeaders;
 
   // Intercept requests so we can gather the 
   page.on('request', async (request) => {
     const request_url = new URL(request.url());
     try {
-      if (request_url.origin === domain
-        && (request_url.href === pageUrl
+      if (request_url.hostname === hostname
+        && (request_url.pathname === pathname
           || request_url.pathname.endsWith('.html')
           || (request_url.pathname.endsWith('.js')
             && (request_url.pathname.startsWith('/etc.clientlibs/') || !request_url.pathname.endsWith('.min.js')))
           || (request_url.pathname.endsWith('.css')
             && (request_url.pathname.includes('/etc.clientlibs/') || !request_url.pathname.endsWith('.min.css'))))) {
-        const resp = await fetch(request.url());
+        const resp = await fetch(request.url(), {
+          // headers to bypass basic bot blocks
+          headers: {
+            'Accept': 'text/html,application/xhtml+xml,application/xml,text/css,application/javascript,text/javascript;q=0.9,image/avif,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'User-Agent': 'Spacecat 1/0'
+          },
+          dispatcher: skipTlsCheck ? new Agent({
+            connect: {
+              rejectUnauthorized: false,
+            },
+          }) : undefined,
+        });
         const body = await resp.text();
         requestMap[request_url.href] = body;
         if (request_url.href === pageUrl) {
@@ -298,13 +311,17 @@ export async function collect(pageUrl, deviceType, skipCache) {
     await har.start();
   }
 
-  await page.goto(pageUrl, {
-    timeout: 120_000,
-    waitUntil: 'networkidle2',
-  });
+  try {
+    await page.goto(pageUrl, {
+      timeout: 120_000,
+      waitUntil: 'networkidle2',
+    });
+  } catch (err) {
+    console.error('Page did not idle after 120s. Force continuing.', err.message);
+  }
   await new Promise(resolve => setTimeout(resolve, 30_000));
 
-  if (requestMap[pageUrl].includes('Access Denied')) {
+  if (requestMap[pageUrl] && requestMap[pageUrl].includes('Access Denied')) {
     throw new Error('Access Denied: ' + pageUrl);
   }
 
@@ -365,8 +382,8 @@ export async function collect(pageUrl, deviceType, skipCache) {
       return JSON.stringify(entries, null, 2);
     });
     cacheResults(pageUrl, deviceType, 'perf', JSON.parse(perfEntries, null, 2));
-    perfEntriesSummary = summarizePerformanceEntries(perfEntries);
-    cacheResults(pageUrl, deviceType, 'perf', summary);
+    // perfEntriesSummary = summarizePerformanceEntries(perfEntries);
+    // cacheResults(pageUrl, deviceType, 'perf', perfEntriesSummary);
   }
 
   // console.log('Estimating code size...');

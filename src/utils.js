@@ -1,4 +1,5 @@
 import fs from 'fs';
+import { Agent } from 'undici';
 
 const OUTPUT_DIR = './.cache';
 
@@ -69,25 +70,49 @@ export function readCache(urlString, deviceType, type) {
 }
 
 export async function getNormalizedUrl(urlString) {
-  let normalizedUrl;
+  // Headers needed to bypass basic bot detection
   const headers = {
-    // PSI mobile user agent
-    'User-Agent': 'Mozilla/5.0 (Linux; Android 11; moto g power (2022)) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.5',
+    'User-Agent': 'Spacecat 1/0'
   };
+
   // Try a HEAD request first
-  let resp = await fetch(urlString, { headers, method: 'HEAD' });
-  if (!resp.ok) {
-    // If that fails, try a GET request
-    resp = await fetch(urlString, { headers });
-    if (!resp.ok) {
-      throw new Error(`HTTP error! status: ${resp.status}`, resp);
-    } else {
-      // If the response is a redirect, use the Location header, otherwise use the normalized URL
-      normalizedUrl = resp.headers.get('Location') || resp.url;
+  let resp
+  try {
+    resp = await fetch(urlString, { headers, method: 'HEAD' });
+    if (resp.ok) {
+      return { url: resp.url };
     }
-  } else {
-    // If the response is not a redirect, use the normalized URL
-    normalizedUrl = resp.url;
+  } catch (err) {
+    // Handle TLS errors
+    if (err.cause?.code) {
+      resp = await fetch(urlString, {
+        headers,
+        method: 'HEAD',
+        dispatcher: new Agent({
+          connect: {
+            rejectUnauthorized: false,
+          },
+        }),
+      });
+      if (resp.ok) {
+        return { url: resp.url, skipTlsCheck: true };
+      }
+    }
   }
-  return normalizedUrl;
+
+  // If that fails, try a GET request
+  resp = await fetch(urlString, { headers });
+  if (resp.ok) {
+    return { url: resp.headers.get('Location') || resp.url };
+  }
+
+  // Handle redirect chains
+  if (urlString !== resp.url) {
+    console.log('Redirected to', resp.url);
+    return getNormalizedUrl(resp.url);
+  }
+
+  throw new Error(`HTTP error! status: ${resp.status}`);
 }

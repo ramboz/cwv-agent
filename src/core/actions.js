@@ -5,10 +5,10 @@ import rules from '../rules/index.js';
 import runPrompt from './multishot-prompt.js';
 import { cacheResults, getCachedResults, getNormalizedUrl, readCache } from '../utils.js';
 
-export async function handlePromptAction(pageUrl, deviceType, skipCache) {
+export async function handlePromptAction(pageUrl, deviceType, options) {
   // Check cache first if not skipping
   let result;
-  if (!skipCache) {
+  if (!options.skipCache) {
     result = getCachedResults(pageUrl, deviceType, 'report');
     if (result) {
       console.log('Using cached report...');
@@ -17,7 +17,7 @@ export async function handlePromptAction(pageUrl, deviceType, skipCache) {
   
   // If no cached result or skipping cache, run the prompt
   if (!result) {
-    result = await runPrompt(pageUrl, deviceType, skipCache);
+    result = await runPrompt(pageUrl, deviceType, options);
     if (result instanceof Error) {
       console.error('❌ Failed to generate report for', pageUrl);
     }
@@ -41,14 +41,14 @@ async function applyRules({ pageUrl, deviceType, crux, psi, har, perfEntries, re
   return results.flat().filter(r => r);
 }
 
-export async function handleCollectAction(pageUrl, deviceType, skipCache) {
+export async function handleCollectAction(pageUrl, deviceType, options) {
   const {
     har,
     psi,
     resources,
     perfEntries,
     crux,
-  } = await collectArtifacts(pageUrl, deviceType, skipCache);
+  } = await collectArtifacts(pageUrl, deviceType, options);
 
   const report = merge(pageUrl, deviceType);
   
@@ -89,37 +89,38 @@ export async function processUrl(pageUrl, action, deviceType, skipCache) {
   
   try {
     const normalizedUrl = await getNormalizedUrl(pageUrl);
-    if (!normalizedUrl) {
+    if (!normalizedUrl?.url) {
       throw new Error(`Failed to access: ${pageUrl}`);
     }
+    console.log('Normalized URL:', normalizedUrl.url, normalizedUrl.skipTlsCheck ? '(invalid TLS check)' : '');
     
     let result;
     
     switch (action) {
       case 'prompt':
-        result = await handlePromptAction(normalizedUrl, deviceType, skipCache);
+        result = await handlePromptAction(normalizedUrl.url, deviceType, { skipCache, skipTlsCheck: normalizedUrl.skipTlsCheck });
         break;
         
       case 'collect':
-        result = await handleCollectAction(normalizedUrl, deviceType, skipCache);
+        result = await handleCollectAction(normalizedUrl.url, deviceType, { skipCache, skipTlsCheck: normalizedUrl.skipTlsCheck });
         result.failedRules.forEach(r => console.log('Failed', r.message, ':', r.recommendation));
-        cacheResults(normalizedUrl, deviceType, 'recommendations', result);
+        cacheResults(normalizedUrl.url, deviceType, 'recommendations', result);
         console.log('Done. Check the `.cache` folder');
         break;
 
       case 'rules':
-        result = await handleRulesAction(normalizedUrl, deviceType);
+        result = await handleRulesAction(normalizedUrl.url, deviceType);
         result.failedRules.forEach(r => console.log('Failed', r.time, r.message, ':', r.recommendation));
-        cacheResults(normalizedUrl, deviceType, 'recommendations', result);
+        cacheResults(normalizedUrl.url, deviceType, 'recommendations', result);
         console.log('Done. Check the `.cache` folder');
         break;
         
       case 'merge':
-        result = await handleMergeAction(normalizedUrl, deviceType);
+        result = await handleMergeAction(normalizedUrl.url, deviceType);
         break;
         
       case 'agent':
-        result = await handleAgentAction(normalizedUrl, deviceType);
+        result = await handleAgentAction(normalizedUrl.url, deviceType);
         console.log(result.messages?.at(-1)?.content || result.content || result);
         if (result.usage_metadata) {
           console.log(result.usage_metadata);
@@ -133,7 +134,7 @@ export async function processUrl(pageUrl, action, deviceType, skipCache) {
     console.groupEnd();
     return result;
   } catch (error) {
-    console.error(`Error processing ${pageUrl}:`, error);
+    console.error(`❌ Error processing ${pageUrl}:`, error);
     console.groupEnd();
     return { error: error.message };
   }

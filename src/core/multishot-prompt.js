@@ -19,7 +19,7 @@ import {
 import { detectAEMVersion } from '../tools/aem.js';
 import { estimateTokenSize } from '../utils.js';
 
-export default async function runPrompt(pageUrl, deviceType, skipCache) {
+export default async function runPrompt(pageUrl, deviceType, options) {
     const {
       har,
       harSummary,
@@ -31,7 +31,7 @@ export default async function runPrompt(pageUrl, deviceType, skipCache) {
       perfEntries,
       perfEntriesSummary,
       mainHeaders,
-    } = await collectArtifacts(pageUrl, deviceType, skipCache);
+    } = await collectArtifacts(pageUrl, deviceType, options);
 
     const cms = detectAEMVersion(mainHeaders, resources[pageUrl]);
     console.log('AEM Version:', cms);

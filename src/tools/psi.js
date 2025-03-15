@@ -147,7 +147,7 @@ export function summarize(psiData) {
   return report;
 }
 
-export async function collect(pageUrl, deviceType, skipCache) {
+export async function collect(pageUrl, deviceType, { skipCache }) {
   if (!skipCache) {
     const cache = getCachedResults(pageUrl, deviceType, 'psi');
     if (cache) {
