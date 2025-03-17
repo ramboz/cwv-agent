@@ -280,7 +280,10 @@ export async function collect(pageUrl, deviceType, { skipCache, skipTlsCheck }) 
           // headers to bypass basic bot blocks
           headers: {
             'Accept': 'text/html,application/xhtml+xml,application/xml,text/css,application/javascript,text/javascript;q=0.9,image/avif,image/webp,*/*;q=0.8',
+            'Accept-Encoding': 'gzip, deflate, br, zstd',
             'Accept-Language': 'en-US,en;q=0.5',
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache',
             'User-Agent': 'Spacecat 1/0'
           },
           dispatcher: skipTlsCheck ? new Agent({

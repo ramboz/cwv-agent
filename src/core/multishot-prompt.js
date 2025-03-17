@@ -35,6 +35,10 @@ export default async function runPrompt(pageUrl, deviceType, options) {
 
     const cms = detectAEMVersion(mainHeaders, resources[pageUrl]);
     console.log('AEM Version:', cms);
+
+    if (Object.values(resources).some((url) => url.includes('/cdn-cgi/challenge-platform/'))) {
+      return new Error('Cloudflare challenge detected.');
+    }
   
     // Perform data collection before running to model, so we don't waste calls if an error occurs
     const llm = new ChatVertexAI({

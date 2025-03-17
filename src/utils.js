@@ -69,11 +69,20 @@ export function readCache(urlString, deviceType, type) {
   return JSON.parse(fs.readFileSync(filePath, 'utf8'));
 }
 
+function ensureHttps(url) {
+  const urlObj = new URL(url);
+  urlObj.protocol = 'https';
+  return urlObj.toString();
+}
+
 export async function getNormalizedUrl(urlString) {
   // Headers needed to bypass basic bot detection
   const headers = {
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+    'Accept-Encoding': 'gzip, deflate, br, zstd',
     'Accept-Language': 'en-US,en;q=0.5',
+    'Cache-Control': 'no-cache',
+    'Pragma': 'no-cache',
     'User-Agent': 'Spacecat 1/0'
   };
 
@@ -82,7 +91,7 @@ export async function getNormalizedUrl(urlString) {
   try {
     resp = await fetch(urlString, { headers, method: 'HEAD' });
     if (resp.ok) {
-      return { url: resp.url };
+      return { url: ensureHttps(resp.url) };
     }
   } catch (err) {
     // Handle TLS errors
@@ -97,7 +106,7 @@ export async function getNormalizedUrl(urlString) {
         }),
       });
       if (resp.ok) {
-        return { url: resp.url, skipTlsCheck: true };
+        return { url: ensureHttps(resp.url), skipTlsCheck: true };
       }
     }
   }
@@ -105,7 +114,7 @@ export async function getNormalizedUrl(urlString) {
   // If that fails, try a GET request
   resp = await fetch(urlString, { headers });
   if (resp.ok) {
-    return { url: resp.headers.get('Location') || resp.url };
+    return { url: ensureHttps(resp.headers.get('Location') || resp.url) };
   }
 
   // Handle redirect chains
