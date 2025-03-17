@@ -36,18 +36,18 @@ a:hover {
   color: var(--hlx-color-hover);
 }
 
-.recommendation {
+#recommendations {
     display: grid;
-    grid-template-columns: 300px 300px 1fr;
-    gap: 16px;
-    align-items: start;
-    border-left: 4px solid var(--hlx-color-lcp);
-    margin: 10px 0;
-    padding: 10px;
+    grid-template-columns:  100px 200px 300px 300px 1fr;
+    gap: 2px;
 }
 
-.recommendation.failed {
-    border-left-color: var(--hlx-color-tbt);
+.recommendation {
+    display: contents;
+}
+
+.recommendation > * {
+    padding: 10px;
 }
 
 .recommendation-category {
@@ -55,23 +55,24 @@ a:hover {
     color: var(--hlx-color-marker);
 }
 
-.recommendation-message {
-    grid-column: 2;
-}
-
 .recommendation-text {
-    grid-column: 2;
     color: #888;
     margin-top: 8px;
 }
 
 .recommendation-element {
-    grid-column: 3;
     font-family: monospace;
     background: rgba(0,0,0,0.2);
     padding: 8px;
     margin: 8px 0;
     overflow-x: auto;
+}
+
+.recommendation-time {
+    color: var(--hlx-color-marker);
+    font-size: 0.9em;
+    font-family: monospace;
+    text-align: right;
 }
 
 .recommendation-element textarea {
@@ -84,10 +85,8 @@ a:hover {
     color: var(--hlx-color-marker);
 }
 
-.recommendation-time {
-    grid-column: 3;
-    color: var(--hlx-color-marker);
-    font-size: 0.9em;
-    font-family: monospace;
-    text-align: right;
-} 
+.recommendation-url {
+    overflow-wrap: break-word;
+    word-break: break-all;
+    max-width: 100%;
+}

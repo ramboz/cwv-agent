@@ -17,8 +17,9 @@ export default function evaluate({ summary, report }) {
         if (u.hostname !== current) {
           results.push({
             category: 'loading-sequence',
-            message: `Resource ${r.url} is loaded from a different origin - this costs at least 500ms.`,
+            message: `Resource is loaded from a different origin - this costs at least 500ms.`,
             recommendation: `Move the resource to the same origin as the page or defer it after the LCP`,
+            url: r.url,
             passing: false,
             time: r.start,
           });
