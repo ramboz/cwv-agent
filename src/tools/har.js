@@ -254,64 +254,31 @@ export function summarizeHAR(harData) {
 }
 
 export async function collect(pageUrl, deviceType, { skipCache, skipTlsCheck }) {
-  const requestMap = {};
+
+  let harFile = getCachedResults(pageUrl, deviceType, 'har');
+  let perfEntries = getCachedResults(pageUrl, deviceType, 'perf');
+  if (harFile && perfEntries && !skipCache) {
+    return {
+      har: harFile,
+      harSummary: summarizeHAR(harFile),
+      perfEntries,
+      perfEntriesSummary: summarizePerformanceEntries(perfEntries),
+      fromCache: true
+    };
+  }
+
   const browser = await puppeteer.launch({ headless: true });
   const page = await browser.newPage();
   await page.setViewport(viewports[deviceType]);
   await page.emulateCPUThrottling(cpuThrottling[deviceType]);
   await page.emulateNetworkConditions(networkThrottling[deviceType]);
-  await page.setRequestInterception(true);
   await page.setUserAgent(userAgent[deviceType]);
   const har = new PuppeteerHar(page);
-
-  const { hostname, pathname } = new URL(pageUrl);
-  let mainHeaders;
-
-  // Intercept requests so we can gather the 
-  page.on('request', async (request) => {
-    const request_url = new URL(request.url());
-    try {
-      if (request_url.hostname === hostname
-        && (request_url.pathname === pathname
-          || request_url.pathname.endsWith('.html')
-          || (request_url.pathname.endsWith('.js')
-            && (request_url.pathname.startsWith('/etc.clientlibs/') || !request_url.pathname.endsWith('.min.js')))
-          || (request_url.pathname.endsWith('.css')
-            && (request_url.pathname.includes('/etc.clientlibs/') || !request_url.pathname.endsWith('.min.css'))))) {
-        const resp = await fetch(request.url(), {
-          // headers to bypass basic bot blocks
-          headers: {
-            'Accept': 'text/html,application/xhtml+xml,application/xml,text/css,application/javascript,text/javascript;q=0.9,image/avif,image/webp,*/*;q=0.8',
-            'Accept-Encoding': 'gzip, deflate, br, zstd',
-            'Accept-Language': 'en-US,en;q=0.5',
-            'Cache-Control': 'no-cache',
-            'Pragma': 'no-cache',
-            'User-Agent': 'Spacecat 1/0'
-          },
-          dispatcher: skipTlsCheck ? new Agent({
-            connect: {
-              rejectUnauthorized: false,
-            },
-          }) : undefined,
-        });
-        const body = await resp.text();
-        requestMap[request_url.href] = body;
-        if (request_url.href === pageUrl) {
-          mainHeaders = resp.headers;
-        }
-      }
-      request.continue();
-    } catch (err) {
-      console.error('Failed to fetch', request_url.href, err);
-      request.abort();
-    }
-  });
   
   // Enable DevTools protocol
   const client = await page.target().createCDPSession();
   await client.send('Performance.enable');
 
-  let harFile = getCachedResults(pageUrl, deviceType, 'har');
   if (!harFile || skipCache) {
     await har.start();
   }
@@ -326,12 +293,6 @@ export async function collect(pageUrl, deviceType, { skipCache, skipTlsCheck }) 
   }
   await new Promise(resolve => setTimeout(resolve, 30_000));
 
-  if (requestMap[pageUrl] && requestMap[pageUrl].includes('Access Denied')) {
-    throw new Error('Access Denied: ' + pageUrl);
-  }
-
-
-  let perfEntries = getCachedResults(pageUrl, deviceType, 'perf');
   if (!perfEntries || skipCache) {
     perfEntries = JSON.parse(await page.evaluate(async () => {
       console.log('Evaluating performance entries');
@@ -390,14 +351,6 @@ export async function collect(pageUrl, deviceType, { skipCache, skipTlsCheck }) 
   let perfEntriesSummary = summarizePerformanceEntries(perfEntries);
   cacheResults(pageUrl, deviceType, 'perf', perfEntriesSummary);
 
-  // console.log('Estimating code size...');
-  // console.table(
-  //   Object.entries(requestMap).map(([url, content]) => ({ url, tokens: estimateTokenSize(content) }))
-  // );
-  Object.entries(requestMap).map(([url, content]) => {
-    cacheResults(url, deviceType, 'code', content);
-  });
-
   if (!harFile || skipCache) {
     harFile = await har.stop();
   }
@@ -407,5 +360,5 @@ export async function collect(pageUrl, deviceType, { skipCache, skipTlsCheck }) 
   const harSummary = summarizeHAR(harFile);
   cacheResults(pageUrl, deviceType, 'har', harSummary);
 
-  return { resources: requestMap, har: harFile, harSummary, perfEntries, perfEntriesSummary, mainHeaders };
+  return { har: harFile, harSummary, perfEntries, perfEntriesSummary };
 };

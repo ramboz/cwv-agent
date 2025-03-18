@@ -30,7 +30,7 @@ node index.js --action <action> --urls <path-to-json-file> [--device <device>] [
 ```
 Options:
   --action, -a  Action to perform
-                [string] [choices: "collect", "prompt", "merge", "agent"] [default: "collect"]
+                [string] [choices: "collect", "prompt", "merge", "agent", "rules"] [default: "collect"]
   --url, -u     URL to analyze                                            [string]
   --urls        Path to JSON file containing URLs to analyze              [string]
   --device, -d  Device type
@@ -65,11 +65,21 @@ node index.js --action collect --url <url> [--device <device>]
 ```
 
 This will automatically collect:
-- the HAR for the page load, including throttling when on mobile
+- the CrUX data for the URL
 - the PSI audit for the page
+- the HAR for the page load, including throttling when on mobile
+- the Performance Entries triggered during the page load
 - the 1st-party code files used by the page
 
-### Running the analysis
+### Evaluating the hardcoded rules
+
+```sh
+node index.js --action rules --url <url> [--device <device>]
+```
+
+Collects the artifacts and runs the predefined rules against the web page to identify performance optimizations.
+
+### Running the LLM analysis
 
 ```sh
 node index.js --action prompt --url <url> [--device <device>]

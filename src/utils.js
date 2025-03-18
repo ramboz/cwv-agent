@@ -7,6 +7,17 @@ function getFilePrefix(urlString, deviceType, type) {
   return `${OUTPUT_DIR}/${urlString.replace('https://', '').replace(/[^A-Za-z0-9-]/g, '-').replace(/\//g, '--').replace(/(^-+|-+$)/, '')}.${deviceType}.${type}`
 }
 
+function getFilename(url) {
+  let filename = url.pathname !== '/'
+    ? url.pathname.replace(/\//g, '--').replace(/(^-+|-+$)/, '')
+    : 'index';
+  const [, ext] = filename.split('/').pop().split('.');
+  if (!ext) {
+    filename += '.html';
+  }
+  return filename;
+}
+
 function ensureDir(dir) {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir);
@@ -19,8 +30,12 @@ export function estimateTokenSize(obj) {
 }
 
 export function getCachedResults(urlString, deviceType, type) {
-  if (type === 'code' && fs.existsSync(`${OUTPUT_DIR}/${url.hostname}/${filename}`)) {
-    return fs.readFileSync(`${OUTPUT_DIR}/${url.hostname}/${filename}`, { encoding: 'utf8' });
+  if (type === 'code') {
+    const url = new URL(urlString);
+    const filename = getFilename(url);
+    if (fs.existsSync(`${OUTPUT_DIR}/${url.hostname}/${filename}`)) {
+      return fs.readFileSync(`${OUTPUT_DIR}/${url.hostname}/${filename}`, { encoding: 'utf8' });
+    }
   }
   else if (fs.existsSync(`${getFilePrefix(urlString, deviceType, type)}.json`)) {
     const content = fs.readFileSync(`${getFilePrefix(urlString, deviceType, type)}.json`, { encoding: 'utf8' });
@@ -35,13 +50,7 @@ export function cacheResults(urlString, deviceType, type, results) {
   const url = new URL(urlString);
   if (type === 'code') {
     ensureDir(`${OUTPUT_DIR}/${url.hostname}`);
-    let filename = url.pathname !== '/'
-      ? url.pathname.replace(/\//g, '--').replace(/(^-+|-+$)/, '')
-      : 'index';
-    const [, ext] = filename.split('/').pop().split('.');
-    if (!ext) {
-      filename += '.html';
-    }
+    const filename = getFilename(url);
     fs.writeFileSync(`${OUTPUT_DIR}/${url.hostname}/${filename}`, results);
     return;
   } else if (typeof results === 'string') {

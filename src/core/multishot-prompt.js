@@ -30,10 +30,9 @@ export default async function runPrompt(pageUrl, deviceType, options) {
       cruxSummary,
       perfEntries,
       perfEntriesSummary,
-      mainHeaders,
     } = await collectArtifacts(pageUrl, deviceType, options);
 
-    const cms = detectAEMVersion(mainHeaders, resources[pageUrl]);
+    const cms = detectAEMVersion(har.log.entries[0].headers, resources[pageUrl]);
     console.log('AEM Version:', cms);
 
     if (Object.values(resources).some((url) => url.includes('/cdn-cgi/challenge-platform/'))) {

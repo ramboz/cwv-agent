@@ -1,21 +1,62 @@
 import { collect as collectCrux } from '../tools/crux.js';
 import { collect as collectHar } from '../tools/har.js';
 import { collect as collectPsi } from '../tools/psi.js';
+import { collect as collectCode } from '../tools/code.js';
 import { estimateTokenSize } from '../utils.js';
 
-export default async function collectArtifacts(pageUrl, deviceType, options) {
-  const { full: crux, summary: cruxSummary } = await collectCrux(pageUrl, deviceType, options);
-  console.log('✅ Processed CrUX data. Estimated token size: ~', estimateTokenSize(crux));
-  const { full: psi, summary: psiSummary } = await collectPsi(pageUrl, deviceType, options);
-  console.log('✅ Processed PSI data. Estimated token size: ~', estimateTokenSize(psi));
-  const { resources, har, harSummary, perfEntries, perfEntriesSummary, mainHeaders } = await collectHar(pageUrl, deviceType, options);
-  console.log('✅ Processed HAR data. Estimated token size: ~', estimateTokenSize(har));
-  if (Object.keys(resources).length) {
-    console.log('✅ Processed project code. Estimated token size: ~', estimateTokenSize(resources));
+export async function getCrux(pageUrl, deviceType, options) {
+  const { full, summary } = await collectCrux(pageUrl, deviceType, options);
+  if (full.error && full.error.code === 404) {
+    console.error('ℹ️  No CrUX data for that page.');
+  } else if (full.error) {
+    console.error('❌ Failed to collect CrUX data.', full.error.message);
+  } else {
+    console.log('✅ Processed CrUX data. Estimated token size: ~', estimateTokenSize(full));
+  }
+  return { full, summary };
+}
+
+export async function getPsi(pageUrl, deviceType, options) {
+  const { full, summary, fromCache } = await collectPsi(pageUrl, deviceType, options);
+  if (fromCache) {
+    console.log('✓ Loaded PSI data from cache. Estimated token size: ~', estimateTokenSize(full));
+  } else {
+    console.log('✅ Processed PSI data. Estimated token size: ~', estimateTokenSize(full));
+  }
+  return { full, summary };
+}
+
+export async function getHar(pageUrl, deviceType, options) {
+  const { har, harSummary, perfEntries, perfEntriesSummary, fromCache } = await collectHar(pageUrl, deviceType, options);
+  if (fromCache) {
+    console.log('✓ Loaded HAR data from cache. Estimated token size: ~', estimateTokenSize(har));
+    console.log('✓ Loaded Performance Entries data from cache. Estimated token size: ~', estimateTokenSize(perfEntries));
+  } else {
+    console.log('✅ Processed HAR data. Estimated token size: ~', estimateTokenSize(har));
+    console.log('✅ Processed Performance Entries data. Estimated token size: ~', estimateTokenSize(perfEntries));
+  }
+  return { har, harSummary, perfEntries, perfEntriesSummary };
+}
+
+export async function getCode(pageUrl, deviceType, requests, options) {
+  const { codeFiles, fromCache } = await collectCode(pageUrl, deviceType, requests, options);
+  if (fromCache === Object.keys(codeFiles).length) {
+    console.log('✓ Loaded code from cache. Estimated token size: ~', estimateTokenSize(codeFiles));
+  } else if (fromCache > 0) {
+    console.log(`✓ Partially loaded code from cache (${fromCache}/${Object.keys(codeFiles).length}). Estimated token size: ~`, estimateTokenSize(codeFiles));
   } else {
     console.error('❌ Failed to collect project code');
   }
-  
+  return codeFiles;
+}
+
+export default async function collectArtifacts(pageUrl, deviceType, options) {
+  const { full: crux, summary: cruxSummary } = await getCrux(pageUrl, deviceType, options);
+  const { full: psi, summary: psiSummary } = await getPsi(pageUrl, deviceType, options);
+  const { har, harSummary, perfEntries, perfEntriesSummary } = await getHar(pageUrl, deviceType, options);
+  const requests = har.log.entries.map((e) => e.request.url);
+  const { codeFiles: resources } = await getCode(pageUrl, deviceType, requests, options);
+
   return {
     har,
     harSummary,
@@ -26,6 +67,5 @@ export default async function collectArtifacts(pageUrl, deviceType, options) {
     perfEntriesSummary,
     crux,
     cruxSummary,
-    mainHeaders,
   };
 }

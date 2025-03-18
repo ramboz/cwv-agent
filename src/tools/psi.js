@@ -151,7 +151,7 @@ export async function collect(pageUrl, deviceType, { skipCache }) {
   if (!skipCache) {
     const cache = getCachedResults(pageUrl, deviceType, 'psi');
     if (cache) {
-      return cache;
+      return { full: cache, summary: summarize(cache), fromCache: true };
     }
   }
 

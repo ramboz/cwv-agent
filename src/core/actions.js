@@ -1,4 +1,4 @@
-import collectArtifacts from './collect.js';
+import collectArtifacts, { getHar } from './collect.js';
 import merge from '../tools/merge.js';
 import rules from '../rules/index.js';
 // import runAgent from './agent.js';
@@ -42,31 +42,18 @@ async function applyRules({ pageUrl, deviceType, crux, psi, har, perfEntries, re
 }
 
 export async function handleCollectAction(pageUrl, deviceType, options) {
-  const {
-    har,
-    psi,
-    resources,
-    perfEntries,
-    crux,
-  } = await collectArtifacts(pageUrl, deviceType, options);
-
-  const report = merge(pageUrl, deviceType);
-  
-  const results = await applyRules({ pageUrl, deviceType, crux, psi, har, perfEntries, resources, report });
-  return {
-    failedRules: results.filter(r => !r.passing)
-  };
+  return collectArtifacts(pageUrl, deviceType, options);
 }
 
-export async function handleRulesAction(pageUrl, deviceType) {
-  // const crux = await readCache(pageUrl, deviceType, 'crux');
-  // const psi = await readCache(pageUrl, deviceType, 'psi');
-  const har = await readCache(pageUrl, deviceType, 'har');
-  const perfEntries = await readCache(pageUrl, deviceType, 'perf');
-  // const resources = await readCache(pageUrl, deviceType, 'resources');
-  const report = await readCache(pageUrl, deviceType, 'report');
+export async function handleRulesAction(pageUrl, deviceType, options) {
+  let report = await readCache(pageUrl, deviceType, 'report');
+  if (!report) {
+    await handleCollectAction(pageUrl, deviceType, { skipCache: true });
+    merge(pageUrl, deviceType);
+    report = await readCache(pageUrl, deviceType, 'report');
+  }
+  const { har, perfEntries } = await getHar(pageUrl, deviceType, options);
 
-  // const results = await applyRules({ pageUrl, deviceType, crux, psi, har, perfEntries, resources, report });
   const results = await applyRules({ pageUrl, deviceType, har, perfEntries, report });
   return {
     failedRules: results.filter(r => !r.passing)
@@ -103,14 +90,14 @@ export async function processUrl(pageUrl, action, deviceType, skipCache) {
         
       case 'collect':
         result = await handleCollectAction(normalizedUrl.url, deviceType, { skipCache, skipTlsCheck: normalizedUrl.skipTlsCheck });
-        result.failedRules.forEach(r => console.log('Failed', r.message, ':', r.recommendation));
-        cacheResults(normalizedUrl.url, deviceType, 'recommendations', result);
         console.log('Done. Check the `.cache` folder');
         break;
 
       case 'rules':
-        result = await handleRulesAction(normalizedUrl.url, deviceType);
-        result.failedRules.forEach(r => console.log('Failed', r.time, r.message, ':', r.recommendation));
+        result = await handleRulesAction(normalizedUrl.url, deviceType, { skipCache, skipTlsCheck: normalizedUrl.skipTlsCheck });
+        console.group('Failed rules:');
+        result.failedRules.forEach(r => console.log('- Failed', r.time, r.message, ':', r.recommendation));
+        console.groupEnd();
         cacheResults(normalizedUrl.url, deviceType, 'recommendations', result);
         console.log('Done. Check the `.cache` folder');
         break;
