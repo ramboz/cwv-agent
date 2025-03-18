@@ -4,7 +4,7 @@ const THRESHOLDS = {
 };
 
 export default function evaluate({ report }) {
-  const { data } = report;
+  const data = report.dataSortedByEnd;
   const lcps = data.filter(r => r.entryType === 'LCP');
   
   const results = [];

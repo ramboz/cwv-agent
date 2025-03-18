@@ -4,7 +4,7 @@ const THRESHOLDS = {
 };
 
 export default function evaluate({ summary, report }) {
-  const { data } = report;
+  const data = report.dataSortedByEnd;
   const lcpResource = data.findLast(r => r.entryType === 'LCP');
   const { element, start } = lcpResource;
   const totalSizeBeforeLCP = data.slice(0, lcpResource.id).reduce((acc, r) => acc + (r.size || 0), 0);
