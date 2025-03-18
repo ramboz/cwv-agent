@@ -1,10 +1,5 @@
 import { getSequence } from './shared.js';
 
-const THRESHOLDS = {
-  'text/javascript': 20,
-  'text/css': 10,
-}
-
 export default function evaluate({ summary, report }) {
   const sequence = getSequence(report);
 

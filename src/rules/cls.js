@@ -41,8 +41,8 @@ export default function evaluate({ report }) {
     }).filter(Boolean);
   }
   return {
-    category: 'tbt',
-    message: 'No blocking time',
+    category: 'cls',
+    message: 'No layout shift',
     passing: true,
   };
 }
