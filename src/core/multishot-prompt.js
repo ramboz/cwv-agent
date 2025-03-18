@@ -17,9 +17,9 @@ import {
   actionPrompt,
 } from '../prompts.js';
 import { detectAEMVersion } from '../tools/aem.js';
-import { estimateTokenSize } from '../utils.js';
 
 export default async function runPrompt(pageUrl, deviceType, options) {
+    // Perform data collection before running the model, so we don't waste calls if an error occurs
     const {
       har,
       harSummary,
@@ -40,7 +40,6 @@ export default async function runPrompt(pageUrl, deviceType, options) {
       return new Error('Cloudflare challenge detected.');
     }
   
-    // Perform data collection before running to model, so we don't waste calls if an error occurs
     const llm = new ChatVertexAI({
       model: 'gemini-2.0-pro-exp-02-05',
       maxOutputTokens: 8192,

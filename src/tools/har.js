@@ -56,17 +56,19 @@ export function summarizePerformanceEntries(performanceEntries) {
         break;
 
       case 'long-animation-frame':
-        markdownOutput += `## Long Animation Frames (Highlights)\n\n`;
-        markdownOutput += `### Long Animation Frame at ${entry.startTime.toFixed(2)} ms (Duration: ${entry.duration} ms, Blocking: ${entry.blockingDuration} ms)\n`;
-        markdownOutput += `*   Blocking Duration: **${entry.blockingDuration} ms**\n`; // Highlight blocking duration
-        if (entry.scripts && entry.scripts.length > 0) {
-          markdownOutput += `*   **Suspect Scripts:**\n`;
-          entry.scripts.forEach(script => {
-            markdownOutput += `    *   Script: ${script.name} (Duration: ${script.duration} ms)\n`;
-            markdownOutput += `        *   Invoker: ${script.invoker}\n`;
-          });
+        if (entry.blockingDuration > 0) {
+          markdownOutput += `## Long Animation Frames (Highlights)\n\n`;
+          markdownOutput += `### Long Animation Frame at ${entry.startTime.toFixed(2)} ms (Duration: ${entry.duration} ms, Blocking: ${entry.blockingDuration} ms)\n`;
+          markdownOutput += `*   Blocking Duration: **${entry.blockingDuration} ms**\n`; // Highlight blocking duration
+          if (entry.scripts && entry.scripts.length > 0) {
+            markdownOutput += `*   **Suspect Scripts:**\n`;
+            entry.scripts.forEach(script => {
+              markdownOutput += `    *   Script: ${script.name} (Duration: ${script.duration} ms)\n`;
+              markdownOutput += `        *   Invoker: ${script.invoker}\n`;
+            });
+          }
+          markdownOutput += `\n`;
         }
-        markdownOutput += `\n`;
         break;
 
       case 'resource':
@@ -330,9 +332,8 @@ export async function collect(pageUrl, deviceType, { skipCache, skipTlsCheck }) 
 
 
   let perfEntries = getCachedResults(pageUrl, deviceType, 'perf');
-  let perfEntriesSummary;
   if (!perfEntries || skipCache) {
-    const perfEntries = await page.evaluate(async () => {
+    perfEntries = JSON.parse(await page.evaluate(async () => {
       console.log('Evaluating performance entries');
 
       const clone = (obj) => {
@@ -383,11 +384,11 @@ export async function collect(pageUrl, deviceType, { skipCache, skipTlsCheck }) 
       }));
 
       return JSON.stringify(entries, null, 2);
-    });
-    cacheResults(pageUrl, deviceType, 'perf', JSON.parse(perfEntries, null, 2));
-    // perfEntriesSummary = summarizePerformanceEntries(perfEntries);
-    // cacheResults(pageUrl, deviceType, 'perf', perfEntriesSummary);
+    }));
+    cacheResults(pageUrl, deviceType, 'perf', perfEntries);
   }
+  let perfEntriesSummary = summarizePerformanceEntries(perfEntries);
+  cacheResults(pageUrl, deviceType, 'perf', perfEntriesSummary);
 
   // console.log('Estimating code size...');
   // console.table(
