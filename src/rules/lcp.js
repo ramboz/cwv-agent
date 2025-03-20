@@ -36,7 +36,7 @@ export default function evaluate({ report }) {
           category: 'lcp',
           message: `LCP is average!`,
           recommendation: `The LCP element is taking too long to load. Load it earlier during the loading sequence.`,
-          passing: true,
+          passing: false,
           time: start,
           element,
         });

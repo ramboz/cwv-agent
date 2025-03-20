@@ -102,6 +102,7 @@ const reportLCP = (entry) => {
 
   return {
     start: formatTime(startTime),
+    end: formatTime(startTime),
     name,
     url,
     entryType: 'LCP',
@@ -157,6 +158,7 @@ const reportLongAnimationFrame = (entry) => {
   
   return {
     start: formatTime(startTime),
+    end: formatTime(startTime + duration),
     name,
     url,
     entryType: 'long-animation-frame',
@@ -192,6 +194,7 @@ const reportINP = (entry) => {
 
   return {
     start: formatTime(startTime),
+    end: formatTime(startTime),
     name,
     entryType: 'INP',
     duration,
@@ -212,6 +215,7 @@ const reportGeneric = (entry) => {
 
   const d = {
     start: formatTime(startTime),
+    end: formatTime(endTime),
     name,
     entryType,
     initiatorType,
