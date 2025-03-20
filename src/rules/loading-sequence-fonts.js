@@ -3,7 +3,7 @@ import { getSequence } from './shared.js';
 export default function evaluate({ report }) {
   const sequence = getSequence(report);
 
-  const fonts = sequence.filter(r => r.entrType === 'resource' && r.mimeType.includes('font'));
+  const fonts = sequence.filter(r => r.entryType === 'resource' && r.mimeType.includes('font'));
   if (fonts.length > 0) {
     return {
         category: 'loading-sequence',

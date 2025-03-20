@@ -215,7 +215,7 @@ const reportGeneric = (entry) => {
 
   const d = {
     start: formatTime(startTime),
-    end: formatTime(endTime),
+    end: formatTime(endTime || startTime + (duration || 0)),
     name,
     entryType,
     initiatorType,
