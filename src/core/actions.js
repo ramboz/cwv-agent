@@ -55,8 +55,10 @@ export async function handleRulesAction(pageUrl, deviceType, options) {
   const { har, perfEntries } = await getHar(pageUrl, deviceType, options);
 
   const results = await applyRules({ pageUrl, deviceType, har, perfEntries, report });
+  const failedRules = results.filter(r => !r.passing);
+  failedRules.sort((a, b) => a.time - b.time);
   return {
-    failedRules: results.filter(r => !r.passing)
+    failedRules,
   };
 }
 
