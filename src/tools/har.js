@@ -10,7 +10,11 @@ const cpuThrottling = {
   mobile: 4
 };
 const networkThrottling = {
-  desktop: null,
+  desktop: {
+    download: 10240 * 1024,
+    upload: 10240 * 1024,
+    latency: 40
+  },
   mobile: PredefinedNetworkConditions['Slow 4G'],
 };
 const viewports = {
