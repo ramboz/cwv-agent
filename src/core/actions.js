@@ -102,11 +102,7 @@ export async function processUrl(pageUrl, action, deviceType, skipCache) {
         console.log('Done. Check the `.cache` folder');
         break;
         
-      case 'merge':
-        result = await handleMergeAction(normalizedUrl.url, deviceType);
-        break;
-        
-      case 'agent':
+       case 'agent':
         result = await handleAgentAction(normalizedUrl.url, deviceType);
         console.log(result.messages?.at(-1)?.content || result.content || result);
         if (result.usage_metadata) {
