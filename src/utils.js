@@ -89,21 +89,21 @@ function ensureHttps(url) {
   return urlObj.toString();
 }
 
-export async function getNormalizedUrl(urlString) {
-  // Headers needed to bypass basic bot detection
-  const headers = {
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-    'Accept-Encoding': 'gzip, deflate, br, zstd',
-    'Accept-Language': 'en-US,en;q=0.5',
-    'Cache-Control': 'no-cache',
-    'Pragma': 'no-cache',
-    'User-Agent': 'Spacecat 1/0'
-  };
+// Headers needed to bypass basic bot detection
+export const AGENT_HTTP_HEADERS = {
+  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+  'Accept-Encoding': 'gzip, deflate, br, zstd',
+  'Accept-Language': 'en-US,en;q=0.5',
+  'Cache-Control': 'no-cache',
+  'Pragma': 'no-cache',
+  'User-Agent': 'Spacecat 1/0'
+}
 
+export async function getNormalizedUrl(urlString) {
   // Try a HEAD request first
   let resp
   try {
-    resp = await fetch(urlString, { headers, method: 'HEAD' });
+    resp = await fetch(urlString, { headers: AGENT_HTTP_HEADERS, method: 'HEAD' });
     if (resp.ok) {
       return { url: ensureHttps(resp.url) };
     }
@@ -111,7 +111,7 @@ export async function getNormalizedUrl(urlString) {
     // Handle TLS errors
     if (err.cause?.code) {
       resp = await fetch(urlString, {
-        headers,
+        headers: AGENT_HTTP_HEADERS,
         method: 'HEAD',
         dispatcher: new Agent({
           connect: {
@@ -126,7 +126,7 @@ export async function getNormalizedUrl(urlString) {
   }
 
   // If that fails, try a GET request
-  resp = await fetch(urlString, { headers });
+  resp = await fetch(urlString, { headers: AGENT_HTTP_HEADERS });
   if (resp.ok) {
     return { url: ensureHttps(resp.headers.get('Location') || resp.url) };
   }

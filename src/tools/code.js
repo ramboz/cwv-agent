@@ -1,4 +1,4 @@
-import { cacheResults, getCachedResults } from '../utils.js';
+import { cacheResults, getCachedResults, AGENT_HTTP_HEADERS } from '../utils.js';
 import { Agent } from 'undici';
 
 /**
@@ -41,19 +41,12 @@ export async function collect(pageUrl, deviceType, resources, { skipCache, skipT
   let cachedResources = 0;
   let failedResources = 0;
 
-  // Standard request headers
-  const headers = {
-    'Accept': 'text/html,application/xhtml+xml,application/xml,text/css,application/javascript,text/javascript;q=0.9,image/avif,image/webp,*/*;q=0.8',
-    'Accept-Encoding': 'gzip, deflate, br, zstd',
-    'Accept-Language': 'en-US,en;q=0.5',
-    'Cache-Control': 'no-cache',
-    'Pragma': 'no-cache',
-    'User-Agent': 'Spacecat 1/0'
-  };
-
-  // Optional TLS validation bypass
   const fetchOptions = {
-    headers,
+    headers: {
+      ...AGENT_HTTP_HEADERS,
+      'Accept': 'text/html,application/xhtml+xml,application/xml,text/css,application/javascript,text/javascript;q=0.9,image/avif,image/webp,*/*;q=0.8',
+    },
+    // Optional TLS validation bypass
     dispatcher: skipTlsCheck ? new Agent({
       connect: { rejectUnauthorized: false }
     }) : undefined

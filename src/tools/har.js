@@ -7,9 +7,9 @@ const simulationConfig = {
   desktop: {
     cpuThrottling: 1,
     networkThrottling: {
-      latency: 40,
       download: 10240 * 1024,
       upload: 10240 * 1024,
+      latency: 40,
     },
     viewport: {
       width: 1350,
