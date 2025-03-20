@@ -2,7 +2,7 @@ import { cacheResults } from '../utils.js';
 
 export default function evaluate({ report }) {
   // use dataSortedByEnd to get the previous entries by end time
-  const { dataSortedByEnd: data } = report;
+  const data = report.dataSortedByEnd;
 
   const clss = data.filter(e => e.entryType === 'CLS');
   if (clss.length > 0) {

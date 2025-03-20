@@ -1,6 +1,6 @@
 export function getSequence(report) {
   const data = report.dataSortedByEnd;
-  const lcpResource = data.findLast(r => r.entryType === 'LCP');
-  const sequence = report.data.slice(0, lcpResource.id);
+  const i = data.findLastIndex(r => r.entryType === 'LCP');
+  const sequence = data.slice(0, i);
   return sequence;
 }

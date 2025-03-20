@@ -5,9 +5,10 @@ const THRESHOLDS = {
 
 export default function evaluate({ summary, report }) {
   const data = report.dataSortedByEnd;
-  const lcpResource = data.findLast(r => r.entryType === 'LCP');
+  const i = data.findLastIndex(r => r.entryType === 'LCP');
+  const lcpResource = data[i];
   const { element, start } = lcpResource;
-  const beforeLCP = data.slice(0, lcpResource.id);
+  const beforeLCP = data.slice(0, i);
   const totalSizeBeforeLCP = beforeLCP.reduce((acc, r) => acc + (r.size || 0), 0);
   if (totalSizeBeforeLCP > THRESHOLDS[summary.type]) {
     return {
