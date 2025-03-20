@@ -8,4 +8,5 @@ export default [
   (await import('./loading-sequence-size.js')).default,
   (await import('./loading-sequence-3rdparty.js')).default,
   (await import('./loading-sequence-media.js')).default,
+  (await import('./images-loading.js')).default,
 ];
