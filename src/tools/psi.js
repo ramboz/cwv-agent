@@ -83,7 +83,14 @@ export function summarize(psiData) {
 
     if (audit.score !== null && audit.score < 1) {
       hasBottlenecks = true;
-      report += `* **${audit.title}:** ${audit.displayValue}`;
+      if (audit.displayValue) {
+        report += `* **${audit.title}:** ${audit.displayValue}`;
+      } else if (audit.details?.items?.length > 0) {
+        report += `* **${audit.title}:**`;
+        for (const item of audit.details.items) {
+          report += `\n    * ${item.node.snippet}`;
+        }
+      }
 
       if (audit.details && audit.details.overallSavingsMs) {
         report += ` (Potential savings of ${audit.details.overallSavingsMs}ms)`;
@@ -125,7 +132,7 @@ export function summarize(psiData) {
 
   // Critical Request Chains (simplified, focusing on the longest chain and listing resources)
   const criticalChainsAudit = audits['critical-request-chains'];
-  if (criticalChainsAudit && criticalChainsAudit.details && criticalChainsAudit.details.longestChain) {
+  if (criticalChainsAudit && criticalChainsAudit.details && criticalChainsAudit.details.longestChain && Object.keys(criticalChainsAudit.details.chains).length > 1) {
     const longestChain = criticalChainsAudit.details.longestChain;
     hasBottlenecks = true;
     report += `* **Longest Critical Request Chain:**\n`;
