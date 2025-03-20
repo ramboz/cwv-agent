@@ -48,7 +48,7 @@ export async function handleCollectAction(pageUrl, deviceType, options) {
 export async function handleRulesAction(pageUrl, deviceType, options) {
   let report = await readCache(pageUrl, deviceType, 'report');
   if (!report) {
-    await handleCollectAction(pageUrl, deviceType, { skipCache: true });
+    await getHar(pageUrl, deviceType, { skipCache: true });
     merge(pageUrl, deviceType);
     report = await readCache(pageUrl, deviceType, 'report');
   }
