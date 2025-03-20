@@ -3,24 +3,7 @@ import { PredefinedNetworkConditions } from 'puppeteer';
 import PuppeteerHar from 'puppeteer-har';
 import { cacheResults, getCachedResults } from '../utils.js';
 
-<<<<<<< Updated upstream
-
-const cpuThrottling = {
-  desktop: 1,
-  mobile: 4
-};
-const networkThrottling = {
-  desktop: {
-    download: 10240 * 1024,
-    upload: 10240 * 1024,
-    latency: 40
-  },
-  mobile: PredefinedNetworkConditions['Slow 4G'],
-};
-const viewports = {
-=======
 const simulationConfig = {
->>>>>>> Stashed changes
   desktop: {
     cpuThrottling: 1,
     networkThrottling: {
