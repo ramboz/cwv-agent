@@ -19,8 +19,6 @@ export function detectAEMVersion(headers, htmlSource) {
     /aem\.js/i,
     // Block structure
     /data-block-status/i,
-    // Script patterns specific to EDS
-    /loadEager|loadLazy|loadDelayed/i,
     // Franklin-specific markup patterns
     /scripts\.js/i,
     // Block HTML patterns
