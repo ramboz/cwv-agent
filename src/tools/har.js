@@ -1,9 +1,9 @@
 import puppeteer from 'puppeteer';
 import { PredefinedNetworkConditions } from 'puppeteer';
 import PuppeteerHar from 'puppeteer-har';
-import { Agent } from 'undici';
-import { cacheResults, estimateTokenSize, getCachedResults } from '../utils.js';
+import { cacheResults, getCachedResults } from '../utils.js';
 
+<<<<<<< Updated upstream
 
 const cpuThrottling = {
   desktop: 1,
@@ -18,25 +18,40 @@ const networkThrottling = {
   mobile: PredefinedNetworkConditions['Slow 4G'],
 };
 const viewports = {
+=======
+const simulationConfig = {
+>>>>>>> Stashed changes
   desktop: {
-    connectionType: 'ethernet',
-    width: 1350,
-    height: 940,
-    deviceScaleFactor: 1,
+    cpuThrottling: 1,
+    networkThrottling: {
+      latency: 40,
+      download: 10240 * 1024,
+      upload: 10240 * 1024,
+    },
+    viewport: {
+      width: 1350,
+      height: 940,
+      deviceScaleFactor: 1,
+      isMobile: false,
+      isLandscape: true,
+    },
+    userAgent: 'Spacecat/1.0'
   },
   mobile: {
-    connectionType: 'cellular4g',
-    width: 412,
-    height: 823,
-    deviceScaleFactor: 1.75,
+    cpuThrottling: 4,
+    networkThrottling: PredefinedNetworkConditions['Slow 4G'],
+    viewport: {
+      width: 412,
+      height: 823,
+      deviceScaleFactor: 1.75,
+      isMobile: true,
+      isLandscape: false,
+    },
+    userAgent: 'Spacecat/1.0'
   }
 };
-const userAgent = {
-  desktop: 'Spacecat/1.0',
-  mobile: 'Spacecat/1.0',
-}
 
-export function summarizePerformanceEntries(performanceEntries) {
+export function summarizePerformanceEntries(performanceEntries, deviceType) {
   let markdownOutput = `# Performance Analysis (Focused)\n\n`;
 
   performanceEntries.forEach((entry) => {
@@ -167,7 +182,7 @@ export function summarizePerformanceEntries(performanceEntries) {
   return markdownOutput;
 }
 
-export function summarizeHAR(harData) {
+export function summarizeHAR(harData, deviceType) {
   if (!harData?.log?.entries) {
     return 'No valid HTTP Archive data available.';
   }
@@ -213,9 +228,9 @@ export function summarizeHAR(harData) {
     });
   }
 
-   // 3. Long Wait Times (> 500ms) - TTFB.  Separate this from blocking.
+   // 3. Long Wait Times (> 500ms desktop / >1s mobile) - TTFB.  Separate this from blocking.
   const longTTFB = entries
-    .filter(entry => entry.timings && entry.timings.wait > 500)
+    .filter(entry => entry.timings && entry.timings.wait > (deviceType === 'desktop' ? 500 : 1000))
     .sort((a, b) => b.timings.wait - a.timings.wait);
 
   if (longTTFB.length > 0) {
@@ -273,10 +288,10 @@ export async function collect(pageUrl, deviceType, { skipCache, skipTlsCheck }) 
 
   const browser = await puppeteer.launch({ headless: true });
   const page = await browser.newPage();
-  await page.setViewport(viewports[deviceType]);
-  await page.emulateCPUThrottling(cpuThrottling[deviceType]);
-  await page.emulateNetworkConditions(networkThrottling[deviceType]);
-  await page.setUserAgent(userAgent[deviceType]);
+  await page.setViewport(simulationConfig[deviceType].viewport);
+  await page.emulateCPUThrottling(simulationConfig[deviceType].cpuThrottling);
+  await page.emulateNetworkConditions(simulationConfig[deviceType].networkThrottling);
+  await page.setUserAgent(simulationConfig[deviceType].userAgent);
   const har = new PuppeteerHar(page);
   
   // Enable DevTools protocol
@@ -352,7 +367,7 @@ export async function collect(pageUrl, deviceType, { skipCache, skipTlsCheck }) 
     }));
     cacheResults(pageUrl, deviceType, 'perf', perfEntries);
   }
-  let perfEntriesSummary = summarizePerformanceEntries(perfEntries);
+  let perfEntriesSummary = summarizePerformanceEntries(perfEntries, deviceType);
   cacheResults(pageUrl, deviceType, 'perf', perfEntriesSummary);
 
   if (!harFile || skipCache) {
@@ -361,7 +376,7 @@ export async function collect(pageUrl, deviceType, { skipCache, skipTlsCheck }) 
 
   await browser.close();
   cacheResults(pageUrl, deviceType, 'har', harFile);
-  const harSummary = summarizeHAR(harFile);
+  const harSummary = summarizeHAR(harFile, deviceType);
   cacheResults(pageUrl, deviceType, 'har', harSummary);
 
   return { har: harFile, harSummary, perfEntries, perfEntriesSummary };
