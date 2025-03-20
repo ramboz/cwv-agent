@@ -7,7 +7,7 @@ import { estimateTokenSize } from '../utils.js';
 export async function getCrux(pageUrl, deviceType, options) {
   const { full, summary } = await collectCrux(pageUrl, deviceType, options);
   if (full.error && full.error.code === 404) {
-    console.error('ℹ️  No CrUX data for that page.');
+    console.warn('ℹ️  No CrUX data for that page.');
   } else if (full.error) {
     console.error('❌ Failed to collect CrUX data.', full.error.message);
   } else {
@@ -39,13 +39,15 @@ export async function getHar(pageUrl, deviceType, options) {
 }
 
 export async function getCode(pageUrl, deviceType, requests, options) {
-  const { codeFiles, fromCache } = await collectCode(pageUrl, deviceType, requests, options);
-  if (fromCache === Object.keys(codeFiles).length) {
+  const { codeFiles, stats } = await collectCode(pageUrl, deviceType, requests, options);
+  if (stats.fromCache === stats.total) {
     console.log('✓ Loaded code from cache. Estimated token size: ~', estimateTokenSize(codeFiles));
-  } else if (fromCache > 0) {
+  } else if (stats.fromCache > 0) {
     console.log(`✓ Partially loaded code from cache (${fromCache}/${Object.keys(codeFiles).length}). Estimated token size: ~`, estimateTokenSize(codeFiles));
+  } else if (stats.failed > 0) {
+    console.error('❌ Failed to collect all project code');
   } else {
-    console.error('❌ Failed to collect project code');
+    console.log('✅ Processed project code. Estimated token size: ~', estimateTokenSize(codeFiles));
   }
   return codeFiles;
 }
