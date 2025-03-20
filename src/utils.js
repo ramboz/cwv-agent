@@ -75,7 +75,12 @@ export function getSummaryLogger(urlString, deviceType, type) {
 
 export function readCache(urlString, deviceType, type) {
   const filePath = `${getFilePrefix(urlString, deviceType, type)}.json`;
-  return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  try {
+    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  } catch (err) {
+    console.warn(`Cache file ${filePath} does not exist`);
+    return null;
+  }
 }
 
 function ensureHttps(url) {
