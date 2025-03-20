@@ -7,14 +7,10 @@ export default function evaluate({ report }) {
   if (lafs.length > 0) {
     return lafs.map((e) => {
       const { url, name, duration, start } = e;
-      let element = url || name;
-      if (!element) {
-        element = 'Inline script, inital navigation or other';
-      }
       return {
         category: 'long-animation-frame',
         message: `${duration.toFixed(0)}ms animation frame`,
-        element,
+        url: url || name || 'Inline script, inital navigation or other',
         recommendation: 'Remove long animation frames to improve performance',
         passing: false,
         time: start,
