@@ -142,7 +142,7 @@ const reportLongAnimationFrame = (entry) => {
   } = entry;
 
   let url = '';
-  let name = 'Inline script';
+  let name = '';
   const lastScript = scripts[scripts.length - 1];
   if (lastScript) {
     const { invoker, invokerType, sourceURL } = lastScript;
