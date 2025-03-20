@@ -1,7 +1,7 @@
 import { getSequence } from './shared.js';
 
 export default function evaluate({ summary, report }) {
-  const sequence = getSequence(report);
+  const { sequence } = getSequence(report);
 
   const results = [];
   const current = new URL(summary.url).hostname;

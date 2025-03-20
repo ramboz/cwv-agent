@@ -6,7 +6,7 @@ const THRESHOLDS = {
 }
 
 export default function evaluate({ report }) {
-  const sequence = getSequence(report);
+  const { sequence } = getSequence(report);
 
   const results = [];
   sequence.forEach(r => {
