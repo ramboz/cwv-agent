@@ -25,7 +25,7 @@ export default function evaluate({ har, perfEntries, report }) {
   return {
     category: 'lcp',
     message: 'LCP image is loaded eagerly and all other iamges are lazy loaded',
-    recommendation: 'Imge loading is well optimized.',
+    recommendation: 'Image loading is well optimized.',
     passing: true,
     time: start,
   };
