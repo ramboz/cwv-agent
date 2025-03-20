@@ -1,10 +1,10 @@
-import { cacheResults } from '../utils.js';
+const THRESHOLD = 0.01;
 
 export default function evaluate({ report }) {
   // use dataSortedByEnd to get the previous entries by end time
   const data = report.dataSortedByEnd;
 
-  const clss = data.filter(e => e.entryType === 'CLS');
+  const clss = data.filter(e => e.entryType === 'CLS' && e.value > THRESHOLD);
   if (clss.length > 0) {
     const processed = new Set();
     return clss.map((e) => {
