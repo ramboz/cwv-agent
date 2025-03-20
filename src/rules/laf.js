@@ -13,7 +13,7 @@ export default function evaluate({ report }) {
       }
       return {
         category: 'long-animation-frame',
-        message: `${duration}ms animation frame`,
+        message: `${duration.toFixed(0)}ms animation frame`,
         element,
         recommendation: 'Remove long animation frames to improve performance',
         passing: false,
