@@ -31,7 +31,7 @@ export async function handlePromptAction(pageUrl, deviceType, options) {
   return result;
 }
 
-async function applyRules({ pageUrl, deviceType, crux, psi, har, perfEntries, resources, report }) {
+async function applyRules({ pageUrl, deviceType, crux, psi, har, perfEntries, resources, fullHtml, report }) {
   // Sort report.data by start time
   report.data.sort((a, b) => a.start - b.start);
   // Clone report.data and sort by end time
@@ -39,7 +39,7 @@ async function applyRules({ pageUrl, deviceType, crux, psi, har, perfEntries, re
 
   const results = rules.map((r) => {
     try {
-      return r({ summary: { url: pageUrl, type: deviceType }, crux, psi, har, perfEntries, resources, report });
+      return r({ summary: { url: pageUrl, type: deviceType }, crux, psi, har, perfEntries, resources, fullHtml, report });
     } catch (error) {
       console.error('❌ Error applying a rule', error);
       return null;
@@ -60,9 +60,9 @@ export async function handleRulesAction(pageUrl, deviceType, options) {
     merge(pageUrl, deviceType);
     report = await readCache(pageUrl, deviceType, 'report');
   }
-  const { har, perfEntries } = await getHar(pageUrl, deviceType, options);
+  const { har, perfEntries, fullHtml } = await getHar(pageUrl, deviceType, options);
 
-  const results = await applyRules({ pageUrl, deviceType, har, perfEntries, report });
+  const results = await applyRules({ pageUrl, deviceType, har, perfEntries, fullHtml, report });
   const failedRules = results.filter(r => !r.passing);
   failedRules.sort((a, b) => a.time - b.time);
   return {
@@ -106,7 +106,7 @@ export async function processUrl(pageUrl, action, deviceType, skipCache) {
       case 'rules':
         result = await handleRulesAction(normalizedUrl.url, deviceType, { skipCache, skipTlsCheck: normalizedUrl.skipTlsCheck });
         console.group('Failed rules:');
-        result.failedRules.forEach(r => console.log('- Failed', r.time, r.message, ':', r.recommendation));
+        result.failedRules.forEach(r => console.log('- Failed', r.time || '', r.message, ':', r.recommendation));
         console.groupEnd();
         cacheResults(normalizedUrl.url, deviceType, 'recommendations', result);
         console.log('Done. Check the `.cache` folder');

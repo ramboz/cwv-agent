@@ -1,5 +1,3 @@
-import { getSequence } from './shared.js';
-
 export default function evaluate({ summary, har }) {
   const { hostname } = new URL(summary.url);
   const allModernProtocol = har.log.entries

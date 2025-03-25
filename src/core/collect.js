@@ -37,7 +37,7 @@ export async function getHar(pageUrl, deviceType, options) {
     console.log('✅ Processed Performance Entries data. Estimated token size: ~', estimateTokenSize(perfEntries));
     console.log('✅ Processed full rendered HTML markup. Estimated token size: ~', estimateTokenSize(fullHtml));
   }
-  return { har, harSummary, perfEntries, perfEntriesSummary };
+  return { har, harSummary, perfEntries, perfEntriesSummary, fullHtml };
 }
 
 export async function getCode(pageUrl, deviceType, requests, options) {
