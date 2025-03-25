@@ -37,7 +37,15 @@ async function applyRules({ pageUrl, deviceType, crux, psi, har, perfEntries, re
   // Clone report.data and sort by end time
   report.dataSortedByEnd = report.data.slice().sort((a, b) => a.end - b.end);
 
-  const results = await Promise.all(rules.map((r) => r({ summary: { url: pageUrl, type: deviceType }, crux, psi, har, perfEntries, resources, report })));
+  const results = rules.map((r) => {
+    try {
+      return r({ summary: { url: pageUrl, type: deviceType }, crux, psi, har, perfEntries, resources, report });
+    } catch (error) {
+      console.error('❌ Error applying a rule', error);
+      return null;
+    }
+  });
+  
   return results.flat().filter(r => r);
 }
 
