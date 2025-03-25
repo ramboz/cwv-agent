@@ -31,7 +31,7 @@ export default function evaluate({ report }) {
         recommendation = `Fix width and height before element or impacting CSS is loaded - Root cause seems to be ${previous.url}`;
       }
       return {
-        category: 'cls',
+        category: 'user-experience',
         message: `Element moves (${value})`,
         recommendation,
         element: node,
@@ -40,9 +40,5 @@ export default function evaluate({ report }) {
       };
     }).filter(Boolean);
   }
-  return {
-    category: 'cls',
-    message: 'No layout shift',
-    passing: true,
-  };
+  return null;
 }

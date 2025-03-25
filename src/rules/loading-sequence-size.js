@@ -14,7 +14,7 @@ export default function evaluate({ report }) {
     if (r.entryType === 'resource') {
       if (r.size > THRESHOLDS[r.mimeType]) {
         results.push({
-          category: 'loading-sequence',
+          category: 'size',
           message: `Resource is large - do you really need those ${r.size} KB before LCP ?`,
           recommendation: `Reduce the size of the resource: keep only what is needed to show the LCP and defer the rest`,
           url: r.url,

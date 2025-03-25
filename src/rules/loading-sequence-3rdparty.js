@@ -11,7 +11,7 @@ export default function evaluate({ summary, report }) {
         const u = new URL(r.url);
         if (u.hostname !== current) {
           results.push({
-            category: 'loading-sequence',
+            category: 'third-party',
             message: `Resource is loaded from a different origin (this costs at least 500ms). Current duration: ${r.duration.toFixed(0)}ms`,
             recommendation: `Move the resource to the same origin as the page or defer it after the LCP`,
             url: r.url,

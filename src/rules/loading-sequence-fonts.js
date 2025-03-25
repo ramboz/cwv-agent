@@ -7,7 +7,7 @@ export default function evaluate({ report }) {
   const results = [];
   fonts.forEach(f => {
     results.push({
-        category: 'loading-sequence',
+        category: 'fonts',
         message: `Font file detected in loading sequence (before LCP)`,
         recommendation: `Move font files after the LCP to improve performance and use the font fallback technique to prevent CLS`,
         url: f.url,

@@ -26,7 +26,7 @@ export default function evaluate({ report }) {
       processed.add(previous.id);
       
       return {
-        category: 'tbt',
+        category: 'main-thread',
         message: `${duration}ms blocking time`,
         recommendation: `Remove blocking time: most likely caused by ${previous.url}`,
         passing: false,
@@ -34,9 +34,5 @@ export default function evaluate({ report }) {
       };
     }).filter(Boolean);
   }
-  return {
-    category: 'tbt',
-    message: 'No blocking time',
-    passing: true,
-  };
+  return null;
 }

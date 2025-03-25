@@ -25,7 +25,7 @@ export default function evaluate({ report }) {
       if (lcp.end > THRESHOLDS.bad) {
         results.push({
           category: 'lcp',
-          message: `LCP is bad!`,
+          message: `LCP is bad`,
           recommendation: `The LCP element is taking too long to load. Load it earlier during the loading sequence.`,
           passing: false,
           time: start,
@@ -34,21 +34,13 @@ export default function evaluate({ report }) {
       } else {
         results.push({
           category: 'lcp',
-          message: `LCP is average!`,
+          message: `LCP is average`,
           recommendation: `The LCP element is taking too long to load. Load it earlier during the loading sequence.`,
           passing: false,
           time: start,
           element,
         });
       }
-    } else {
-      results.push({
-        category: 'lcp',
-        message: `LCP is good!`,
-        passing: true,
-        time: start,
-        element,
-      });
     }
   }
   return results;

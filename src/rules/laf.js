@@ -8,7 +8,7 @@ export default function evaluate({ report }) {
     return lafs.map((e) => {
       const { url, name, duration, start } = e;
       return {
-        category: 'long-animation-frame',
+        category: 'main-thread',
         message: `${duration.toFixed(0)}ms animation frame`,
         url: url || name || 'Inline script, inital navigation or other',
         recommendation: 'Remove long animation frames to improve performance',
@@ -17,9 +17,5 @@ export default function evaluate({ report }) {
       };
     });
   }
-  return {
-    category: 'long-animation-frame',
-    message: 'No long animation frames',
-    passing: true,
-  };
+  return null;
 }

@@ -7,7 +7,7 @@ export default function evaluate({ report }) {
   const results = [];
   blocking.forEach(b => {
     results.push({
-        category: 'loading-sequence',
+        category: 'main-thread',
         message: `Resource is blocking the main thread`,
         recommendation: `Consider deferring the loading of this resource or at least make it non-blocking`,
         url: b.url,

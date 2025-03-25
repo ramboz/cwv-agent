@@ -7,16 +7,11 @@ export default function evaluate({ summary, har }) {
     .every((e) => ['h3', 'h2'].includes(e.request.httpVersion));
   if (!allModernProtocol) {
     return {
-      category: 'lcp',
+      category: 'network',
       message: 'Some first party resources are not served using HTTP/2 or HTTP/3.',
       recommendation: 'Configured your CDN to use HTTP/2 or HTTP/3.',
       passing: false,
     };
   }
-  return {
-    category: 'lcp',
-    message: 'All first party resources are using HTTP/2 or HTTP/3.',
-    recommendation: 'Http version is well optimized.',
-    passing: true,
-  };
+  return null;
 }
