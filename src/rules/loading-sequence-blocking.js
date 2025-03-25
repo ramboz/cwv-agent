@@ -4,7 +4,6 @@ export default function evaluate({ report }) {
   const { sequence } = getSequence(report);
 
   const blocking = sequence.filter(r => r.entryType === 'resource' && !r.url.includes('/styles.css') && r.renderBlockingStatus === 'blocking');
-  console.log('blocking', blocking);
   const results = [];
   blocking.forEach(b => {
     results.push({
