@@ -11,4 +11,6 @@ export default [
   (await import('./images-loading.js')).default,
   (await import('./http-version.js')).default,
   (await import('./loading-sequence-blocking.js')).default,
+  (await import('./no-inline-svg.js')).default,
+  (await import('./lazy-header-footer.js')).default,
 ];
