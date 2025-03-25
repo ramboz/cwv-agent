@@ -15,5 +15,5 @@ export default function evaluate({ report }) {
         time: f.start,
       });
   });
-  return [];
+  return results;
 }

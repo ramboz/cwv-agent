@@ -88,6 +88,7 @@ const reportResources = (entry, matchingHar) => {
     duration: formatTime(duration),
     size: formatSize(size),
     mimeType,
+    renderBlockingStatus,
     issues,
   };
 

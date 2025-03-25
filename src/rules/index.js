@@ -10,4 +10,5 @@ export default [
   (await import('./loading-sequence-media.js')).default,
   (await import('./images-loading.js')).default,
   (await import('./http-version.js')).default,
+  (await import('./loading-sequence-blocking.js')).default,
 ];
