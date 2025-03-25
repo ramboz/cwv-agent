@@ -259,12 +259,14 @@ export async function collect(pageUrl, deviceType, { skipCache, skipTlsCheck }) 
 
   let harFile = getCachedResults(pageUrl, deviceType, 'har');
   let perfEntries = getCachedResults(pageUrl, deviceType, 'perf');
-  if (harFile && perfEntries && !skipCache) {
+  let fullHtml = getCachedResults(pageUrl, deviceType, 'html');
+  if (harFile && perfEntries && fullHtml&& !skipCache) {
     return {
       har: harFile,
       harSummary: summarizeHAR(harFile),
       perfEntries,
       perfEntriesSummary: summarizePerformanceEntries(perfEntries),
+      fullHtml,
       fromCache: true
     };
   }
@@ -357,10 +359,17 @@ export async function collect(pageUrl, deviceType, { skipCache, skipTlsCheck }) 
     harFile = await har.stop();
   }
 
+  if (!fullHtml || skipCache) {
+    fullHtml = await page.evaluate(() => {
+      return document.documentElement.outerHTML;
+    });
+  }
+  cacheResults(pageUrl, deviceType, 'html', fullHtml);
+
   await browser.close();
   cacheResults(pageUrl, deviceType, 'har', harFile);
   const harSummary = summarizeHAR(harFile, deviceType);
   cacheResults(pageUrl, deviceType, 'har', harSummary);
 
-  return { har: harFile, harSummary, perfEntries, perfEntriesSummary };
+  return { har: harFile, harSummary, perfEntries, perfEntriesSummary, fullHtml };
 };

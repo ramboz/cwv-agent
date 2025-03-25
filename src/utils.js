@@ -36,6 +36,8 @@ export function getCachedResults(urlString, deviceType, type) {
     if (fs.existsSync(`${OUTPUT_DIR}/${url.hostname}/${filename}`)) {
       return fs.readFileSync(`${OUTPUT_DIR}/${url.hostname}/${filename}`, { encoding: 'utf8' });
     }
+  } else if (type === 'html' && fs.existsSync(`${getFilePrefix(urlString, deviceType, 'full')}.html`)) {
+    return fs.readFileSync(`${getFilePrefix(urlString, deviceType, 'full')}.html`, { encoding: 'utf8' });
   }
   else if (fs.existsSync(`${getFilePrefix(urlString, deviceType, type)}.json`)) {
     const content = fs.readFileSync(`${getFilePrefix(urlString, deviceType, type)}.json`, { encoding: 'utf8' });
@@ -53,6 +55,11 @@ export function cacheResults(urlString, deviceType, type, results) {
     const filename = getFilename(url);
     fs.writeFileSync(`${OUTPUT_DIR}/${url.hostname}/${filename}`, results);
     return;
+  } else if (type === 'html') {
+    fs.writeFileSync(
+      `${getFilePrefix(urlString, deviceType, 'full')}.html`,
+      results,
+    );
   } else if (typeof results === 'string') {
     fs.writeFileSync(
       `${getFilePrefix(urlString, deviceType, type)}.summary.md`,
