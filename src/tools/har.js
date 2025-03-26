@@ -260,6 +260,7 @@ export async function collect(pageUrl, deviceType, { skipCache, skipTlsCheck }) 
   let harFile = getCachedResults(pageUrl, deviceType, 'har');
   let perfEntries = getCachedResults(pageUrl, deviceType, 'perf');
   let fullHtml = getCachedResults(pageUrl, deviceType, 'html');
+  let jsApi = getCachedResults(pageUrl, deviceType, 'jsapi');
   if (harFile && perfEntries && fullHtml&& !skipCache) {
     return {
       har: harFile,
@@ -366,10 +367,34 @@ export async function collect(pageUrl, deviceType, { skipCache, skipTlsCheck }) 
   }
   cacheResults(pageUrl, deviceType, 'html', fullHtml);
 
+  if (!jsApi || skipCache) {
+    jsApi = await page.evaluate(async () => {
+      const fontsSet = await document.fonts.ready;
+      return {
+        fonts: [...fontsSet].map((ff) => ({
+          ascentOverride: ff.ascentOverride,
+          descentOverride: ff.descentOverride,
+          display: ff.display,
+          family: ff.family,
+          featureSettings: ff.featureSettings,
+          lineGapOverride: ff.lineGapOverride,
+          sizeAdjust: ff.sizeAdjust,
+          status: ff.status,
+          stretch: ff.stretch,
+          style: ff.style,
+          unicodeRange: ff.unicodeRange,
+          variant: ff.variant,
+          weight: ff.weight,
+        })),
+      };
+    });
+  }
+  cacheResults(pageUrl, deviceType, 'jsapi', jsApi);
+
   await browser.close();
   cacheResults(pageUrl, deviceType, 'har', harFile);
   const harSummary = summarizeHAR(harFile, deviceType);
   cacheResults(pageUrl, deviceType, 'har', harSummary);
 
-  return { har: harFile, harSummary, perfEntries, perfEntriesSummary, fullHtml };
+  return { har: harFile, harSummary, perfEntries, perfEntriesSummary, fullHtml, jsApi };
 };

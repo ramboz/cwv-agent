@@ -31,7 +31,7 @@ export async function handlePromptAction(pageUrl, deviceType, options) {
   return result;
 }
 
-async function applyRules({ pageUrl, deviceType, crux, psi, har, perfEntries, resources, fullHtml, report }) {
+async function applyRules({ pageUrl, deviceType, crux, psi, har, perfEntries, resources, fullHtml, jsApi, report }) {
   // Sort report.data by start time
   report.data.sort((a, b) => a.start - b.start);
   // Clone report.data and sort by end time
@@ -60,9 +60,9 @@ export async function handleRulesAction(pageUrl, deviceType, options) {
     merge(pageUrl, deviceType);
     report = await readCache(pageUrl, deviceType, 'report');
   }
-  const { har, perfEntries, fullHtml } = await getHar(pageUrl, deviceType, options);
+  const { har, perfEntries, fullHtml, jsApi } = await getHar(pageUrl, deviceType, options);
 
-  const results = await applyRules({ pageUrl, deviceType, har, perfEntries, fullHtml, report });
+  const results = await applyRules({ pageUrl, deviceType, har, perfEntries, fullHtml, jsApi, report });
   const failedRules = results.filter(r => !r.passing);
   failedRules.sort((a, b) => a.time - b.time);
   return {
