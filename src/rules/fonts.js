@@ -6,7 +6,7 @@ export default function evaluate({ har, perfEntries }) {
   const allModernFonts = allFonts.every((e) => e.response.content.mimeType.includes('woff2'));
   if (!allModernFonts) {
     return {
-      category: 'fonts',
+      category: 'lcp',
       message: 'Use a modern font format for custom fonts',
       recommendation: 'Make sure to use custom fonts that are in the WOFF2 format.',
       passing: false,
