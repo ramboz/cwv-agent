@@ -4,7 +4,7 @@
         div.className = `recommendation ${rec.passing ? 'passing' : 'failed'}`;
         
         let html = `
-            <div class="recommendation-time">${rec.time.toFixed(0)}ms</div>
+            <div class="recommendation-time">${rec.time ? rec.time.toFixed(0) + 'ms' : ''}</div>
             <div class="recommendation-category">${rec.category.toUpperCase()}</div>
             <div class="recommendation-message">${rec.message}</div>
             ${rec.recommendation ? `<div class="recommendation-text"><p>${rec.recommendation}</p></div>` : ''}
