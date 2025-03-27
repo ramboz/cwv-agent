@@ -6,7 +6,7 @@ export default function evaluate({ fullHtml }) {
   if (svgElements.length > 0) {
     return {
       category: 'lcp',
-      message: 'No inline SVGs found on the page.',
+      message: 'Inline SVGs found on the page.',
       recommendation: 'Remove inline SVGs from the page, and replace them by <img> tags with loading="lazy" attribute.',
       passing: false,
     };

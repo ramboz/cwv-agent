@@ -261,7 +261,7 @@ export async function collect(pageUrl, deviceType, { skipCache, skipTlsCheck }) 
   let perfEntries = getCachedResults(pageUrl, deviceType, 'perf');
   let fullHtml = getCachedResults(pageUrl, deviceType, 'html');
   let jsApi = getCachedResults(pageUrl, deviceType, 'jsapi');
-  if (harFile && perfEntries && fullHtml&& !skipCache) {
+  if (harFile && perfEntries && fullHtml && jsApi && !skipCache) {
     return {
       har: harFile,
       harSummary: summarizeHAR(harFile),
