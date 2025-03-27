@@ -268,6 +268,7 @@ export async function collect(pageUrl, deviceType, { skipCache, skipTlsCheck }) 
       perfEntries,
       perfEntriesSummary: summarizePerformanceEntries(perfEntries),
       fullHtml,
+      jsApi,
       fromCache: true
     };
   }

@@ -39,7 +39,7 @@ async function applyRules({ pageUrl, deviceType, crux, psi, har, perfEntries, re
 
   const results = rules.map((r) => {
     try {
-      return r({ summary: { url: pageUrl, type: deviceType }, crux, psi, har, perfEntries, resources, fullHtml, report });
+      return r({ summary: { url: pageUrl, type: deviceType }, crux, psi, har, perfEntries, resources, fullHtml, jsApi, report });
     } catch (error) {
       console.error('❌ Error applying a rule', error);
       return null;
