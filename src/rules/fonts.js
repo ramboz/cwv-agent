@@ -44,7 +44,7 @@ export default function evaluate({ har, perfEntries, jsApi }) {
   if (loadedFonts.length > 0 && !fallbackFonts.length) {
     return {
       category: 'lcp',
-      message: 'Use fallback fonts to for all your custom fonts.',
+      message: 'Use fallback fonts for all your custom fonts.',
       recommendation: 'Make sure to use configure fallback fonts to be shown while your custom fonts load.',
       passing: false,
     };
