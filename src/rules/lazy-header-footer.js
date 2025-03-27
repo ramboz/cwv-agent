@@ -1,37 +1,47 @@
-export default function evaluate({ perfEntries }) {
-  const lcp = perfEntries.find((e) => e.entryType === 'largest-contentful-paint');
+import { getSequence } from './shared.js';
+
+export default function evaluate({ report }) {
+  const { sequence, lcp } = getSequence(report);
+
   if (!lcp || !lcp.url) {
     return null;
   }
-  const lcpIndex = perfEntries.findIndex((e) => e.entryType === 'resource' && e.name === lcp.url);  
-  const headerIndex = perfEntries.findIndex((e) => e.entryType === 'resource' && e.name.includes('header.js'));
-  const footerIndex = perfEntries.findIndex((e) => e.entryType === 'resource' && e.name.includes('footer.js'));
-  if (lcpIndex === -1) {
-    return null;
-  }
-  if (headerIndex > -1 && lcpIndex > headerIndex) {
-    return {  
-      category: 'lcp',
+  const headerIndex = sequence.findIndex((e) => e.entryType === 'resource' && e.url.includes('header.js'));
+  const footerIndex = sequence.findIndex((e) => e.entryType === 'resource' && e.url.includes('footer.js'));
+  
+  const results = [];
+  if (headerIndex > -1) {
+    const header = sequence[headerIndex];
+    results.push({  
+      category: 'loading-sequence',
       message: 'Lazy loaded header.',
       recommendation: 'Ensure the page header is lazy loaded after the LCP.',
       passing: false,
-    };
+      time: header.start,
+      url: header.url
+    });
   }
-  if (footerIndex > -1 && lcpIndex > footerIndex) {
-    return {  
-      category: 'lcp',
+  if (footerIndex > -1 ) {
+    const footer = sequence[footerIndex];
+    results.push({
+      category: 'loading-sequence',
       message: 'Lazy loaded footer.',
       recommendation: 'Ensure the page footer is lazy loaded after the LCP.',
       passing: false,
-    };
+      time: footer.start,
+      url: footer.url
+    });
   }
   if (headerIndex > -1 && footerIndex > -1 && headerIndex > footerIndex) {
-    return {  
-      category: 'lcp',
+    const header = sequence[headerIndex];
+    results.push({
+      category: 'loading-sequence',
       message: 'Lazy loaded header/footer.',
       recommendation: 'Ensure the page header loads before the page footer.',
       passing: false,
-    };
+      time: header.start,
+      url: header.url
+    });
   }
-  return null;
+  return results;
 }
