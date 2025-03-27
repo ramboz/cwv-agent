@@ -28,9 +28,10 @@ export default function evaluate({ report }) {
       return {
         category: 'main-thread',
         message: `${duration}ms blocking time`,
-        recommendation: `Remove blocking time: most likely caused by ${previous.url}`,
+        recommendation: `Remove the blocking time which most likely caused by the previous loaded resource`,
         passing: false,
         time: start,
+        url: previous.url
       };
     }).filter(Boolean);
   }
