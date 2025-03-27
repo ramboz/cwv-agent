@@ -151,7 +151,9 @@ const reportLongAnimationFrame = (entry) => {
     try {
       const u = new URL(sourceURL || invoker);
       url = u.toString();
-      name = '';
+      if (invokerType !== 'classic-script') {
+        name = `${invokerType}[${invoker}]`;
+      }
     } catch (e) {
       name = `${invokerType}: ${invoker}`;
     }

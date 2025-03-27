@@ -11,7 +11,7 @@ export default function evaluate({ report }) {
         return {
           category: 'main-thread',
           message: `${duration.toFixed(0)}ms animation frame`,
-          url: url || name,
+          url: `${name || ''}${name && url ? ' in ' : ''}${url || ''}`,
           recommendation: 'Remove long animation frames to improve performance',
           passing: false,
           time: start,
