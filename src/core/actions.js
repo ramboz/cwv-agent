@@ -108,7 +108,8 @@ export async function processUrl(pageUrl, action, deviceType, skipCache) {
         console.group('Failed rules:');
         result.failedRules.forEach(r => console.log('- Failed', r.time || '', r.message, ':', r.recommendation));
         console.groupEnd();
-        cacheResults(normalizedUrl.url, deviceType, 'recommendations', result);
+        const outputFile = cacheResults(normalizedUrl.url, deviceType, 'recommendations', result);
+        console.log('Recommendations saved to:', outputFile);
         console.log('Done. Check the `.cache` folder');
         break;
         

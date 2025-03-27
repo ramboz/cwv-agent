@@ -51,29 +51,34 @@ export function getCachedResults(urlString, deviceType, type) {
 
 // Save some results in the cache on the file system
 export function cacheResults(urlString, deviceType, type, results) {
+  let outputFile = '';
   ensureDir(OUTPUT_DIR);
   const url = new URL(urlString);
   if (type === 'code') {
     ensureDir(`${OUTPUT_DIR}/${url.hostname}`);
     const filename = getFilename(url);
-    fs.writeFileSync(`${OUTPUT_DIR}/${url.hostname}/${filename}`, results);
-    return;
+    outputFile = `${OUTPUT_DIR}/${url.hostname}/${filename}`;
+    fs.writeFileSync(outputFile, results);
   } else if (type === 'html') {
+    outputFile = `${getFilePrefix(urlString, deviceType, 'full')}.html`;
     fs.writeFileSync(
-      `${getFilePrefix(urlString, deviceType, 'full')}.html`,
+      outputFile,
       results,
     );
   } else if (typeof results === 'string') {
+    outputFile = `${getFilePrefix(urlString, deviceType, type)}.summary.md`;
     fs.writeFileSync(
-      `${getFilePrefix(urlString, deviceType, type)}.summary.md`,
+      outputFile,
       results,
     );
   } else {
+    outputFile = `${getFilePrefix(urlString, deviceType, type)}.json`;
     fs.writeFileSync(
-      `${getFilePrefix(urlString, deviceType, type)}.json`,
+      outputFile,
       typeof results === 'string' ? results : JSON.stringify(results, null, 2),
     );
   }
+  return outputFile;
 }
 
 export function getSummaryLogger(urlString, deviceType, type) {
