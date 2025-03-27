@@ -1,4 +1,4 @@
-export default function evaluate({ har, perfEntries }) {
+export default function evaluate({ har, perfEntries, jsApi }) {
   const allFonts = har.log.entries.filter((e) => e.response.content.mimeType.includes('font'));
   if (!allFonts.length) {
     return null;
@@ -24,6 +24,39 @@ export default function evaluate({ har, perfEntries }) {
       category: 'lcp',
       message: 'Load custom fonts lazily.',
       recommendation: 'Make sure to load custom fonts after the LCP element.',
+      passing: false,
+    };
+  }
+
+  const loadedFonts = jsApi.fonts.filter((f) => f.status === 'loaded');
+  const allFontsUseSwap = loadedFonts.every((f) => f.display === 'swap');
+  if (!allFontsUseSwap) {
+    return {
+      category: 'lcp',
+      message: 'Gracefully swap custom fonts when they are loaded.',
+      recommendation: 'Make sure to use the swap display property for custom fonts.',
+      passing: false,
+    };
+  }
+
+  // Check that fallback fonts are used
+  const fallbackFonts = jsApi.fonts.filter((f) => f.status === 'unloaded');
+  if (loadedFonts.length > 0 && !fallbackFonts.length) {
+    return {
+      category: 'lcp',
+      message: 'Use fallback fonts to for all your custom fonts.',
+      recommendation: 'Make sure to use configure fallback fonts to be shown while your custom fonts load.',
+      passing: false,
+    };
+  }
+
+  // Check that fallback fonts are size adjusted
+  const allFallbackFontsSizeAdjusted = fallbackFonts.every((f) => f.sizeAdjust !== '100%');
+  if (!allFallbackFontsSizeAdjusted) {
+    return {
+      category: 'lcp',
+      message: 'Size fallback fonts to mimic custom fonts.',
+      recommendation: 'Make sure to use the swap display property for custom fonts.',
       passing: false,
     };
   }
