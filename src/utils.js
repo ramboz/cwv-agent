@@ -26,6 +26,9 @@ function ensureDir(dir) {
 
 // A crude approximation of the number of tokens in a string
 export function estimateTokenSize(obj) {
+  if (!obj) {
+    return 0;
+  }
   return Math.ceil(JSON.stringify(obj).length / 4);
 }
 
