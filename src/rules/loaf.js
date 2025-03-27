@@ -6,15 +6,28 @@ export default function evaluate({ report }) {
 
   if (lafs.length > 0) {
     return lafs.map((e) => {
-      const { url, name, duration, start } = e;
-      return {
-        category: 'main-thread',
-        message: `${duration.toFixed(0)}ms animation frame`,
-        url: url || name || 'Inline script, inital navigation or other',
-        recommendation: 'Remove long animation frames to improve performance',
-        passing: false,
-        time: start,
-      };
+      const { url, name, duration, start, end } = e;
+      if (url || name) {
+        return {
+          category: 'main-thread',
+          message: `${duration.toFixed(0)}ms animation frame`,
+          url: url || name,
+          recommendation: 'Remove long animation frames to improve performance',
+          passing: false,
+          time: start,
+        };
+      } else {
+        // find scripts and styles that are blocking the main thread during the animation frame
+        const blockingResources = data.filter(e => e.entryType === 'resource' && e.start >= start && e.end <= end && (e.initiatorType === 'script' || e.initiatorType === 'link'));
+        return {
+          category: 'main-thread',
+          message: `Blocking resource${blockingResources.length > 1 ? 's' : ''}`,
+          url: blockingResources.map(e => e.url).join(', '),
+          recommendation: `Review potential blocking resource${blockingResources.length > 1 ? 's' : ''} found during the animation frame`,
+          passing: false,
+          time: start,
+        };
+      }
     });
   }
   return null;
