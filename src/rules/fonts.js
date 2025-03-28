@@ -17,10 +17,11 @@ export default function evaluate({ har, jsApi }) {
         passing: false,
       })
     }
-  });  
+  });
 
-  // Check "font-display: swap"
-  const loadedFonts = jsApi.fonts.filter((f) => f.status === 'loaded');
+  // Check "font-display: swap" and fallback fonts
+  const mainFonts = Object.keys(jsApi.usedFonts);
+  const loadedFonts = jsApi.fonts.filter((f) => f.status === 'loaded' && mainFonts.includes(f.fontFamily));
   loadedFonts.forEach((f) => {
     if (f.display !== 'swap') {
       results.push({
@@ -30,18 +31,18 @@ export default function evaluate({ har, jsApi }) {
         passing: false,
       });
     }
+    if (!jsApi.usedFonts[f.fontFamily].length) {
+      results.push({
+        category: 'fonts',
+        message: `Font ${f.family} has no fallback font.`,
+        recommendation: 'Make sure to use configure fallback fonts to be shown while your custom fonts load.',
+        passing: false,
+      });
+    }
   });
 
-  // Check that fallback fonts are used
-  const fallbackFonts = jsApi.fonts.filter((f) => f.family.includes('fallback'));
-  if (loadedFonts.length > 0 && !fallbackFonts.length) {
-    results.push({
-      category: 'fonts',
-      message: 'Use fallback fonts for all your custom fonts.',
-      recommendation: 'Make sure to use configure fallback fonts to be shown while your custom fonts load.',
-      passing: false,
-    });
-  }
+  const fallbackFontNames = Array.from(new Set(Object.values(jsApi.usedFonts).map((ff) => ff[0])));
+  const fallbackFonts = jsApi.fonts.filter((f) => fallbackFontNames.includes(f.family));
 
   // Check that fallback fonts are size adjusted
   fallbackFonts.forEach((f) => {

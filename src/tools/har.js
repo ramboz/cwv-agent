@@ -387,6 +387,12 @@ export async function collect(pageUrl, deviceType, { skipCache, skipTlsCheck }) 
           variant: ff.variant,
           weight: ff.weight,
         })),
+        usedFonts: ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'body', 'p', 'button']
+          .map((sel) => document.querySelector(sel))
+          .filter((sel) => !!sel)
+          .map((el) => el && window.getComputedStyle(el).fontFamily)
+          .map((ff) => ff.split(',').map((f) => f.trim().replace(/['"]/g, '')))
+          .reduce((set, val) => { set[val[0]] = []; val.splice(1).forEach((v) => set[val[0]].push(v)); return set; }, {})
       };
     });
   }
