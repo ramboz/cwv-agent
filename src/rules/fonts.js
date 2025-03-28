@@ -46,7 +46,7 @@ export default function evaluate({ har, jsApi }) {
 
   // Check that fallback fonts are size adjusted
   fallbackFonts.forEach((f) => {
-    if (f.sizeAdjust !== '100%') {
+    if (f.sizeAdjust === '100%') {
       results.push({
         category: 'fonts',
         message: 'Size fallback fonts to mimic custom fonts.',
