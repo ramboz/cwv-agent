@@ -9,8 +9,10 @@ export default function evaluate({ har, jsApi }) {
   allFonts.forEach((e) => {
     if (!e.response.content.mimeType.includes('woff2')) {
       results.push({
-        category: 'lcp',
-        message: `Use a modern font format for ${e.request.url}`,
+        category: 'fonts',
+        message: 'Use a modern font format',
+        url: e.request.url,
+        time: e.time.toFixed(0),
         recommendation: 'Make sure to use custom fonts that are in the WOFF2 format.',
         passing: false,
       })
@@ -22,7 +24,7 @@ export default function evaluate({ har, jsApi }) {
   loadedFonts.forEach((f) => {
     if (f.display !== 'swap') {
       results.push({
-        category: 'lcp',
+        category: 'fonts',
         message: `Gracefully swap in ${f.family} when the font is loaded`,
         recommendation: 'Make sure to use the swap display property for custom fonts.',
         passing: false,
@@ -34,7 +36,7 @@ export default function evaluate({ har, jsApi }) {
   const fallbackFonts = jsApi.fonts.filter((f) => f.family.includes('fallback'));
   if (loadedFonts.length > 0 && !fallbackFonts.length) {
     results.push({
-      category: 'lcp',
+      category: 'fonts',
       message: 'Use fallback fonts for all your custom fonts.',
       recommendation: 'Make sure to use configure fallback fonts to be shown while your custom fonts load.',
       passing: false,
@@ -43,9 +45,9 @@ export default function evaluate({ har, jsApi }) {
 
   // Check that fallback fonts are size adjusted
   fallbackFonts.forEach((f) => {
-    if (f.sizeAdjust === '100%') {
+    if (f.sizeAdjust !== '100%') {
       results.push({
-        category: 'lcp',
+        category: 'fonts',
         message: 'Size fallback fonts to mimic custom fonts.',
         recommendation: 'Make sure to use the swap display property for custom fonts.',
         passing: false,
