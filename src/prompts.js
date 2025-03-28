@@ -38,6 +38,7 @@ You know the following about AEM EDS.
 - header and footer should be loaded in the "loadLazy" phase
 - self-hosting third-party resources (like martech, custom fonts, etc.). This helps reduce the number of external hosts that need to be resolved and the number of TLS connections that need to be established
 - preloading critical JS and CSS files needed to render the LCP directly in the HTML head or via HTTP Link headers (better) to benefit from Early Hints
+- defer third-party embeds (like maps, videos, social widgets, etc.) with a "facade" (i.e. placeholder) and only load them using an Intersection Observer or an actual user interaction
  
 #### CLS
  
