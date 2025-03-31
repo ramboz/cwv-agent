@@ -81,7 +81,7 @@ export async function collect(pageUrl, deviceType, resources, { skipCache, skipT
       const response = await fetch(url, fetchOptions);
 
       if (!response.ok) {
-        console.warn(`HTTP error! Status: ${response.status}`);
+        console.warn(`Failed to fetch resource: ${url}. Error: ${response.status} - ${response.statusText}`);
         failedResources++;
       }
 
