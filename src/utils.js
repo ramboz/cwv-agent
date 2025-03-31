@@ -1,7 +1,10 @@
 import fs from 'fs';
 import { Agent } from 'undici';
+import { Tiktoken } from 'js-tiktoken/lite';
+import cl100k_base from 'js-tiktoken/ranks/cl100k_base';
 
 const OUTPUT_DIR = './.cache';
+let encoder;
 
 function getFilePrefix(urlString, deviceType, type) {
   return `${OUTPUT_DIR}/${urlString.replace('https://', '').replace(/[^A-Za-z0-9-]/g, '-').replace(/\//g, '--').replace(/(^-+|-+$)/, '')}.${deviceType}.${type}`
@@ -29,7 +32,10 @@ export function estimateTokenSize(obj) {
   if (!obj) {
     return 0;
   }
-  return Math.ceil(JSON.stringify(obj).length / 4);
+  if (!encoder) {
+    encoder = new Tiktoken(cl100k_base);
+  }
+  return encoder.encode(JSON.stringify(obj)).length;
 }
 
 export function getCachedResults(urlString, deviceType, type) {
