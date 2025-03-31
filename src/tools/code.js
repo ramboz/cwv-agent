@@ -45,6 +45,7 @@ export async function collect(pageUrl, deviceType, resources, { skipCache, skipT
     headers: {
       ...AGENT_HTTP_HEADERS,
       'Accept': 'text/html,application/xhtml+xml,application/xml,text/css,application/javascript,text/javascript;q=0.9,image/avif,image/webp,*/*;q=0.8',
+      'Accept-Encoding': '',
     },
     // Optional TLS validation bypass
     dispatcher: skipTlsCheck ? new Agent({
