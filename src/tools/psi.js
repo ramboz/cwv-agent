@@ -1,6 +1,14 @@
 import psi from 'psi';
 import { cacheResults, getCachedResults } from '../utils.js';
 
+function cleanup(psiAudit) {
+  // removing all base 64 encoded images from the json
+  delete psiAudit.data.lighthouseResult.audits['screenshot-thumbnails'];
+  delete psiAudit.data.lighthouseResult.audits['final-screenshot'];
+  delete psiAudit.data.lighthouseResult.fullPageScreenshot;
+  return psiAudit;
+}
+
 function checkMetric(audit, goodThreshold, needsImprovementThreshold, metricName) {
   if (!audit || audit.scoreDisplayMode === 'notApplicable' || audit.scoreDisplayMode === 'informational' || audit.scoreDisplayMode === 'manual') {
     return ''; // Skip if not applicable or informational
@@ -162,10 +170,10 @@ export async function collect(pageUrl, deviceType, { skipCache }) {
     }
   }
 
-  const psiAudit = await psi(pageUrl, {
+  const psiAudit = cleanup(await psi(pageUrl, {
     key: process.env.GOOGLE_PAGESPEED_INSIGHTS_API_KEY,
     strategy: deviceType
-  });
+  }));
 
   cacheResults(pageUrl, deviceType, 'psi', psiAudit);
   const summary = summarize(psiAudit);
