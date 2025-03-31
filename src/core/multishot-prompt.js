@@ -1,7 +1,7 @@
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { ChatVertexAI } from '@langchain/google-vertexai';
-import { Tiktoken } from "js-tiktoken/lite";
-import cl100k_base from "js-tiktoken/ranks/cl100k_base";
+import { Tiktoken } from 'js-tiktoken/lite';
+import cl100k_base from 'js-tiktoken/ranks/cl100k_base';
 import collectArtifacts from './collect.js';
 import {
   initializeSystem,
@@ -40,7 +40,8 @@ export default async function runPrompt(pageUrl, deviceType, options) {
     }
   
     const llm = new ChatVertexAI({
-      model: 'gemini-2.0-pro-exp-02-05',
+      model: 'gemini-2.5-pro-exp-03-25',
+      // model: 'gemini-2.0-pro-exp-02-05',
       maxOutputTokens: 8192,
     });
   
