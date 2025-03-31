@@ -12,6 +12,7 @@ You know the following about AEM EDS.
 - the files are purely static and served by the CDN
 - the code is usually written in vanilla JavaScript & CSS for the frontend, and the files are usually not minified
 - all images starting with "media_" are already minified and served from the CDN using the Fastly Image Optimizer. The images are dynamically optimized at the CDN level and you should not trust the image's extension, but rather look at the "format" query parameter. For instance, if that parameter has the value "webply" this means the image is in WebP (Lossy) format.
+- all images starting with "media_" are using loading="lazy" in the initial markup, and the initial markup cannot be changed
 - "aem.js" and "lib-franklin.js", if present, are the rendering engine library and they instrument Real User Monitoring (RUM) logic. Those should not be touched and cannot be deferred or loaded asynchronously
 - "scripts.js" is responsible for the page rendering flow and is typically composed of 3 phases "loadEager" (which handles the LCP), "loadLazy" which renders the rest of the page, and "loadDelayed" (which loads additional resources that do not directly impact the user experience with a timeout of a few seconds). This file also needs to be executed as early as possible (to minimize its contribution to TBT and ensure timely LCP processing).
 - "scripts.js" usually has a "decorateMain" method that is typically used to patch the HTML markup before the page rendering starts, and has to runs in the eager phase before the LCP. For instance, to decorate buttons, a hero block, etc.
@@ -31,9 +32,9 @@ You know the following about AEM EDS.
  
 - cleaning up the critical path for the LCP by delaying unused dependencies, martech and third-party libraries
 - leveraging inline imports to do tree shaking of the JavaScript files at runtime
-- making sure images above the fold, especially in the hero section or block and for the LCP element, are loaded eagerly and with a high fetch-priority
+- making sure images above the fold, especially in the hero section or block and for the LCP element, are loaded eagerly and with a high fetch-priority. The initial markup itself cannot be modified, so this is typically done via Javascript
 - keeping the 1st section short so it doesn't have to wait for every block in it to render before showing the LCP. A good rule of thumb is to not have more than 3 blocks in the first section
-- defer non-critical styles and move them out of "styles.css" and into "lazy-styles.css"
+- defer non-critical styles and move them out of "styles.css" and into "lazy-styles.css". If they are block-specific keep them in the block's CSS file
 - avoiding inlining SVG images in the HTML markup, and instead rely on an "img" element loaded lazily
 - header and footer should be loaded in the "loadLazy" phase
 - self-hosting third-party resources (like martech, custom fonts, etc.). This helps reduce the number of external hosts that need to be resolved and the number of TLS connections that need to be established
@@ -46,7 +47,7 @@ You know the following about AEM EDS.
 - making sure that the CSS uses "scrollbar-gutter: stable;" to avoid CLS when the page is longer than the initial viewport
 - loading any page template files (CSS and JS) in the eager phase before the LCP
 - setting a minimum height on the blocks that are loaded asynchronously to avoid CLS after the block is shown
-- when custom fonts are used, they should have the "font-display: swap;" CSS property, and there should also be a fallback font for it using a safe web font that has the "size-adjust" CSS property to reduce CLS
+- when custom fonts are used, they should have the "font-display: swap;" CSS property, and there should also be a fallback font for it in styles.css using a safe web font that has the "size-adjust" CSS property to reduce CLS
  
 #### INP
  
@@ -60,8 +61,9 @@ You know the following about AEM EDS.
  
 - Do not inline critical CSS for above-the-fold content in the <head>. It would require a build system
 - Do not minify CSS and JS files. The files are already small, HTTP compression is already properly configured, and it would again require a build system
-- Do not preload the LCP image via meta tags. Setting loading to eager and fetchpriority to high is the recommended approach
+- Do not preload the LCP image via meta tags or HTTP headers. Setting loading to eager and fetchpriority to high using Javascript is the recommended approach. The initial markup itself cannot be modified
 - Do not add defer or async to third-party scripts in the head. "aem.js"/"lib-franklin.js" are modules and anyways loaded like "defer". Instead load those dependencies via the "loadDelayed" method
+- Do not preload JS and CSS for page specific blocks. This is considered overkill and would require page-specific rules that won't scale
 - Do not preload custom fonts. This would clutter the LCP critical path. Instead, defer the fonts to the lazy phase with appropriate font fallbacks defined
 - Do not preload/preconnect any third-party resource that is not in the critical path for the LCP. Instead, let them load async in "loadLazy" or "loadDelayed"
 `;
@@ -376,4 +378,5 @@ ${Object.entries(resources)
 
 export const actionPrompt = (pageUrl, deviceType) =>`
 Perform your final exhaustive and detailed analysis for url ${pageUrl} on a ${deviceType} device.
+You can omit the intermediate steps and go straight to the final recommendations.
 `;
