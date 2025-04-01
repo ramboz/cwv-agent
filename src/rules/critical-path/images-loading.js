@@ -6,7 +6,7 @@ export default function evaluate({ har, perfEntries, report }) {
     const start = lcpResource.start;
     
     const lcpImage = images.find((img) => img.request.url === lcp.url);
-    const isLcpEagerlyLoaded = lcpImage && lcpImage._priority === 'High';
+    // const isLcpEagerlyLoaded = lcpImage && lcpImage._priority === 'High';
     const areAllLazyLoaded = images.every((img) => img._priority === 'Low' || img.request.url === lcp.url);
 
     if (areAllLazyLoaded) {
@@ -17,14 +17,14 @@ export default function evaluate({ har, perfEntries, report }) {
         passing: false,
         time: start,
       };
-    } else if (!isLcpEagerlyLoaded) {
-      return {
-        category: 'critical-path',
-        message: 'LCP image is not eagerly loaded',
-        recommendation: 'Ensure the LCP image is loaded with `loading="eager"` and `fetchpriority="high"`.',
-        passing: false,
-        time: start,
-      };
+    // } else if (!isLcpEagerlyLoaded) {
+    //   return {
+    //     category: 'critical-path',
+    //     message: 'LCP image is not eagerly loaded',
+    //     recommendation: 'Ensure the LCP image is loaded with `loading="eager"` and `fetchpriority="high"`.',
+    //     passing: false,
+    //     time: start,
+    //   };
     }
   } 
   return null;
