@@ -56,7 +56,7 @@ export function getCachedResults(urlString, deviceType, type) {
 }
 
 // Save some results in the cache on the file system
-export function cacheResults(urlString, deviceType, type, results) {
+export function cacheResults(urlString, deviceType, type, results, suffix) {
   let outputFile = '';
   ensureDir(OUTPUT_DIR);
   const url = new URL(urlString);
@@ -66,19 +66,19 @@ export function cacheResults(urlString, deviceType, type, results) {
     outputFile = `${OUTPUT_DIR}/${url.hostname}/${filename}`;
     fs.writeFileSync(outputFile, results);
   } else if (type === 'html') {
-    outputFile = `${getFilePrefix(urlString, deviceType, 'full')}.html`;
+    outputFile = `${getFilePrefix(urlString, deviceType, 'full')}${suffix ? `.${suffix}` : ''}.html`;
     fs.writeFileSync(
       outputFile,
       results,
     );
   } else if (typeof results === 'string') {
-    outputFile = `${getFilePrefix(urlString, deviceType, type)}.summary.md`;
+    outputFile = `${getFilePrefix(urlString, deviceType, type)}${suffix ? `.${suffix}` : ''}.summary.md`;
     fs.writeFileSync(
       outputFile,
       results,
     );
   } else {
-    outputFile = `${getFilePrefix(urlString, deviceType, type)}.json`;
+    outputFile = `${getFilePrefix(urlString, deviceType, type)}${suffix ? `.${suffix}` : ''}.json`;
     fs.writeFileSync(
       outputFile,
       typeof results === 'string' ? results : JSON.stringify(results, null, 2),

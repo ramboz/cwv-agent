@@ -32,6 +32,12 @@ export function parseArguments() {
       type: 'boolean',
       default: false
     })
+    .option('output-suffix', {
+      alias: 'o',
+      describe: 'Suffix for output recommendations file',
+      type: 'string',
+      default: ''
+    })
     .check((argv) => {
       if (!argv.url && !argv.urls) {
         throw new Error('Either --url or --urls must be provided');

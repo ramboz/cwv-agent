@@ -82,7 +82,7 @@ export async function handleAgentAction(pageUrl, deviceType) {
   return { error: "Agent action not implemented yet" };
 }
 
-export async function processUrl(pageUrl, action, deviceType, skipCache) {
+export async function processUrl(pageUrl, action, deviceType, skipCache, suffix) {
   console.group(`Processing: ${pageUrl}`);
   
   try {
@@ -109,7 +109,7 @@ export async function processUrl(pageUrl, action, deviceType, skipCache) {
         console.group('Failed rules:');
         result.failedRules.forEach(r => console.log('- Failed', r.time || '', r.message, ':', r.recommendation));
         console.groupEnd();
-        const outputFile = cacheResults(normalizedUrl.url, deviceType, 'recommendations', result);
+        const outputFile = cacheResults(normalizedUrl.url, deviceType, 'recommendations', result, suffix);
         console.log('Recommendations saved to:', outputFile);
         console.log('Done. Check the `.cache` folder');
         break;
