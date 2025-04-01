@@ -296,7 +296,10 @@ Present your findings as:
    - Implementation complexity (Easy/Medium/Hard)
    - Affected metric(s)
    - Expected improvement range
-3. An explicit section for "Detailed technical recommendations", organized with subheadings for the CWV metrics (LCP, CLS, INP), with code examples where applicable, and in a form appropriate for creating pull requests (including a title, a description and a "diff"-like code sample)
+3. An explicit section for "Detailed technical recommendations", organized with subheadings for the CWV metrics (LCP, CLS, INP), with code examples where applicable, and in a form appropriate for creating pull requests, with:
+   - a short title
+   - a description for the issue targeted towards business users
+   - a recommenation in the form of a diff-like code sample that a developer can easily apply to the codebase
 4. Implementation roadmap highlighting quick wins vs. strategic improvements
  
 Phase 1 will start with the next message.`;
@@ -362,7 +365,7 @@ ${step(n)} here is the HTML markup for the page:
 ${resources[pageUrl]}
 `;
 
-export const codeStep = (n, pageUrl, resources, threshold = 100000) => {
+export const codeStep = (n, pageUrl, resources, threshold = 100_000) => {
    const html = resources[pageUrl];
    return `
 ${step(n)} here are the source codes for the important files on the page (the name for each file is given
