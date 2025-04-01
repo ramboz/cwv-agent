@@ -51,7 +51,7 @@ export async function getCode(pageUrl, deviceType, requests, options) {
   } else if (stats.fromCache > 0) {
     console.log(`✓ Partially loaded code from cache (${stats.fromCache}/${stats.total}). Estimated token size: ~`, estimateTokenSize(codeFiles));
   } else if (stats.failed > 0) {
-    console.error('❌ Failed to collect all project code');
+    console.error('❌ Failed to collect all project code. Estimated token size: ~', estimateTokenSize(codeFiles));
   } else {
     console.log('✅ Processed project code. Estimated token size: ~', estimateTokenSize(codeFiles));
   }
