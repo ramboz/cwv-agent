@@ -39,6 +39,7 @@ async function applyRules({ pageUrl, deviceType, crux, psi, har, perfEntries, re
 
   const results = rules.map((r) => {
     try {
+      // TODO: r(report, rawData)
       return r({ summary: { url: pageUrl, type: deviceType }, crux, psi, har, perfEntries, resources, fullHtml, jsApi, report });
     } catch (error) {
       console.error('❌ Error applying a rule', error);
@@ -54,11 +55,11 @@ export async function handleCollectAction(pageUrl, deviceType, options) {
 }
 
 export async function handleRulesAction(pageUrl, deviceType, options) {
-  let report = await readCache(pageUrl, deviceType, 'report');
+  let report = await readCache(pageUrl, deviceType, 'merge');
   if (!report || options.skipCache) {
     await getHar(pageUrl, deviceType, { skipCache: true });
     merge(pageUrl, deviceType);
-    report = await readCache(pageUrl, deviceType, 'report');
+    report = await readCache(pageUrl, deviceType, 'merge');
   }
   const { har, perfEntries, fullHtml, jsApi } = await getHar(pageUrl, deviceType, options);
 

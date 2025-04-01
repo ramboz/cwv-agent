@@ -1,4 +1,4 @@
-import { getSequence } from './shared.js';
+import { getSequence } from '../shared.js';
 
 const THRESHOLDS = {
   'text/javascript': 20,

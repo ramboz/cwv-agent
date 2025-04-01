@@ -1,4 +1,4 @@
-import { getSequence } from './shared.js';
+import { getSequence } from '../shared.js';
 
 export default function evaluate({ report }) {
   const { sequence } = getSequence(report);

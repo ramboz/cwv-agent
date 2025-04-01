@@ -12,7 +12,7 @@ export default function evaluate({ summary, report }) {
   const totalSizeBeforeLCP = beforeLCP.reduce((acc, r) => acc + (r.size || 0), 0);
   if (totalSizeBeforeLCP > THRESHOLDS[summary.type]) {
     return {
-      category: 'size',
+      category: 'critical-path',
       message: `>${THRESHOLDS[summary.type]}kb on ${summary.type} pre-lcp assets`,
       recommendation: `${totalSizeBeforeLCP}kb loaded before the LCP - remove resources loaded before the LCP to reduce the size of the initial page load and speed up the LCP.`,
       element,

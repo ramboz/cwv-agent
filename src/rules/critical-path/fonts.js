@@ -1,4 +1,4 @@
-import { getSequence } from './shared.js';
+import { getSequence } from '../shared.js';
 
 export default function evaluate({ report }) {
   const { sequence } = getSequence(report);
@@ -7,7 +7,7 @@ export default function evaluate({ report }) {
   const results = [];
   fonts.forEach(f => {
     results.push({
-        category: 'fonts',
+        category: 'critical-path',
         message: `Font file detected in loading sequence (before LCP)`,
         recommendation: `Move font files after the LCP to improve performance and use the font fallback technique to prevent CLS`,
         url: f.url,

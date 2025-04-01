@@ -11,7 +11,7 @@ export default function evaluate({ har, perfEntries, report }) {
 
     if (areAllLazyLoaded) {
       return {
-        category: 'lcp',
+        category: 'critical-path',
         message: 'Images below the fold are not lazy loaded',
         recommendation: 'Ensure all images below the fold are loaded with `loading="lazy"`.',
         passing: false,
@@ -19,7 +19,7 @@ export default function evaluate({ har, perfEntries, report }) {
       };
     } else if (!isLcpEagerlyLoaded) {
       return {
-        category: 'lcp',
+        category: 'critical-path',
         message: 'LCP image is not eagerly loaded',
         recommendation: 'Ensure the LCP image is loaded with `loading="eager"` and `fetchpriority="high"`.',
         passing: false,

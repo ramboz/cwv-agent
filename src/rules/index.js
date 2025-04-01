@@ -1,17 +1,34 @@
+import kb100 from './critical-path/kb100.js';
+import loaf from './main-thread/loaf.js';
+import tbt from './main-thread/tbt.js';
+import cls from './cls/cls.js';
+import lcp from './critical-path/lcp.js';
+import loadingSequenceFonts from './critical-path/fonts.js';
+import loadingSequenceSize from './critical-path/size.js';
+import loadingSequence3rdparty from './critical-path/thirdparty.js';
+import loadingSequenceMedia from './critical-path/no-extra-media.js';
+import imagesLoading from './critical-path/images-loading.js';
+import httpVersion from './ttfb/http-version.js';
+import loadingSequenceBlocking from './main-thread/blocking.js';
+import noInlineSvg from './critical-path/no-inline-svg.js';
+import lazyHeaderFooter from './critical-path/no-header-footer.js';
+import fonts from './fonts/fonts.js';
+
 export default [
-  (await import('./100kb.js')).default,
-  (await import('./loaf.js')).default,
-  (await import('./tbt.js')).default,
-  (await import('./cls.js')).default,
-  (await import('./lcp.js')).default,
-  (await import('./loading-sequence-fonts.js')).default,
-  (await import('./loading-sequence-size.js')).default,
-  (await import('./loading-sequence-3rdparty.js')).default,
-  (await import('./loading-sequence-media.js')).default,
-  (await import('./images-loading.js')).default,
-  (await import('./http-version.js')).default,
-  (await import('./loading-sequence-blocking.js')).default,
-  (await import('./no-inline-svg.js')).default,
-  (await import('./lazy-header-footer.js')).default,
-  (await import('./fonts.js')).default,
+  kb100,
+  loaf,
+  tbt,
+  cls,
+  lcp,
+  loadingSequenceFonts,
+  loadingSequenceSize,
+  loadingSequence3rdparty,
+  loadingSequenceMedia,
+  imagesLoading,
+  httpVersion,
+  loadingSequenceBlocking,
+  noInlineSvg,
+  lazyHeaderFooter,
+  fonts,
+  // TODO: check redirects on 1st party domain
 ];

@@ -1,4 +1,4 @@
-import { getSequence } from './shared.js';
+import { getSequence } from '../shared.js';
 
 export default function evaluate({ report }) {
   const { sequence, lcp } = getSequence(report);
@@ -13,7 +13,7 @@ export default function evaluate({ report }) {
   if (headerIndex > -1) {
     const header = sequence[headerIndex];
     results.push({  
-      category: 'loading-sequence',
+      category: 'critical-path',
       message: 'Lazy loaded header.',
       recommendation: 'Ensure the page header is lazy loaded after the LCP.',
       passing: false,
@@ -24,7 +24,7 @@ export default function evaluate({ report }) {
   if (footerIndex > -1 ) {
     const footer = sequence[footerIndex];
     results.push({
-      category: 'loading-sequence',
+      category: 'critical-path',
       message: 'Lazy loaded footer.',
       recommendation: 'Ensure the page footer is lazy loaded after the LCP.',
       passing: false,
@@ -35,7 +35,7 @@ export default function evaluate({ report }) {
   if (headerIndex > -1 && footerIndex > -1 && headerIndex > footerIndex) {
     const header = sequence[headerIndex];
     results.push({
-      category: 'loading-sequence',
+      category: 'critical-path',
       message: 'Lazy loaded header/footer.',
       recommendation: 'Ensure the page header loads before the page footer.',
       passing: false,

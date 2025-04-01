@@ -284,6 +284,6 @@ export default function merge(siteURL, type) {
     type: type,
     data: data,
   };
-  cacheResults(siteURL, type, 'report', merged);
+  cacheResults(siteURL, type, 'merge', merged);
   return merged;
 }
