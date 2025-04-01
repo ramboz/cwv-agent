@@ -9,9 +9,9 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "@langchain/core": "^0.3.42",
+    "@langchain/core": "^0.3.43",
     "@langchain/google-genai": "^0.1.11",
-    "@langchain/google-vertexai": "^0.2.2",
+    "@langchain/google-vertexai": "^0.2.3",
     "@langchain/langgraph": "^0.2.55",
     "dotenv": "^16.4.7",
     "js-tiktoken": "^1.0.19",
