@@ -34,6 +34,16 @@ const simulationConfig = {
   }
 };
 
+function cleanup(har) {
+  // Remove preflight requests (OPTIONS) from HAR data
+  if (har && har.log && har.log.entries) {
+    har.log.entries = har.log.entries.filter(entry => {
+      return !(entry.request && entry.request.method === 'OPTIONS');
+    });
+  }
+  return har;
+}
+
 export function summarizePerformanceEntries(performanceEntries, deviceType) {
   let markdownOutput = `# Performance Analysis (Focused)\n\n`;
 
@@ -358,7 +368,7 @@ export async function collect(pageUrl, deviceType, { skipCache, skipTlsCheck }) 
   cacheResults(pageUrl, deviceType, 'perf', perfEntriesSummary);
 
   if (!harFile || skipCache) {
-    harFile = await har.stop();
+    harFile = cleanup(await har.stop());
   }
 
   if (!fullHtml || skipCache) {
