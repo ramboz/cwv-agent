@@ -366,17 +366,22 @@ ${resources[pageUrl]}
 `;
 
 export const codeStep = (n, pageUrl, resources, threshold = 100_000) => {
-   const html = resources[pageUrl];
-   return `
+   try {
+      const html = resources[pageUrl];
+      const code = Object.entries(resources)
+         .filter(([key]) => key !== pageUrl)
+         .filter(([key]) => !html || html.includes((new URL(key)).pathname) || key.match(/(lazy-styles.css|fonts.css|delayed.js)/))
+         .filter(([,value]) => estimateTokenSize(value) < threshold) // do not bloat context with too large files
+         .map(([key, value]) => `// File: ${key}\n${value}\n\n`).join('\n');
+      return `
 ${step(n)} here are the source codes for the important files on the page (the name for each file is given
 to you as a comment before its content):
 
-${Object.entries(resources)
-   .filter(([key]) => key !== pageUrl)
-   .filter(([key]) => html.includes((new URL(key)).pathname) || key.match(/(lazy-styles.css|fonts.css|delayed.js)/))
-   .filter(([,value]) => estimateTokenSize(value) < threshold) // do not bloat context with too large files
-   .map(([key, value]) => `// File: ${key}\n${value}\n\n`).join('\n')}
+${code}
 `;
+   } catch (err) {
+      return `Could not collect actual website code.`;
+   }
 };
 
 export const actionPrompt = (pageUrl, deviceType) =>`
