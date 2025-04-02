@@ -1,6 +1,6 @@
 import collectArtifacts, { getHar } from './collect.js';
+import rulesAction from './rules.js';
 import merge from '../tools/merge.js';
-import { applyRules } from '../tools/rules.js';
 // import runAgent from './agent.js';
 import runPrompt from './multishot-prompt.js';
 import { cacheResults, getCachedResults, getNormalizedUrl, readCache } from '../utils.js';
@@ -36,25 +36,7 @@ export async function handleCollectAction(pageUrl, deviceType, options) {
 }
 
 export async function handleRulesAction(pageUrl, deviceType, options) {
-  let har, perfEntries, fullHtml, jsApi;
-  let report = await readCache(pageUrl, deviceType, 'merge');
-  if (!report || options.skipCache) {
-    ({ har, perfEntries, fullHtml, jsApi } = await getHar(pageUrl, deviceType, { skipCache: true }));
-    merge(pageUrl, deviceType);
-    report = await readCache(pageUrl, deviceType, 'merge');
-  } else {
-    ({ har, perfEntries, fullHtml, jsApi } = await getHar(pageUrl, deviceType, { skipCache: false }));
-  }
-
-  const result = await applyRules(pageUrl, deviceType, options, { har, perfEntries, fullHtml, jsApi, report });
-  console.group('Failed rules:');
-  console.log(result.summary);
-  console.groupEnd();
-  console.group('Rules saved to:');
-  console.log(result.path);
-  console.log(result.summaryPath);
-  console.groupEnd();
-  return result;
+  return rulesAction(pageUrl, deviceType, options);
 }
 
 export async function handleAgentAction(pageUrl, deviceType) {
