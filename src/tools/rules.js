@@ -9,7 +9,7 @@ export function summarize(rulesResults) {
     .join('\n');
 }
 
-export async function applyRules(pageUrl, deviceType, { skipCache }, { crux, psi, har, perfEntries, resources, fullHtml, jsApi, report }) {
+export async function applyRules(pageUrl, deviceType, { outputSuffix }, { crux, psi, har, perfEntries, resources, fullHtml, jsApi, report }) {
   // Sort report.data by start time
   report.data.sort((a, b) => a.start - b.start);
   // Clone report.data and sort by end time
@@ -25,8 +25,8 @@ export async function applyRules(pageUrl, deviceType, { skipCache }, { crux, psi
     }
   }).flat();
 
-  const path = cacheResults(pageUrl, deviceType, 'rules', json);
+  const path = cacheResults(pageUrl, deviceType, 'rules', json, outputSuffix);
   const summary = summarize(json);
-  const summaryPath = cacheResults(pageUrl, deviceType, 'rules', summary);
+  const summaryPath = cacheResults(pageUrl, deviceType, 'rules', summary, outputSuffix);
   return { full: json, summary, path, summaryPath };
 }

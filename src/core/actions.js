@@ -45,7 +45,7 @@ export async function handleAgentAction(pageUrl, deviceType) {
   return { error: "Agent action not implemented yet" };
 }
 
-export async function processUrl(pageUrl, action, deviceType, skipCache, suffix) {
+export async function processUrl(pageUrl, action, deviceType, skipCache, outputSuffix) {
   console.group(`Processing: ${pageUrl}`);
   
   try {
@@ -68,7 +68,7 @@ export async function processUrl(pageUrl, action, deviceType, skipCache, suffix)
         break;
 
       case 'rules':
-        result = await handleRulesAction(normalizedUrl.url, deviceType, { skipCache, skipTlsCheck: normalizedUrl.skipTlsCheck });
+        result = await handleRulesAction(normalizedUrl.url, deviceType, { skipCache, skipTlsCheck: normalizedUrl.skipTlsCheck, outputSuffix });
         break;
         
        case 'agent':
