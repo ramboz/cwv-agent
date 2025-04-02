@@ -23,7 +23,7 @@ export async function applyRules(pageUrl, deviceType, { outputSuffix }, { crux, 
       console.error('❌ Error applying a rule', error);
       return null;
     }
-  }).flat();
+  }).flat().filter(r => r);
 
   const path = cacheResults(pageUrl, deviceType, 'rules', json, outputSuffix);
   const summary = summarize(json);

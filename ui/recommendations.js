@@ -35,9 +35,9 @@
     const displayRecommendations = (data) => {
         const container = document.getElementById('recommendations');
         
-        data.failedRules.sort((a, b) => (a.time || 0) - (b.time || 0));
+        data.sort((a, b) => (a.time || 0) - (b.time || 0));
         
-        data.failedRules.forEach(rec => {
+        data.forEach(rec => {
             container.appendChild(renderRecommendation(rec));
         });
     };
