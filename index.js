@@ -15,6 +15,7 @@ async function main() {
   const deviceType = argv.device;
   const skipCache = argv.skipCache;
   const outputSuffix = argv.outputSuffix;
+  const blockRequests = argv.blockRequests;
   // Load URLs
   const urls = loadUrls(argv);
   
@@ -25,7 +26,7 @@ async function main() {
   
   // Process each URL
   for (const url of urls) {
-    await processUrl(url, action, deviceType, skipCache, outputSuffix);
+    await processUrl(url, action, deviceType, skipCache, outputSuffix, blockRequests);
     
     // Small delay between processing URLs
     if (urls.length > 1) {

@@ -45,7 +45,7 @@ export async function handleAgentAction(pageUrl, deviceType) {
   return { error: "Agent action not implemented yet" };
 }
 
-export async function processUrl(pageUrl, action, deviceType, skipCache, outputSuffix) {
+export async function processUrl(pageUrl, action, deviceType, skipCache, outputSuffix, blockRequests) {
   console.group(`Processing: ${pageUrl}`);
   
   try {
@@ -63,12 +63,12 @@ export async function processUrl(pageUrl, action, deviceType, skipCache, outputS
         break;
         
       case 'collect':
-        result = await handleCollectAction(normalizedUrl.url, deviceType, { skipCache, skipTlsCheck: normalizedUrl.skipTlsCheck });
+        result = await handleCollectAction(normalizedUrl.url, deviceType, { skipCache, skipTlsCheck: normalizedUrl.skipTlsCheck, blockRequests });
         console.log('Done. Check the `.cache` folder');
         break;
 
       case 'rules':
-        result = await handleRulesAction(normalizedUrl.url, deviceType, { skipCache, skipTlsCheck: normalizedUrl.skipTlsCheck, outputSuffix });
+        result = await handleRulesAction(normalizedUrl.url, deviceType, { skipCache, skipTlsCheck: normalizedUrl.skipTlsCheck, outputSuffix, blockRequests });
         break;
         
        case 'agent':

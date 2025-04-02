@@ -265,7 +265,7 @@ export function summarizeHAR(harData, deviceType) {
   return report;
 }
 
-export async function collect(pageUrl, deviceType, { skipCache, skipTlsCheck }) {
+export async function collect(pageUrl, deviceType, { skipCache, skipTlsCheck, blockRequests }) {
 
   let harFile = getCachedResults(pageUrl, deviceType, 'har');
   let perfEntries = getCachedResults(pageUrl, deviceType, 'perf');
@@ -290,6 +290,24 @@ export async function collect(pageUrl, deviceType, { skipCache, skipTlsCheck }) 
   await page.emulateNetworkConditions(simulationConfig[deviceType].networkThrottling);
   await page.setUserAgent(simulationConfig[deviceType].userAgent);
   const har = new PuppeteerHar(page);
+
+  if (blockRequests) {
+    const blockedUrls = blockRequests.split(',');
+    // // block certain requests
+    await page.setRequestInterception(true);
+    page.on('request', (request) => {
+      const url = request.url();
+      // check if the url is in the blockedUrls array
+      const filtered = blockedUrls.some(b => url.includes(b.trim()));
+      // if (url.includes('/assets/') || url.includes('/s.go-mpulse.net/') || url.includes('KGO4l5Qk3zIB7zm9p50Y99tr') || url.includes('tags.tiqcdn.com')) {
+      if (filtered) {
+        console.log('Blocking', url);
+        request.abort();
+      } else {
+        request.continue();
+      }
+    });
+  }
   
   // Enable DevTools protocol
   const client = await page.target().createCDPSession();

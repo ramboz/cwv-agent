@@ -38,6 +38,12 @@ export function parseArguments() {
       type: 'string',
       default: ''
     })
+    .option('block-requests', {
+      alias: 'b',
+      describe: 'Block requests - comma separated list of strings, urls containing these strings will be blocked',
+      type: 'string',
+      default: ''
+    })
     .check((argv) => {
       if (!argv.url && !argv.urls) {
         throw new Error('Either --url or --urls must be provided');
