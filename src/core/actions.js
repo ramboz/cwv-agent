@@ -55,13 +55,15 @@ export async function handleCollectAction(pageUrl, deviceType, options) {
 }
 
 export async function handleRulesAction(pageUrl, deviceType, options) {
+  let har, perfEntries, fullHtml, jsApi;
   let report = await readCache(pageUrl, deviceType, 'merge');
   if (!report || options.skipCache) {
-    await getHar(pageUrl, deviceType, { skipCache: true });
+    ({ har, perfEntries, fullHtml, jsApi } = await getHar(pageUrl, deviceType, { skipCache: true }));
     merge(pageUrl, deviceType);
     report = await readCache(pageUrl, deviceType, 'merge');
+  } else {
+    ({ har, perfEntries, fullHtml, jsApi } = await getHar(pageUrl, deviceType, { skipCache: false }));
   }
-  const { har, perfEntries, fullHtml, jsApi } = await getHar(pageUrl, deviceType, options);
 
   const results = await applyRules({ pageUrl, deviceType, har, perfEntries, fullHtml, jsApi, report });
   const failedRules = results.filter(r => !r.passing);
