@@ -1,6 +1,5 @@
-import collectArtifacts, { getHar } from './collect.js';
+import collecetAction from './collect.js';
 import rulesAction from './rules.js';
-import merge from '../tools/merge.js';
 // import runAgent from './agent.js';
 import runPrompt from './multishot-prompt.js';
 import { cacheResults, getCachedResults, getNormalizedUrl, readCache } from '../utils.js';
@@ -31,14 +30,6 @@ export async function handlePromptAction(pageUrl, deviceType, options) {
   return result;
 }
 
-export async function handleCollectAction(pageUrl, deviceType, options) {
-  return collectArtifacts(pageUrl, deviceType, options);
-}
-
-export async function handleRulesAction(pageUrl, deviceType, options) {
-  return rulesAction(pageUrl, deviceType, options);
-}
-
 export async function handleAgentAction(pageUrl, deviceType) {
   // const result = await runAgent(pageUrl, deviceType);
   // return result;
@@ -59,16 +50,16 @@ export async function processUrl(pageUrl, action, deviceType, skipCache, outputS
     
     switch (action) {
       case 'prompt':
-        result = await handlePromptAction(normalizedUrl.url, deviceType, { skipCache, skipTlsCheck: normalizedUrl.skipTlsCheck });
+        result = await handlePromptAction(normalizedUrl.url, deviceType, { skipCache, skipTlsCheck: normalizedUrl.skipTlsCheck, blockRequests });
         break;
         
       case 'collect':
-        result = await handleCollectAction(normalizedUrl.url, deviceType, { skipCache, skipTlsCheck: normalizedUrl.skipTlsCheck, blockRequests });
+        result = await collecetAction(normalizedUrl.url, deviceType, { skipCache, skipTlsCheck: normalizedUrl.skipTlsCheck, blockRequests });
         console.log('Done. Check the `.cache` folder');
         break;
 
       case 'rules':
-        result = await handleRulesAction(normalizedUrl.url, deviceType, { skipCache, skipTlsCheck: normalizedUrl.skipTlsCheck, outputSuffix, blockRequests });
+        result = await rulesAction(normalizedUrl.url, deviceType, { skipCache, skipTlsCheck: normalizedUrl.skipTlsCheck, blockRequests });
         break;
         
        case 'agent':
