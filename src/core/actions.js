@@ -1,6 +1,6 @@
 import collectArtifacts, { getHar } from './collect.js';
 import merge from '../tools/merge.js';
-import rules from '../rules/index.js';
+import { applyRules } from '../tools/rules.js';
 // import runAgent from './agent.js';
 import runPrompt from './multishot-prompt.js';
 import { cacheResults, getCachedResults, getNormalizedUrl, readCache } from '../utils.js';
@@ -31,25 +31,6 @@ export async function handlePromptAction(pageUrl, deviceType, options) {
   return result;
 }
 
-async function applyRules({ pageUrl, deviceType, crux, psi, har, perfEntries, resources, fullHtml, jsApi, report }) {
-  // Sort report.data by start time
-  report.data.sort((a, b) => a.start - b.start);
-  // Clone report.data and sort by end time
-  report.dataSortedByEnd = report.data.slice().sort((a, b) => a.end - b.end);
-
-  const results = rules.map((r) => {
-    try {
-      // TODO: r(report, rawData)
-      return r({ summary: { url: pageUrl, type: deviceType }, crux, psi, har, perfEntries, resources, fullHtml, jsApi, report });
-    } catch (error) {
-      console.error('❌ Error applying a rule', error);
-      return null;
-    }
-  });
-  
-  return results.flat().filter(r => r);
-}
-
 export async function handleCollectAction(pageUrl, deviceType, options) {
   return collectArtifacts(pageUrl, deviceType, options);
 }
@@ -65,17 +46,15 @@ export async function handleRulesAction(pageUrl, deviceType, options) {
     ({ har, perfEntries, fullHtml, jsApi } = await getHar(pageUrl, deviceType, { skipCache: false }));
   }
 
-  const results = await applyRules({ pageUrl, deviceType, har, perfEntries, fullHtml, jsApi, report });
-  const failedRules = results.filter(r => !r.passing);
-  failedRules.sort((a, b) => a.time - b.time);
-  return {
-    failedRules,
-  };
-}
-
-export async function handleMergeAction(pageUrl, deviceType) {
-  merge(pageUrl, deviceType);
-  return { success: true };
+  const result = await applyRules(pageUrl, deviceType, options, { har, perfEntries, fullHtml, jsApi, report });
+  console.group('Failed rules:');
+  console.log(result.summary);
+  console.groupEnd();
+  console.group('Rules saved to:');
+  console.log(result.path);
+  console.log(result.summaryPath);
+  console.groupEnd();
+  return result;
 }
 
 export async function handleAgentAction(pageUrl, deviceType) {
@@ -108,12 +87,6 @@ export async function processUrl(pageUrl, action, deviceType, skipCache, suffix)
 
       case 'rules':
         result = await handleRulesAction(normalizedUrl.url, deviceType, { skipCache, skipTlsCheck: normalizedUrl.skipTlsCheck });
-        console.group('Failed rules:');
-        result.failedRules.forEach(r => console.log('- Failed', r.time || '', r.message, ':', r.recommendation));
-        console.groupEnd();
-        const outputFile = cacheResults(normalizedUrl.url, deviceType, 'recommendations', result, suffix);
-        console.log('Recommendations saved to:', outputFile);
-        console.log('Done. Check the `.cache` folder');
         break;
         
        case 'agent':
