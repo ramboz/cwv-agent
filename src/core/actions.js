@@ -50,16 +50,16 @@ export async function processUrl(pageUrl, action, deviceType, skipCache, outputS
     
     switch (action) {
       case 'prompt':
-        result = await handlePromptAction(normalizedUrl.url, deviceType, { skipCache, skipTlsCheck: normalizedUrl.skipTlsCheck, blockRequests });
+        result = await handlePromptAction(normalizedUrl.url, deviceType, { skipCache, skipTlsCheck: normalizedUrl.skipTlsCheck, outputSuffix, blockRequests });
         break;
         
       case 'collect':
-        result = await collecetAction(normalizedUrl.url, deviceType, { skipCache, skipTlsCheck: normalizedUrl.skipTlsCheck, blockRequests });
+        result = await collecetAction(normalizedUrl.url, deviceType, { skipCache, skipTlsCheck: normalizedUrl.skipTlsCheck, outputSuffix, blockRequests });
         console.log('Done. Check the `.cache` folder');
         break;
 
       case 'rules':
-        result = await rulesAction(normalizedUrl.url, deviceType, { skipCache, skipTlsCheck: normalizedUrl.skipTlsCheck, blockRequests });
+        result = await rulesAction(normalizedUrl.url, deviceType, { skipCache, skipTlsCheck: normalizedUrl.skipTlsCheck, outputSuffix, blockRequests });
         break;
         
        case 'agent':
