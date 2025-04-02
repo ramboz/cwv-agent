@@ -6,7 +6,9 @@ export default function evaluate({ report }) {
   const medias = sequence.filter(r => 
     r.entryType === 'resource' &&
     r.url !== lcp.url &&
-    (r.mimeType.includes('image') || r.mimeType.includes('video'))
+    (r.mimeType.includes('image') || r.mimeType.includes('video') &&
+    !r.url.includes('favicon.ico')
+  )
   );
   const results = [];
   medias.forEach(m => {
