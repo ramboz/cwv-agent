@@ -3,6 +3,9 @@ import { getSequence } from '../shared.js';
 export default function evaluate({ report }) {
   const { sequence, lcp } = getSequence(report);
 
+  if (!lcp) {
+    return null;
+  }
   const medias = sequence.filter(r => 
     r.entryType === 'resource' &&
     r.url !== lcp.url &&

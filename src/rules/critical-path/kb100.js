@@ -6,6 +6,9 @@ const THRESHOLDS = {
 export default function evaluate({ summary, report }) {
   const data = report.dataSortedByEnd;
   const i = data.findLastIndex(r => r.entryType === 'LCP');
+  if (i === -1) {
+    return null;
+  }
   const lcpResource = data[i];
   const { element, start } = lcpResource;
   const beforeLCP = data.slice(0, i);

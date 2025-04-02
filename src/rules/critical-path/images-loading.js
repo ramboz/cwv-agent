@@ -1,6 +1,9 @@
 export default function evaluate({ har, perfEntries, report }) {
   const images = har.log.entries.filter((e) => e.response.content.mimeType.startsWith('image/'));
   const lcp = perfEntries.filter((e) => e.entryType === 'largest-contentful-paint').pop();
+  if (!lcp) {
+    return null;
+  }
   const lcpResource = report.data.find((entry) => entry.entryType === 'resource' && entry.url === lcp.url);
   if (lcpResource) {
     const start = lcpResource.start;
