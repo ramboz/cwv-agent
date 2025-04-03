@@ -13,6 +13,7 @@ import loadingSequenceBlocking from './main-thread/blocking.js';
 import noInlineSvg from './critical-path/no-inline-svg.js';
 import lazyHeaderFooter from './critical-path/no-header-footer.js';
 import fonts from './fonts/fonts.js';
+import redirects from './critical-path/redirects.js';
 
 export default [
   kb100,
@@ -30,5 +31,5 @@ export default [
   noInlineSvg,
   lazyHeaderFooter,
   fonts,
-  // TODO: check redirects on 1st party domain
+  redirects,
 ];

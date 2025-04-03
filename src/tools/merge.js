@@ -17,23 +17,12 @@ const reportNavigation = (entry) => {
     responseEnd,
     responseStart,
     activationStart,
-    redirectCount,
     redirectStart,
     redirectEnd,
   } = entry;
 
-
-  const issues = [];
   const ttfb = responseStart - (activationStart || 0);
-  if (ttfb) {
-    issues.push(`TTFB: ${formatTimeMS(ttfb)}`);
-  }
-
-  if (redirectCount > 0) {
-    const redirectTime = redirectEnd - redirectStart;
-    const s = redirectCount > 1 ? 's' : '';
-    issues.push(`${redirectCount} redirect${s} - cost: ${formatTimeMS(redirectTime)}`);
-  }
+  const redirect = redirectEnd - redirectStart;
 
   const d = {
     start: formatTime(startTime),
@@ -43,8 +32,15 @@ const reportNavigation = (entry) => {
     entryType,
     duration: formatTime(duration),
     size: formatSize(transferSize),
-    issues,
   };
+
+  if (redirect > 0) {
+    d.redirect = formatTime(redirect);
+  }
+
+  if (ttfb > 0) {
+    d.ttfb = formatTime(ttfb);
+  }
 
   return d;
 }
@@ -57,25 +53,25 @@ const reportResources = (entry, matchingHar) => {
     startTime,
     duration,
     transferSize,
-    connectStart,
-    connectEnd,
-    domainLookupStart,
-    domainLookupEnd,
     renderBlockingStatus,
     responseEnd,
+    redirectStart,
+    redirectEnd,
+    // connectStart,
+    // connectEnd,
+    // domainLookupStart,
+    // domainLookupEnd,
   } = entry;
 
-  const tcpHandshake = connectEnd - connectStart;
-  const dnsLookup = domainLookupEnd - domainLookupStart;
-  let issues = undefined;
-  if (tcpHandshake > 0 || dnsLookup > 0 || renderBlockingStatus !== 'non-blocking') {
-    const title = [];
-    if (tcpHandshake > 0) title.push(`TCP handshake: ${formatTimeMS(tcpHandshake)}`);
-    if (dnsLookup > 0) title.push(`DNS lookup: ${formatTimeMS(dnsLookup)}`);
-    if (renderBlockingStatus !== 'non-blocking') title.push(`Render blocking: ${renderBlockingStatus}`);
-    issues = title.join(', ');
-  }
+  // const tcpHandshake = connectEnd - connectStart;
+  // const dnsLookup = domainLookupEnd - domainLookupStart;
+  // if (tcpHandshake > 0 || dnsLookup > 0 || renderBlockingStatus !== 'non-blocking') {
+  //   if (tcpHandshake > 0) title.push(`TCP handshake: ${formatTimeMS(tcpHandshake)}`);
+  //   if (dnsLookup > 0) title.push(`DNS lookup: ${formatTimeMS(dnsLookup)}`);
+  //   if (renderBlockingStatus !== 'non-blocking') title.push(`Render blocking: ${renderBlockingStatus}`);
+  // }
 
+  const redirect = redirectEnd - redirectStart;
   const size = transferSize || matchingHar?.response?.bodySize || 0;
   const mimeType = matchingHar?.response?.content?.mimeType || '';
   
@@ -89,8 +85,11 @@ const reportResources = (entry, matchingHar) => {
     size: formatSize(size),
     mimeType,
     renderBlockingStatus,
-    issues,
   };
+
+  if (redirect > 0) {
+    d.redirect = formatTime(redirect);
+  }
 
   return d;
 };
