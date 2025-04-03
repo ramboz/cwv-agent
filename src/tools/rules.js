@@ -1,4 +1,4 @@
-import { cacheResults, getCachedResults } from '../utils.js';
+import { cacheResults } from '../utils.js';
 import rules from '../rules/index.js';
 
 export function summarize(rulesResults) {

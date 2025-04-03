@@ -14,7 +14,6 @@ export default function evaluate({ report }) {
   );
   const results = [];
   medias.forEach(m => {
-    console.log('m', m.url);
     results.push({
         category: 'media',
         message: `Media file detected in loading sequence (before LCP)`,
