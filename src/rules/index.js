@@ -14,6 +14,7 @@ import noInlineSvg from './critical-path/no-inline-svg.js';
 import lazyHeaderFooter from './critical-path/no-header-footer.js';
 import fonts from './fonts/fonts.js';
 import redirects from './critical-path/redirects.js';
+import ttfb from './ttfb/ttfb.js';
 
 export default [
   kb100,
@@ -32,4 +33,5 @@ export default [
   lazyHeaderFooter,
   fonts,
   redirects,
+  ttfb,
 ];
