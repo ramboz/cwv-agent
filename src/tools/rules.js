@@ -1,11 +1,32 @@
+import { prettify } from 'htmlfy'
 import { cacheResults } from '../utils.js';
 import rules from '../rules/index.js';
+
+function prettifyWithOffset(str, offset = 4) {
+  // Use the provided offset to dynamically indent each line of the prettified HTML
+  return prettify(str).split(/\n/).map((line) => `${' '.repeat(offset)}${line}`).join('\n');
+}
+
+function details(rule) {
+  if (rule.url) {
+    return `Url: ${rule.url}`;
+  } else if (rule.urls) {
+    return `Urls: ${rule.urls.join(',')}`;
+  } else if (rule.element) {
+    return `Element:\n${prettifyWithOffset(rule.element)}`;
+  } else if (rule.elements) {
+    return `Elements:\n${rule.elements.map((el) => `${prettifyWithOffset(el)}\n`)}`;
+  }
+}
 
 export function summarize(rulesResults) {
   const failedRules = rulesResults.filter((r) => r && !r.passing);
   failedRules.sort((a, b) => a.time - b.time);
   return failedRules
-    .map((r) => `- Failed ${r.time ? `${r.time}ms ` : ''}${r.message}: ${r.recommendation}`)
+    .map((r) => `
+- ${r.message}${r.time ? ` at ${r.time}ms` : ''}:
+  - ${details(r)}
+  - Recommendation: ${r.recommendation}`)
     .join('\n');
 }
 
