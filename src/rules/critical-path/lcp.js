@@ -10,7 +10,7 @@ export default function evaluate({ report }) {
   const results = [];
   if (lcps.length > 0) {
     const lcp = lcps[lcps.length - 1];
-    const { element, start } = lcp;
+    const { element, start, url } = lcp;
     if (lcps.length > 1) {
       results.push({
         category: 'critical-path',
@@ -22,6 +22,7 @@ export default function evaluate({ report }) {
       });
     }
     if (lcp.end > THRESHOLDS.average) {
+
       if (lcp.end > THRESHOLDS.bad) {
         results.push({
           category: 'critical-path',
@@ -29,6 +30,7 @@ export default function evaluate({ report }) {
           recommendation: `The LCP element is taking too long to load. Load it earlier during the loading sequence.`,
           passing: false,
           time: start,
+          url,
           element,
         });
       } else {
@@ -38,6 +40,7 @@ export default function evaluate({ report }) {
           recommendation: `The LCP element is taking too long to load. Load it earlier during the loading sequence.`,
           passing: false,
           time: start,
+          url,
           element,
         });
       }
