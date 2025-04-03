@@ -48,15 +48,16 @@ a:hover {
 
 .recommendation > * {
     padding: 10px;
+    border-bottom: 1px solid var(--hlx-color-border);
+}
+
+.recommendation-header {
+    text-transform: uppercase;
+    font-weight: bold;
 }
 
 .recommendation-category {
-    font-weight: bold;
     color: var(--hlx-color-marker);
-}
-
-.recommendation-text {
-    color: #888;
 }
 
 .recommendation-text p {
