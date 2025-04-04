@@ -8,7 +8,8 @@ import {
   harSummaryStep,
   perfStep,
   htmlStep,
-  codeStep
+  codeStep,
+  rulesStep
 } from './analysis.js';
 import { actionPrompt } from './action.js';
 
@@ -23,5 +24,6 @@ export {
   perfStep,
   htmlStep,
   codeStep,
+  rulesStep,
   actionPrompt
 }

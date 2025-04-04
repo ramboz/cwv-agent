@@ -64,7 +64,7 @@ You know the following about AEM EDS.
 - Do not minify CSS and JS files. The files are already small, HTTP compression is already properly configured, and it would again require a build system
 - Do not preload the LCP image via meta tags or HTTP headers. Setting loading to eager and fetchpriority to high using Javascript is the recommended approach. The initial markup itself cannot be modified
 - Do not add defer or async to third-party scripts in the head. "aem.js"/"lib-franklin.js" are modules and anyways loaded like "defer". Instead load those dependencies via the "loadDelayed" method
-- Do not preload JS and CSS for page specific blocks. This is considered overkill and would require page-specific rules that won't scale
+- Do not preload JS and CSS for individual blocks. This is considered overkill and would require page-specific rules that won't scale
 - Do not preload custom fonts. This would clutter the LCP critical path. Instead, defer the fonts to the lazy phase with appropriate font fallbacks defined
 - Do not preload/preconnect any third-party resource that is not in the critical path for the LCP. Instead, let them load async in "loadLazy" or "loadDelayed"
 `; 

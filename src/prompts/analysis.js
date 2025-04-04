@@ -116,6 +116,17 @@ ${resources[pageUrl]}
 `;
 
 /**
+ * Prompt for rule analysis
+ * @param {string} rules - Rule summary text
+ * @returns {string} Rule analysis prompt
+ */
+export const rulesStep = (rules) => `
+${step()} here is the set of custom rules that failed for the page:
+
+${rules}
+`;
+
+/**
  * Prompt for code analysis
  * @param {string} pageUrl - URL of the page
  * @param {Object} resources - Resources object containing code files

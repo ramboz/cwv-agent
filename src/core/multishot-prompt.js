@@ -14,9 +14,12 @@ import {
   perfStep,
   htmlStep,
   codeStep,
+  rulesStep,
   actionPrompt,
 } from '../prompts/index.js';
 import { detectAEMVersion } from '../tools/aem.js';
+import merge from '../tools/merge.js';
+import { applyRules } from '../tools/rules.js';
 
 const MAX_TOKENS = {
   'gemini-2.5-pro-exp-03-25': { input: 1_048_576, output: 65_535 },
@@ -38,7 +41,17 @@ export default async function runPrompt(pageUrl, deviceType, options) {
       cruxSummary,
       perfEntries,
       perfEntriesSummary,
+      fullHtml,
+      jsApi,
     } = await collectArtifacts(pageUrl, deviceType, options);
+
+    const report = merge(pageUrl, deviceType);
+    const { rulesSummary, fromCache } = await applyRules(pageUrl, deviceType, options, { crux, psi, har, perfEntries, resources, fullHtml, jsApi, report });
+    if (fromCache) {
+      console.log('✓ Loaded rules from cache. Estimated token size: ~', estimateTokenSize(rulesSummary));
+    } else {
+      console.log('✅ Processed rules. Estimated token size: ~', estimateTokenSize(rulesSummary));
+    }
 
     const cms = detectAEMVersion(har.log.entries[0].headers, resources[pageUrl]);
     console.log('AEM Version:', cms);
@@ -56,9 +69,10 @@ export default async function runPrompt(pageUrl, deviceType, options) {
       new SystemMessage(initializeSystem(cms)),
       new HumanMessage(cruxStep(crux)),
       new HumanMessage(psiStep(psi)),
+      new HumanMessage(perfStep(perfEntries)),
       new HumanMessage(harStep(har)),
-      // new HumanMessage(perfStep(perfEntries)),
       new HumanMessage(htmlStep(pageUrl, resources)),
+      new HumanMessage(rulesStep(rulesSummary)),
       new HumanMessage(codeStep(pageUrl, resources)),
       new HumanMessage(actionPrompt(pageUrl, deviceType)),
     ];
@@ -72,9 +86,10 @@ export default async function runPrompt(pageUrl, deviceType, options) {
         new SystemMessage(initializeSystem(cms)),
         new HumanMessage(cruxSummaryStep(cruxSummary)),
         new HumanMessage(psiSummaryStep(psiSummary)),
+        new HumanMessage(perfSummaryStep(perfEntriesSummary)),
         new HumanMessage(harSummaryStep(harSummary)),
-        // new HumanMessage(perfSummaryStep(perfEntriesSummary)),
         new HumanMessage(htmlStep(pageUrl, resources)),
+        new HumanMessage(rulesStep(rulesSummary)),
         new HumanMessage(codeStep(pageUrl, resources, 10_000)),
         new HumanMessage(actionPrompt(pageUrl, deviceType)),
       ]

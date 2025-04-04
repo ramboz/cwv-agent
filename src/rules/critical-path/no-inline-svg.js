@@ -2,7 +2,7 @@ import { parse } from 'node-html-parser';
 
 export default function evaluate({ fullHtml }) {
   const doc = parse(fullHtml);
-  const svgElements = doc.body.querySelectorAll('svg');
+  const svgElements = doc.querySelectorAll('body svg');
   if (svgElements.length > 0) {
     return [...svgElements].map((el) => ({
       category: 'critical-path',
