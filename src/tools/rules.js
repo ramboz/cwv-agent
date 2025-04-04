@@ -1,5 +1,5 @@
 import { prettify } from 'htmlfy'
-import { cacheResults } from '../utils.js';
+import { cacheResults, getCachedResults, getCachePath } from '../utils.js';
 import rules from '../rules/index.js';
 
 function prettifyWithOffset(str, offset = 4, code) {
@@ -40,9 +40,15 @@ export function summarize(rulesResults) {
 
 export async function applyRules(pageUrl, deviceType, { skipCache, outputSuffix }, { crux, psi, har, perfEntries, resources, fullHtml, jsApi, report }) {
   if (!skipCache) {
-    const cache = getCachedResults(pageUrl, deviceType, 'rules');
+    const cache = getCachedResults(pageUrl, deviceType, 'rules', outputSuffix);
     if (cache) {
-      return { full: cache, summary: summarize(cache), fromCache: true };
+      return {
+        full: cache,
+        summary: summarize(cache),
+        path: getCachePath(pageUrl, deviceType, 'rules', outputSuffix),
+        summaryPath: getCachePath(pageUrl, deviceType, 'rules', outputSuffix, true),
+        fromCache: true,
+      };
     }
   }
 
