@@ -38,7 +38,14 @@ export function summarize(rulesResults) {
     .join('\n');
 }
 
-export async function applyRules(pageUrl, deviceType, { outputSuffix }, { crux, psi, har, perfEntries, resources, fullHtml, jsApi, report }) {
+export async function applyRules(pageUrl, deviceType, { skipCache, outputSuffix }, { crux, psi, har, perfEntries, resources, fullHtml, jsApi, report }) {
+  if (!skipCache) {
+    const cache = getCachedResults(pageUrl, deviceType, 'rules');
+    if (cache) {
+      return { full: cache, summary: summarize(cache), fromCache: true };
+    }
+  }
+
   // Sort report.data by start time
   report.data.sort((a, b) => a.start - b.start);
   // Clone report.data and sort by end time
