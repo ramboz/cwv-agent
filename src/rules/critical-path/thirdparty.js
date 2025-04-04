@@ -14,8 +14,8 @@ export default function evaluate({ summary, report }) {
         if (u.hostname !== current) {
           results.push({
             category: 'critical-path',
-            message: `Resource is loaded from a different origin - current duration: ${r.duration.toFixed(0)}ms`,
-            recommendation: `Move the resource to the same origin as the page or defer it after the LCP`,
+            message: `Third-party resource (from a different origin) detected in critical path (before LCP) causing ${r.duration.toFixed(0)}ms delay`,
+            recommendation: `Move the resource to the same origin as the page, defer it after the LCP, or use preloading techniques if it is required for the LCP`,
             url: r.url,
             passing: false,
             time: r.start,

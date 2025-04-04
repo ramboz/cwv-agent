@@ -15,7 +15,7 @@ export default function evaluate({ report }) {
       results.push({
         category: 'critical-path',
         message: `Multiple LCPs found`,
-        recommendation: `Having multiple LCPs might lead to performance issues as the loading sequence might be optimized for the first LCP.`,
+        recommendation: `Having multiple LCPs might lead to performance issues as the critical path might be optimized for the first FCP. Or you have async content coming in late that overshadows the LCP itself.`,
         passing: false,
         time: start,
         elements: lcps.map(l => l.element),
@@ -26,8 +26,8 @@ export default function evaluate({ report }) {
       if (lcp.end > THRESHOLDS.bad) {
         results.push({
           category: 'critical-path',
-          message: `LCP is bad`,
-          recommendation: `The LCP element is taking too long to load. Load it earlier during the loading sequence.`,
+          message: `LCP timing is bad`,
+          recommendation: `The LCP element is taking too long to load. Load it earlier during the critical path.`,
           passing: false,
           time: start,
           url,
@@ -36,8 +36,8 @@ export default function evaluate({ report }) {
       } else {
         results.push({
           category: 'critical-path',
-          message: `LCP is average`,
-          recommendation: `The LCP element is taking too long to load. Load it earlier during the loading sequence.`,
+          message: `LCP timing is average`,
+          recommendation: `The LCP element is taking too long to load. Load it earlier during the critical path.`,
           passing: false,
           time: start,
           url,

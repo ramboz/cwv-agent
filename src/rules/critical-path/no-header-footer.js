@@ -14,8 +14,8 @@ export default function evaluate({ report }) {
     const header = sequence[headerIndex];
     results.push({  
       category: 'critical-path',
-      message: 'Lazy loaded header.',
-      recommendation: 'Ensure the page header is lazy loaded after the LCP.',
+      message: 'Header detected in critical path (before LCP)',
+      recommendation: 'Ensure the page header is lazy loaded after the LCP',
       passing: false,
       time: header.start,
       url: header.url
@@ -25,8 +25,8 @@ export default function evaluate({ report }) {
     const footer = sequence[footerIndex];
     results.push({
       category: 'critical-path',
-      message: 'Lazy loaded footer.',
-      recommendation: 'Ensure the page footer is lazy loaded after the LCP.',
+      message: 'Footer detected in critical path (before LCP)',
+      recommendation: 'Ensure the page footer is lazy loaded after the LCP',
       passing: false,
       time: footer.start,
       url: footer.url
@@ -36,8 +36,8 @@ export default function evaluate({ report }) {
     const header = sequence[headerIndex];
     results.push({
       category: 'critical-path',
-      message: 'Lazy loaded header/footer.',
-      recommendation: 'Ensure the page header loads before the page footer.',
+      message: 'Footer detected before the header',
+      recommendation: 'Ensure the page header loads before the page footer',
       passing: false,
       time: header.start,
       url: header.url

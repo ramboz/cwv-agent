@@ -8,8 +8,8 @@ export default function evaluate({ report }) {
   fonts.forEach(f => {
     results.push({
         category: 'critical-path',
-        message: `Font file detected in loading sequence (before LCP)`,
-        recommendation: `Move font files after the LCP to improve performance and use the font fallback technique to prevent CLS`,
+        message: `Font file detected in critical path (before LCP)`,
+        recommendation: `Move font files after the LCP to improve performance and use the font fallback techniques to prevent CLS`,
         url: f.url,
         passing: false,
         time: f.start,

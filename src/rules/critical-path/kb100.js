@@ -16,8 +16,8 @@ export default function evaluate({ summary, report }) {
   if (totalSizeBeforeLCP > THRESHOLDS[summary.type]) {
     return {
       category: 'critical-path',
-      message: `>${THRESHOLDS[summary.type]}kb on ${summary.type} pre-lcp assets`,
-      recommendation: `${totalSizeBeforeLCP}kb loaded before the LCP - remove resources loaded before the LCP to reduce the size of the initial page load and speed up the LCP.`,
+      message: `Critical path has >${THRESHOLDS[summary.type]}kb pre-lcp assets on ${summary.type} ()`,
+      recommendation: `A total of ${totalSizeBeforeLCP}kb is loaded before the LCP - defer resources loaded before the LCP to reduce the size of the critical path`,
       element,
       passing: false,
       time: start,

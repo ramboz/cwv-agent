@@ -5,8 +5,8 @@ export default function evaluate({ report }) {
     return { 
       passing: false,
       category: 'network',
-      message: `TTFB is ${entry.ttfb}ms`,
-      recommendation: 'Reduce TTFB to improve the performance',
+      message: `Large time to first byte (TTFB) detected (${entry.ttfb}ms)`,
+      recommendation: 'Reduce TTFB by reviewing your CDN configuration and caching rules to improve the performance',
       url: entry.url,
       time: entry.start,
     };

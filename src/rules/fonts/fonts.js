@@ -10,7 +10,7 @@ export default function evaluate({ har, jsApi }) {
     if (!e.response.content.mimeType.includes('woff2')) {
       results.push({
         category: 'fonts',
-        message: 'Use a modern font format',
+        message: 'Non optimal font format detected',
         url: e.request.url,
         time: e.time.toFixed(0),
         recommendation: 'Make sure to use custom fonts that are in the WOFF2 format',
@@ -26,8 +26,8 @@ export default function evaluate({ har, jsApi }) {
     if (f.display !== 'swap') {
       results.push({
         category: 'fonts',
-        message: `Gracefully swap in ${f.family} when the font is loaded`,
-        recommendation: 'Make sure to use the swap display property for custom fonts',
+        message: `Non optimal font loading detected for ${f.family}`,
+        recommendation: 'Make sure to use the swap display property for custom fonts so they are seamlessly injected in the page',
         name: f.family,
         passing: false,
       });
@@ -35,8 +35,8 @@ export default function evaluate({ har, jsApi }) {
     if (!jsApi.usedFonts[f.fontFamily].length) {
       results.push({
         category: 'fonts',
-        message: `Font ${f.family} has no fallback font`,
-        recommendation: 'Make sure to use configure fallback fonts to be shown while your custom fonts load',
+        message: `No fallback font detected for ${f.family}`,
+        recommendation: 'Make sure to use configure fallback fonts to be shown while your custom fonts load to avoid a flash of unstyled text (FOUT)',
         name: f.family,
         passing: false,
       });
@@ -51,8 +51,8 @@ export default function evaluate({ har, jsApi }) {
     if (f.sizeAdjust === '100%') {
       results.push({
         category: 'fonts',
-        message: 'Size fallback fonts to mimic custom fonts',
-        recommendation: 'Make sure to use the swap display property for custom fonts',
+        message: 'Fallback font is not size-adjusted to mimic the custom fonts',
+        recommendation: 'Make sure to configure the size-adjust property so that the custom font does not shift the content when injected',
         name: f.family,
         passing: false,
       });

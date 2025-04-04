@@ -25,14 +25,14 @@ export default function evaluate({ report }) {
       processed.add(previous.id);
 
       const source = sources[sources.length - 1];
-      const { node } = source;
+      const { node, from, to } = source;
       let recommendation = `Fix width and height before element or impacting CSS is loaded - root cause seems to be the LCP element`;
       if (previous.entryType === 'resource') {
         recommendation = `Fix width and height before element or impacting CSS is loaded - Root cause seems to be ${previous.url}`;
       }
       return {
         category: 'user-experience',
-        message: `Element moves (${value})`,
+        message: `Element caused layout shift when moving from [${from}] to [${to}] (${value})`,
         recommendation,
         element: node,
         passing: false,

@@ -27,8 +27,8 @@ export default function evaluate({ report }) {
       
       return {
         category: 'main-thread',
-        message: `${duration}ms blocking time`,
-        recommendation: `Remove the blocking time which most likely caused by the previous loaded resource`,
+        message: `A task is blocking the main thread for ${duration.toFixed(0)}ms`,
+        recommendation: `Remove the blocking time which most is likely caused by the previous loaded resource`,
         passing: false,
         time: start,
         url: previous.url

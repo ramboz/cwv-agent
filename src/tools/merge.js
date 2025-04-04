@@ -121,8 +121,8 @@ const reportCLS = (entry) => {
     const from = source.previousRect;
     return {
       node: source.node || '',
-      from: `from: ${from.top} ${from.right} ${from.bottom} ${from.left}`,
-      to: `to: ${to.top} ${to.right} ${to.bottom} ${to.left}`,
+      from: `${from.top} ${from.right} ${from.bottom} ${from.left}`,
+      to: `${to.top} ${to.right} ${to.bottom} ${to.left}`,
     };
   });
   return {

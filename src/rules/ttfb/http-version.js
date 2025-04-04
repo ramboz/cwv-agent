@@ -6,8 +6,8 @@ export default function evaluate({ summary, har }) {
   if (!allModernProtocol) {
     return {
       category: 'network',
-      message: 'Some first party resources are not served using HTTP/2 or HTTP/3.',
-      recommendation: 'Configured your CDN to use HTTP/2 or HTTP/3.',
+      message: 'Legacy HTTP version detected for first-part resource',
+      recommendation: 'Configured your CDN to use HTTP/2 or HTTP/3 for all first-party requests to speed up the page load',
       passing: false,
     };
   }

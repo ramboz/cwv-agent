@@ -10,9 +10,9 @@ export default function evaluate({ report }) {
       if (url || name) {
         return {
           category: 'main-thread',
-          message: `${duration.toFixed(0)}ms animation frame`,
+          message: `A long animation frame is blocking the main thread for ${duration.toFixed(0)}ms`,
           url: `${name || ''}${name && url ? ' in ' : ''}${url || ''}`,
-          recommendation: 'Remove long animation frames to improve performance',
+          recommendation: 'Remove long animation frames to improve page loading speed and UI responsiveness',
           passing: false,
           time: start,
         };
@@ -29,11 +29,11 @@ export default function evaluate({ report }) {
         if (!hasCSS) {
           return {
             category: 'main-thread',
-          message: `Blocking resource${blockingResources.length > 1 ? 's' : ''}`,
-          url: blockingResources.map(e => e.url).join(', '),
-          recommendation: `Review potential blocking resource${blockingResources.length > 1 ? 's' : ''} found during the animation frame`,
-          passing: false,
-          time: start,
+            message: `Blocking resource${blockingResources.length > 1 ? 's' : ''} detected`,
+            url: blockingResources.map(e => e.url).join(', '),
+            recommendation: `Review potential blocking resource${blockingResources.length > 1 ? 's' : ''} found during the long animation frame`,
+            passing: false,
+            time: start,
           };
         }
       }

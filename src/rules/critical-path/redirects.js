@@ -7,8 +7,8 @@ export default function evaluate({ report }) {
   if (redirects.length > 0) {
     return redirects.map(r => ({
       category: 'critical-path',
-      message: `${r.redirect}ms redirect time on the critical path`,
-      recommendation: 'Redirects on the critical path are not allowed',
+      message: `Redirect detected in critical path (before LCP) and causing ${r.redirect}ms delay`,
+      recommendation: 'Update the reference and use the final URL in your code to avoid the redirect chain',
       url: r.url,
       passing: false,
       time: r.start,
