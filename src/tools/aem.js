@@ -57,10 +57,16 @@ export function detectAEMVersion(headers, htmlSource) {
     /\/apps\//i
   ];
 
+  const aemHeadlessPatterns = [
+    /aem-headless/i,
+    /\/content\/dam\//i
+  ];
+
   // Count matches for each type
   let edsMatches = 0;
   let csMatches = 0;
   let amsMatches = 0;
+  let aemHeadlessMatches = 0;
 
   // Check EDS patterns
   for (const pattern of edsPatterns) {
@@ -83,6 +89,12 @@ export function detectAEMVersion(headers, htmlSource) {
     }
   }
 
+  for (const pattern of aemHeadlessPatterns) {
+    if (pattern.test(normalizedHtml)) {
+      aemHeadlessMatches++;
+    }
+  }
+
   // Check for decisive indicators with higher weight
   if (normalizedHtml.includes('lib-franklin.js') || normalizedHtml.includes('aem.js')) {
     edsMatches += 3;
@@ -97,7 +109,7 @@ export function detectAEMVersion(headers, htmlSource) {
   }
 
   // Determine the most likely version based on match counts
-  const maxMatches = Math.max(edsMatches, csMatches, amsMatches);
+  const maxMatches = Math.max(edsMatches, csMatches, amsMatches, aemHeadlessMatches);
   
   // Require a minimum threshold of matches to make a determination
   const MIN_THRESHOLD = 2;
@@ -106,14 +118,16 @@ export function detectAEMVersion(headers, htmlSource) {
     return null;
   }
   
-  if (edsMatches === maxMatches && edsMatches > csMatches && edsMatches > amsMatches) {
+  if (edsMatches === maxMatches && edsMatches > csMatches && edsMatches > amsMatches && edsMatches > aemHeadlessMatches) {
     return 'eds';
-  } else if (csMatches === maxMatches && csMatches > edsMatches && csMatches > amsMatches) {
+  } else if (csMatches === maxMatches && csMatches > edsMatches && csMatches > amsMatches && csMatches > aemHeadlessMatches) {
     return 'cs';
-  } else if (amsMatches === maxMatches && amsMatches > edsMatches && amsMatches > csMatches) {
+  } else if (amsMatches === maxMatches && amsMatches > edsMatches && amsMatches > csMatches && amsMatches > aemHeadlessMatches) {
     return 'ams';
+  } else if (aemHeadlessMatches === maxMatches && aemHeadlessMatches > edsMatches && aemHeadlessMatches > csMatches && aemHeadlessMatches > amsMatches) {
+    return 'aem-headless';
   }
-  
+
   // If there's a tie or unclear result
   return null;
 }
