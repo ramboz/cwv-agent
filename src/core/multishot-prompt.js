@@ -15,7 +15,7 @@ import {
   htmlStep,
   codeStep,
   actionPrompt,
-} from '../prompts.js';
+} from '../prompts/index.js';
 import { detectAEMVersion } from '../tools/aem.js';
 
 const MAX_TOKENS = {
@@ -54,12 +54,12 @@ export default async function runPrompt(pageUrl, deviceType, options) {
   
     let messages = [
       new SystemMessage(initializeSystem(cms)),
-      new HumanMessage(cruxStep(1, crux)),
-      new HumanMessage(psiStep(2, psi)),
-      new HumanMessage(harStep(3, har)),
-      // new HumanMessage(perfStep(4, perfEntries)),
-      new HumanMessage(htmlStep(4, pageUrl, resources)),
-      new HumanMessage(codeStep(5, pageUrl, resources)),
+      new HumanMessage(cruxStep(crux)),
+      new HumanMessage(psiStep(psi)),
+      new HumanMessage(harStep(har)),
+      // new HumanMessage(perfStep(perfEntries)),
+      new HumanMessage(htmlStep(pageUrl, resources)),
+      new HumanMessage(codeStep(pageUrl, resources)),
       new HumanMessage(actionPrompt(pageUrl, deviceType)),
     ];
 
@@ -70,12 +70,12 @@ export default async function runPrompt(pageUrl, deviceType, options) {
       console.log('Context window limit hit. Trying with summarized prompt...');
       messages = [
         new SystemMessage(initializeSystem(cms)),
-        new HumanMessage(cruxSummaryStep(1, cruxSummary)),
-        new HumanMessage(psiSummaryStep(2, psiSummary)),
-        new HumanMessage(harSummaryStep(3, harSummary)),
-        // new HumanMessage(perfSummaryStep(4, perfEntriesSummary)),
-        new HumanMessage(htmlStep(4, pageUrl, resources)),
-        new HumanMessage(codeStep(5, pageUrl, resources, 10_000)),
+        new HumanMessage(cruxSummaryStep(cruxSummary)),
+        new HumanMessage(psiSummaryStep(psiSummary)),
+        new HumanMessage(harSummaryStep(harSummary)),
+        // new HumanMessage(perfSummaryStep(perfEntriesSummary)),
+        new HumanMessage(htmlStep(pageUrl, resources)),
+        new HumanMessage(codeStep(pageUrl, resources, 10_000)),
         new HumanMessage(actionPrompt(pageUrl, deviceType)),
       ]
       tokensLength = messages.map((m) => enc.encode(m.content).length).reduce((a, b) => a + b, 0);
