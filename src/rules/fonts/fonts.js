@@ -13,7 +13,7 @@ export default function evaluate({ har, jsApi }) {
         message: 'Use a modern font format',
         url: e.request.url,
         time: e.time.toFixed(0),
-        recommendation: 'Make sure to use custom fonts that are in the WOFF2 format.',
+        recommendation: 'Make sure to use custom fonts that are in the WOFF2 format',
         passing: false,
       })
     }
@@ -27,15 +27,17 @@ export default function evaluate({ har, jsApi }) {
       results.push({
         category: 'fonts',
         message: `Gracefully swap in ${f.family} when the font is loaded`,
-        recommendation: 'Make sure to use the swap display property for custom fonts.',
+        recommendation: 'Make sure to use the swap display property for custom fonts',
+        name: f.family,
         passing: false,
       });
     }
     if (!jsApi.usedFonts[f.fontFamily].length) {
       results.push({
         category: 'fonts',
-        message: `Font ${f.family} has no fallback font.`,
-        recommendation: 'Make sure to use configure fallback fonts to be shown while your custom fonts load.',
+        message: `Font ${f.family} has no fallback font`,
+        recommendation: 'Make sure to use configure fallback fonts to be shown while your custom fonts load',
+        name: f.family,
         passing: false,
       });
     }
@@ -49,8 +51,9 @@ export default function evaluate({ har, jsApi }) {
     if (f.sizeAdjust === '100%') {
       results.push({
         category: 'fonts',
-        message: 'Size fallback fonts to mimic custom fonts.',
-        recommendation: 'Make sure to use the swap display property for custom fonts.',
+        message: 'Size fallback fonts to mimic custom fonts',
+        recommendation: 'Make sure to use the swap display property for custom fonts',
+        name: f.family,
         passing: false,
       });
     }

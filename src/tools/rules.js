@@ -2,9 +2,15 @@ import { prettify } from 'htmlfy'
 import { cacheResults } from '../utils.js';
 import rules from '../rules/index.js';
 
-function prettifyWithOffset(str, offset = 4) {
+function prettifyWithOffset(str, offset = 4, code) {
   // Use the provided offset to dynamically indent each line of the prettified HTML
-  return prettify(str).split(/\n/).map((line) => `${' '.repeat(offset)}${line}`).join('\n');
+  let prefix = '';
+  let suffix = '';
+  if (code) {
+    prefix = `${' '.repeat(offset)}\`\`\`html\n`;
+    suffix = `\n${' '.repeat(offset)}\`\`\``;
+  }
+  return prefix + prettify(str).split(/\n/).map((line) => `${' '.repeat(offset)}${line}`).join('\n') + suffix;
 }
 
 function details(rule) {
@@ -13,9 +19,11 @@ function details(rule) {
   } else if (rule.urls) {
     return `Urls: ${rule.urls.join(',')}`;
   } else if (rule.element) {
-    return `Element:\n${prettifyWithOffset(rule.element)}`;
+    return `Element:\n${prettifyWithOffset(rule.element, 4, 'html')}`;
   } else if (rule.elements) {
-    return `Elements:\n${rule.elements.map((el) => `${prettifyWithOffset(el)}\n`)}`;
+    return `Elements:\n${rule.elements.map((el) => prettifyWithOffset(el, 4, 'html')).join('\n')}`;
+  } else if (rule.name) {
+    return `Name: ${rule.name}`;
   }
 }
 
@@ -25,8 +33,8 @@ export function summarize(rulesResults) {
   return failedRules
     .map((r) => `
 - ${r.message}${r.time ? ` at ${r.time}ms` : ''}:
-  - ${details(r)}
-  - Recommendation: ${r.recommendation}`)
+  - Recommendation: ${r.recommendation}
+  - ${details(r)}`)
     .join('\n');
 }
 
