@@ -60,6 +60,7 @@ export async function processUrl(pageUrl, action, deviceType, skipCache, outputS
 
       case 'rules':
         result = await rulesAction(normalizedUrl.url, deviceType, { skipCache, skipTlsCheck: normalizedUrl.skipTlsCheck, outputSuffix, blockRequests });
+        console.log('Done. Check the `.cache` folder');
         break;
         
        case 'agent':

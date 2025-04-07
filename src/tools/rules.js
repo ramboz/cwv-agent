@@ -25,6 +25,7 @@ function details(rule) {
   } else if (rule.name) {
     return `Name: ${rule.name}`;
   }
+  return '';
 }
 
 export function summarize(rulesResults) {
@@ -34,7 +35,7 @@ export function summarize(rulesResults) {
     .map((r) => `
 - ${r.message}${r.time ? ` at ${r.time}ms` : ''}:
   - Recommendation: ${r.recommendation}
-  - ${details(r)}`)
+  ${details(r) ? `- ${details(r)}` : ''}`)
     .join('\n');
 }
 
