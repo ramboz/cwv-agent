@@ -12,7 +12,7 @@ export default function evaluate({ har, jsApi }) {
         category: 'fonts',
         message: 'Non optimal font format detected',
         url: e.request.url,
-        time: e.time.toFixed(0),
+        time: e.time,
         recommendation: 'Make sure to use custom fonts that are in the WOFF2 format',
         passing: false,
       })
