@@ -15,6 +15,7 @@ import lazyHeaderFooter from './critical-path/no-header-footer.js';
 import fonts from './fonts/fonts.js';
 import redirects from './critical-path/redirects.js';
 import ttfb from './ttfb/ttfb.js';
+import csp from './config/csp.js';
 
 export default [
   kb100,
@@ -34,4 +35,5 @@ export default [
   fonts,
   redirects,
   ttfb,
+  csp,
 ];

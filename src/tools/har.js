@@ -317,6 +317,24 @@ export async function collect(pageUrl, deviceType, { skipCache, skipTlsCheck, bl
     await har.start();
   }
 
+  await page.evaluateOnNewDocument(() => {
+    if (!window.CSP_VIOLATIONS) {
+      window.CSP_VIOLATIONS = [];
+      window.addEventListener('securitypolicyviolation', (e) => {
+        window.CSP_VIOLATIONS.push({
+          violatedDirective: e.violatedDirective,
+          blockedURI: e.blockedURI,
+          lineNumber: e.lineNumber,
+          columnNumber: e.columnNumber,
+          sourceFile: e.sourceFile,
+          statusCode: e.statusCode,
+          referrer: e.referrer,
+          effectiveDirective: e.effectiveDirective
+        });
+      });
+    }
+  });
+
   try {
     await page.goto(pageUrl, {
       timeout: 120_000,
@@ -420,7 +438,8 @@ export async function collect(pageUrl, deviceType, { skipCache, skipTlsCheck, bl
           .filter((sel) => !!sel)
           .map((el) => el && window.getComputedStyle(el).fontFamily)
           .map((ff) => ff.split(',').map((f) => f.trim().replace(/['"]/g, '')))
-          .reduce((set, val) => { set[val[0]] = []; val.splice(1).forEach((v) => set[val[0]].push(v)); return set; }, {})
+          .reduce((set, val) => { set[val[0]] = []; val.splice(1).forEach((v) => set[val[0]].push(v)); return set; }, {}),
+        cspViolations: window.CSP_VIOLATIONS || [],
       };
     });
   }
