@@ -1,6 +1,6 @@
 import { getHar } from './collect.js';
 import merge from '../tools/merge.js';
-import { readCache } from '../utils.js';
+import { readCache, estimateTokenSize } from '../utils.js';
 import { applyRules } from '../tools/rules.js';
 
 export default async function rulesAction(pageUrl, deviceType, options) {
@@ -15,6 +15,11 @@ export default async function rulesAction(pageUrl, deviceType, options) {
   }
 
   const result = await applyRules(pageUrl, deviceType, options, { har, perfEntries, fullHtml, jsApi, report });
+  if (result.fromCache) {
+    console.log('✓ Loaded rules from cache. Estimated token size: ~', estimateTokenSize(result.summary));
+  } else {
+    console.log('✅ Processed rules. Estimated token size: ~', estimateTokenSize(result.summary));
+  }
   console.group('Failed rules:');
   console.log(result.summary);
   console.groupEnd();
