@@ -2,7 +2,7 @@ import collecetAction from './collect.js';
 import rulesAction from './rules.js';
 // import runAgent from './agent.js';
 import runPrompt from './multishot-prompt.js';
-import { cacheResults, getCachedResults, getNormalizedUrl, readCache } from '../utils.js';
+import { cacheResults, getCachedResults, getNormalizedUrl, getCachePath } from '../utils.js';
 
 export async function handlePromptAction(pageUrl, deviceType, options) {
   // Check cache first if not skipping
@@ -10,7 +10,8 @@ export async function handlePromptAction(pageUrl, deviceType, options) {
   if (!options.skipCache) {
     result = getCachedResults(pageUrl, deviceType, 'report');
     if (result) {
-      console.log('Using cached report...');
+      const path = getCachePath(pageUrl, deviceType, 'report', '', true);
+      console.log('Report already exists at', path);
     }
   }
   
@@ -22,8 +23,9 @@ export async function handlePromptAction(pageUrl, deviceType, options) {
     }
     else {
       cacheResults(pageUrl, deviceType, 'report', result);
-      cacheResults(pageUrl, deviceType, 'report', result.content);
-      console.log('✅ CWV report generated.');
+      const path = cacheResults(pageUrl, deviceType, 'report', result.content);
+
+      console.log('✅ CWV report generated at:', path);
     }
   }
   

@@ -20,6 +20,7 @@ import {
 import { detectAEMVersion } from '../tools/aem.js';
 import merge from '../tools/merge.js';
 import { applyRules } from '../tools/rules.js';
+import { estimateTokenSize } from '../utils.js';
 
 const MAX_TOKENS = {
   'gemini-2.5-pro-exp-03-25': { input: 1_048_576, output: 65_535 },
@@ -46,7 +47,7 @@ export default async function runPrompt(pageUrl, deviceType, options) {
     } = await collectArtifacts(pageUrl, deviceType, options);
 
     const report = merge(pageUrl, deviceType);
-    const { rulesSummary, fromCache } = await applyRules(pageUrl, deviceType, options, { crux, psi, har, perfEntries, resources, fullHtml, jsApi, report });
+    const { summary: rulesSummary, fromCache } = await applyRules(pageUrl, deviceType, options, { crux, psi, har, perfEntries, resources, fullHtml, jsApi, report });
     if (fromCache) {
       console.log('✓ Loaded rules from cache. Estimated token size: ~', estimateTokenSize(rulesSummary));
     } else {
