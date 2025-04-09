@@ -1,6 +1,6 @@
-import { getSequence } from '../shared.js';
+import { getSequence, getInitiator } from '../shared.js';
 
-export default function evaluate({ report }) {
+export default function evaluate({ report, har }) {
   const { sequence, lcp } = getSequence(report);
 
   if (!lcp) {
@@ -20,7 +20,8 @@ export default function evaluate({ report }) {
         recommendation: `Lazy load media files after the LCP`,
         url: m.url,
         passing: false,
-        time: m.start
+        time: m.start,
+        initiator: getInitiator(har, m.url),
     });
   });
   return results;

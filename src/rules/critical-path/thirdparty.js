@@ -1,8 +1,8 @@
-import { getSequence } from '../shared.js';
+import { getSequence, getInitiator } from '../shared.js';
 
 const THRESHOLD = 60;
 
-export default function evaluate({ summary, report }) {
+export default function evaluate({ summary, report, har }) {
   const { sequence } = getSequence(report);
 
   const results = [];
@@ -19,6 +19,7 @@ export default function evaluate({ summary, report }) {
             url: r.url,
             passing: false,
             time: r.start,
+            initiator: getInitiator(har, r.url),
           });
         }
       } catch (e) {

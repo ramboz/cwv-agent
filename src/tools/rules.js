@@ -35,7 +35,7 @@ export function summarize(rulesResults) {
     .map((r) => `
 - ${r.message}${r.time ? ` at ${r.time}ms` : ''}:
   - Recommendation: ${r.recommendation}
-  ${details(r) ? `- ${details(r)}` : ''}`)
+  ${details(r) ? `- ${details(r)}` : ''}${r.initiator ? `\n  - Initiator: ${r.initiator}` : ''}`)
     .join('\n');
 }
 

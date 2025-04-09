@@ -1,3 +1,5 @@
+import { getInitiator } from '../shared.js';
+
 export default function evaluate({ har, jsApi }) {
   const allFonts = har.log.entries.filter((e) => e.response.content.mimeType.includes('font'));
   if (!allFonts.length) {
@@ -15,6 +17,7 @@ export default function evaluate({ har, jsApi }) {
         time: e.time,
         recommendation: 'Make sure to use custom fonts that are in the WOFF2 format',
         passing: false,
+        initiator: getInitiator(har, e.url),
       })
     }
   });

@@ -1,4 +1,4 @@
-export default function evaluate({ har, perfEntries, report }) {
+export default function evaluate({ summary, har, perfEntries, report }) {
   const images = har.log.entries.filter((e) => e.response.content.mimeType.startsWith('image/'));
   const lcp = perfEntries.filter((e) => e.entryType === 'largest-contentful-paint').pop();
   if (!lcp) {
@@ -19,6 +19,7 @@ export default function evaluate({ har, perfEntries, report }) {
         recommendation: 'Ensure all images below the fold are loaded with `loading="lazy"`.',
         passing: false,
         time: start,
+        initiator: summary.url,
       };
     // } else if (!isLcpEagerlyLoaded) {
     //   return {

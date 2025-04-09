@@ -5,8 +5,9 @@ export default function evaluate({ jsApi }) {
       category: 'network',
       message: `Security policy violation detected`,
       url: v.blockedURI,
-      recommendation: `Make sure to use the correct CSP directives to prevent security policy violations - ${v.violatedDirective} blocks ${v.blockedURI} from source ${v.sourceFile}`,
+      recommendation: `Make sure to use the correct CSP directives to prevent security policy violations - ${v.violatedDirective} blocks the resource from executing`,
       passing: false,
+      initiator: `${v.sourceFile} (L${v.lineNumber})`,
     });
   });
   return results;

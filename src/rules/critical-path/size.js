@@ -1,4 +1,4 @@
-import { getSequence } from '../shared.js';
+import { getSequence, getInitiator } from '../shared.js';
 
 const THRESHOLDS = {
   'text/javascript': 20,
@@ -6,7 +6,7 @@ const THRESHOLDS = {
   'text/css': 10,
 };
 
-export default function evaluate({ report }) {
+export default function evaluate({ report, har }) {
   const { sequence } = getSequence(report);
 
   const results = [];
@@ -20,6 +20,7 @@ export default function evaluate({ report }) {
           url: r.url,
           passing: false,
           time: r.start,
+          initiator: getInitiator(har, r.url),
         });
       }
     }

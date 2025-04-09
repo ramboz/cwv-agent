@@ -1,6 +1,6 @@
 import { parse } from 'node-html-parser';
 
-export default function evaluate({ fullHtml }) {
+export default function evaluate({ summary, fullHtml }) {
   const doc = parse(fullHtml);
   const svgElements = doc.querySelectorAll('body svg');
   if (svgElements.length > 0) {
@@ -9,7 +9,7 @@ export default function evaluate({ fullHtml }) {
       message: 'Inline SVGs found on the page',
       recommendation: 'Remove inline SVGs from the page, and replace them by <img> tags with loading="lazy" attribute.',
       element: el.outerHTML,
-      passing: false
+      passing: false,
     }));
   }
   return null;

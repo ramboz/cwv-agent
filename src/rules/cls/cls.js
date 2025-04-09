@@ -37,6 +37,7 @@ export default function evaluate({ report }) {
         element: node,
         passing: false,
         time: start,
+        initiator: previous?.url,
       };
     }).filter(Boolean);
   }

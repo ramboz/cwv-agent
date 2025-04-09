@@ -7,3 +7,12 @@ export function getSequence(report) {
     lcp: data[i],
   };
 }
+
+export function getInitiator(har, url) {
+  const entry = har.log.entries.find(e => e.request.url === url);
+  return entry?._initiator_line
+    ? `${entry._initiator} (L${entry._initiator_line})`
+    : entry?._initiator
+      ? entry._initiator
+      : undefined;
+}

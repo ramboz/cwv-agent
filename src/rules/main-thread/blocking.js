@@ -1,6 +1,6 @@
-import { getSequence } from '../shared.js';
+import { getSequence, getInitiator } from '../shared.js';
 
-export default function evaluate({ report }) {
+export default function evaluate({ report, har }) {
   const { sequence } = getSequence(report);
 
   const blocking = sequence.filter(r => r.entryType === 'resource' && !r.url.includes('/styles.css') && r.renderBlockingStatus === 'blocking');
@@ -13,6 +13,7 @@ export default function evaluate({ report }) {
         url: b.url,
         passing: false,
         time: b.start,
+        initiator: getInitiator(har, b.url),
       });
   });
   return results;
