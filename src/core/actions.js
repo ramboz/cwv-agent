@@ -2,35 +2,7 @@ import collecetAction from './collect.js';
 import rulesAction from './rules.js';
 // import runAgent from './agent.js';
 import runPrompt from './multishot-prompt.js';
-import { cacheResults, getCachedResults, getNormalizedUrl, getCachePath } from '../utils.js';
-
-export async function handlePromptAction(pageUrl, deviceType, options) {
-  // Check cache first if not skipping
-  let result;
-  if (!options.skipCache) {
-    result = getCachedResults(pageUrl, deviceType, 'report');
-    if (result) {
-      const path = getCachePath(pageUrl, deviceType, 'report', '', true);
-      console.log('Report already exists at', path);
-    }
-  }
-  
-  // If no cached result or skipping cache, run the prompt
-  if (!result) {
-    result = await runPrompt(pageUrl, deviceType, options);
-    if (result instanceof Error) {
-      console.error('❌ Failed to generate report for', pageUrl);
-    }
-    else {
-      cacheResults(pageUrl, deviceType, 'report', result);
-      const path = cacheResults(pageUrl, deviceType, 'report', result.content);
-
-      console.log('✅ CWV report generated at:', path);
-    }
-  }
-  
-  return result;
-}
+import { getNormalizedUrl } from '../utils.js';
 
 export async function handleAgentAction(pageUrl, deviceType) {
   // const result = await runAgent(pageUrl, deviceType);
@@ -52,7 +24,7 @@ export async function processUrl(pageUrl, action, deviceType, skipCache, outputS
     
     switch (action) {
       case 'prompt':
-        result = await handlePromptAction(normalizedUrl.url, deviceType, { skipCache, skipTlsCheck: normalizedUrl.skipTlsCheck, outputSuffix, blockRequests });
+        result = await runPrompt(normalizedUrl.url, deviceType, { skipCache, skipTlsCheck: normalizedUrl.skipTlsCheck, outputSuffix, blockRequests });
         break;
         
       case 'collect':
@@ -62,7 +34,6 @@ export async function processUrl(pageUrl, action, deviceType, skipCache, outputS
 
       case 'rules':
         result = await rulesAction(normalizedUrl.url, deviceType, { skipCache, skipTlsCheck: normalizedUrl.skipTlsCheck, outputSuffix, blockRequests });
-        console.log('Done. Check the `.cache` folder');
         break;
         
        case 'agent':
