@@ -45,7 +45,7 @@ export async function applyRules(pageUrl, deviceType, { skipCache, outputSuffix 
     if (cache) {
       return {
         full: cache,
-        summary: summarize(cache),
+        summary: summarize(cache.data),
         path: getCachePath(pageUrl, deviceType, 'rules', outputSuffix),
         summaryPath: getCachePath(pageUrl, deviceType, 'rules', outputSuffix, true),
         fromCache: true,
@@ -68,7 +68,11 @@ export async function applyRules(pageUrl, deviceType, { skipCache, outputSuffix 
     }
   }).flat().filter(r => r);
 
-  const path = cacheResults(pageUrl, deviceType, 'rules', json, outputSuffix);
+  const path = cacheResults(pageUrl, deviceType, 'rules', {
+    url: pageUrl,
+    type: deviceType,
+    data: json,
+  }, outputSuffix);
   const summary = summarize(json);
   const summaryPath = cacheResults(pageUrl, deviceType, 'rules', summary, outputSuffix);
   return { full: json, summary, path, summaryPath };

@@ -32,11 +32,12 @@
         return div;
     };
 
-    const displayRecommendations = (data) => {
+    const displayRecommendations = (url, type, data) => {
+        document.title = `Performance Recommendations for ${url} on ${type}`;
+        document.querySelector('h1').textContent = document.title;
+
         const container = document.getElementById('recommendations');
-        
         data.sort((a, b) => (a.time || 0) - (b.time || 0));
-        
         data.forEach(rec => {
             container.appendChild(renderRecommendation(rec));
         });
@@ -52,9 +53,9 @@
             }
 
             const response = await fetch(reportPath);
-            const data = await response.json();
+            const report = await response.json();
             
-            displayRecommendations(data);
+            displayRecommendations(report.url, report.type, report.data);
         } catch (error) {
             console.error('Failed to load recommendations:', error);
             document.getElementById('recommendations').innerHTML = 
