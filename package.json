@@ -9,26 +9,26 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "@langchain/core": "^0.3.43",
-    "@langchain/google-genai": "^0.1.11",
-    "@langchain/google-vertexai": "^0.2.3",
-    "@langchain/langgraph": "^0.2.55",
-    "dotenv": "^16.4.7",
-    "htmlfy": "^0.6.6",
-    "js-tiktoken": "^1.0.19",
-    "langchain": "^0.3.19",
-    "node-html-parser": "^7.0.1",
-    "psi": "^4.1.0",
-    "puppeteer": "^24.4.0",
-    "puppeteer-har": "^1.1.2",
-    "undici": "^7.5.0",
-    "yargs": "^17.7.2",
-    "zod": "^3.24.2"
+    "@langchain/core": "0.3.45",
+    "@langchain/google-genai": "0.2.4",
+    "@langchain/google-vertexai": "0.2.4",
+    "@langchain/langgraph": "0.2.64",
+    "dotenv": "16.5.0",
+    "htmlfy": "0.7.2",
+    "js-tiktoken": "1.0.19",
+    "langchain": "0.3.22",
+    "node-html-parser": "7.0.1",
+    "psi": "4.1.0",
+    "puppeteer": "24.6.1",
+    "puppeteer-har": "1.1.2",
+    "undici": "7.8.0",
+    "yargs": "17.7.2",
+    "zod": "3.24.3"
   },
   "type": "module",
   "devDependencies": {
-    "@babel/eslint-parser": "^7.26.10",
-    "eslint": "^8.57.1",
-    "eslint-config-airbnb-base": "^15.0.0"
+    "@babel/eslint-parser": "7.27.0",
+    "eslint": "8.57.1",
+    "eslint-config-airbnb-base": "15.0.0"
   }
 }
