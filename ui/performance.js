@@ -336,9 +336,9 @@
 
   const getPerformanceReport = async () => {
     const usp = new URLSearchParams(window.location.search);
-    const report = usp.get('report');
-    const data = await fetch(report);
-    const json = await data.json();
+    const report = usp.get('merge');
+    const res = await fetch(report);
+    const json = await res.json();
 
     return json.data.map((entry) => {
       const {
