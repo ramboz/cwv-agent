@@ -46,10 +46,10 @@
     const loadRecommendations = async () => {
         try {
             const usp = new URLSearchParams(window.location.search);
-            const reportPath = usp.get('report');
+            const reportPath = usp.get('rules');
             
             if (!reportPath) {
-                throw new Error('No report parameter specified');
+                throw new Error('No "rules" parameter specified');
             }
 
             const response = await fetch(reportPath);

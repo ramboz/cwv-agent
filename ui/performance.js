@@ -336,7 +336,12 @@
 
   const getPerformanceReport = async () => {
     const usp = new URLSearchParams(window.location.search);
-    const report = usp.get('merge');
+    const reportPath = usp.get('merge');
+
+    if (!reportPath) {
+      throw new Error('No "merge" parameter specified');
+    }
+
     const res = await fetch(report);
     const json = await res.json();
 
