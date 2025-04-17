@@ -342,7 +342,7 @@
       throw new Error('No "merge" parameter specified');
     }
 
-    const res = await fetch(report);
+    const res = await fetch(reportPath);
     const json = await res.json();
 
     return json.data.map((entry) => {

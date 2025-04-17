@@ -4,20 +4,110 @@
     <link rel="stylesheet" href="colors.css">
     <style>
       body {
-        background-color: var(--hlx-color-background);
-        color: var(--hlx-color-text);
+        margin: 0;
+        padding: 20px;
+        overflow-y: auto;
+
+        background-color: var(--hlx-color-dialog);
+        
+        font-family: sans-serif;
+        font-size: 14px;
+        color: white;
       }
+
+      #reports {
+        display: none;
+      }
+
+      #reports.visible {
+        display: block;
+      }
+
+      form {
+        display: flex;
+        flex-direction: row;
+        gap: 10px;
+      }
+
+      #url {
+        width: 500px;
+      }
+
+      #reports a {
+        color: var(--hlx-color-link);
+      }
+
+      #reports a:hover {
+        color: var(--hlx-color-hover);
+      }
+
     </style>
   </head>
   <body>
     <h1>Reports</h1>
-    <ul>
+    <form>
+      <input type="text" id="url" placeholder="URL">
+      <div>
+        <label>
+          <input type="radio" name="type" value="mobile" checked>
+          Mobile
+        </label>
+        <label>
+          <input type="radio" name="type" value="desktop">
+          Desktop
+        </label>
+      </div>
+      <button id="toggle-reports" type="button">Show reports</button>
+    </form>
+
+    <ul id="reports">
       <li>
-        <a href="./performance.html">Performance Report (requires "merge" parameter)</a>
+        <a id="merge" href="./performance.html" target="_blank">Performance Report</a>
       </li>
       <li>
-        <a href="./recommendations.html">Performance Recommendations (requires "rules" parameter)</a>
+        <a id="rules" href="./recommendations.html" target="_blank">Performance Recommendations</a>
       </li>
     </ul>
+
+    <script>
+      // copy from ../src/utils.js
+      const OUTPUT_DIR = '/.cache';
+
+      function getFilePrefix(urlString, deviceType, type) {
+        return `${OUTPUT_DIR}/${urlString.replace('https://', '').replace(/[^A-Za-z0-9-]/g, '-').replace(/\//g, '--').replace(/(^-+|-+$)/, '')}.${deviceType}.${type}`
+      }
+
+      const showReports = () => {
+        const url = document.getElementById('url').value;
+        const type = document.querySelector('input[name="type"]:checked').value;
+
+        const merge = document.getElementById('merge');
+        const rules = document.getElementById('rules');
+
+        const mergeFile = getFilePrefix(url, type, 'merge');
+        const rulesFile = getFilePrefix(url, type, 'rules');
+
+        merge.href = `./performance.html?merge=${mergeFile}.json`;
+        rules.href = `./recommendations.html?rules=${rulesFile}.json`;
+
+        const reports = document.getElementById('reports');
+        reports.classList.add('visible');
+
+        // persist url and type in local storage
+        localStorage.setItem('url', url);
+        localStorage.setItem('type', type);
+      };
+
+      document.getElementById('toggle-reports').addEventListener('click', showReports);
+
+      // persist url and type in local storage
+      const url = localStorage.getItem('url');
+      const type = localStorage.getItem('type');
+      if (url) {
+        document.getElementById('url').value = url;
+        document.querySelector('input[name="type"][value="' + type + '"]').checked = true;
+        showReports();
+      }
+    </script>
   </body>
 </html>
