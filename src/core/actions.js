@@ -10,7 +10,7 @@ export async function handleAgentAction(pageUrl, deviceType) {
   return { error: "Agent action not implemented yet" };
 }
 
-export async function processUrl(pageUrl, action, deviceType, skipCache, outputSuffix, blockRequests) {
+export async function processUrl(pageUrl, action, deviceType, skipCache, outputSuffix, blockRequests, model) {
   console.group(`Processing: ${pageUrl}`);
   
   try {
@@ -24,7 +24,13 @@ export async function processUrl(pageUrl, action, deviceType, skipCache, outputS
     
     switch (action) {
       case 'prompt':
-        result = await runPrompt(normalizedUrl.url, deviceType, { skipCache, skipTlsCheck: normalizedUrl.skipTlsCheck, outputSuffix, blockRequests });
+        result = await runPrompt(normalizedUrl.url, deviceType, { 
+          skipCache, 
+          skipTlsCheck: normalizedUrl.skipTlsCheck, 
+          outputSuffix, 
+          blockRequests,
+          model
+        });
         break;
         
       case 'collect':

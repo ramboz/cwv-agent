@@ -1,5 +1,4 @@
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
-import { ChatVertexAI } from '@langchain/google-vertexai';
 import { Tiktoken } from 'js-tiktoken/lite';
 import cl100k_base from 'js-tiktoken/ranks/cl100k_base';
 import collectArtifacts from './collect.js';
@@ -12,6 +11,7 @@ import {
   harStep,
   harSummaryStep,
   perfStep,
+  perfSummaryStep,
   htmlStep,
   codeStep,
   rulesStep,
@@ -21,16 +21,14 @@ import { detectAEMVersion } from '../tools/aem.js';
 import merge from '../tools/merge.js';
 import { applyRules } from '../tools/rules.js';
 import { estimateTokenSize, cacheResults, getCachedResults, getCachePath } from '../utils.js';
+import { LLMFactory } from '../models/llm-factory.js';
+import { DEFAULT_MODEL, getTokenLimits } from '../models/config.js';
 
-const MAX_TOKENS = {
-  'gemini-2.5-pro-exp-03-25': { input: 1_048_576, output: 65_535 },
-  'gemini-2.0-pro-exp-02-05': { input: 2_097_152, output: 8_191 },
-}
-
-const model = 'gemini-2.5-pro-exp-03-25';
-// model: 'gemini-2.0-pro-exp-02-05',
-
-export default async function runPrompt(pageUrl, deviceType, options) {
+export default async function runPrompt(pageUrl, deviceType, options = {}) {
+  // Get model from options or use default
+  const model = options.model || DEFAULT_MODEL;
+  const tokenLimits = getTokenLimits(model);
+  
   // Check cache first if not skipping
   let result;
   if (!options.skipCache) {
@@ -72,10 +70,8 @@ export default async function runPrompt(pageUrl, deviceType, options) {
     return new Error('Cloudflare challenge detected.');
   }
 
-  const llm = new ChatVertexAI({
-    model,
-    maxOutputTokens: MAX_TOKENS[model].output,
-  });
+  // Create LLM instance using the factory
+  const llm = LLMFactory.createLLM(model, options.llmOptions || {});
 
   let messages = [
     new SystemMessage(initializeSystem(cms)),
@@ -92,7 +88,7 @@ export default async function runPrompt(pageUrl, deviceType, options) {
   const enc = new Tiktoken(cl100k_base);
   let tokensLength = messages.map((m) => enc.encode(m.content).length).reduce((a, b) => a + b, 0);
   console.log('Prompt Tokens:', tokensLength);
-  if (tokensLength > (MAX_TOKENS[model].input - MAX_TOKENS[model].output) * .9) {
+  if (tokensLength > (tokenLimits.input - tokenLimits.output) * .9) {
     console.log('Context window limit hit. Trying with summarized prompt...');
     messages = [
       new SystemMessage(initializeSystem(cms)),

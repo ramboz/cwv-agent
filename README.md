@@ -11,18 +11,32 @@ npm install
 
 Create a `.env` file and add your API keys:
 ```
-GOOGLE_GEMINI_API_KEY=...
+GOOGLE_CRUX_API_KEY=...
 GOOGLE_PAGESPEED_INSIGHTS_API_KEY=...
+
+# Gemini Models
+GOOGLE_APPLICATION_CREDENTIALS=...
+
+# OpenAI Models
+AZURE_OPENAI_API_DEPLOYMENT_NAME=...
+AZURE_OPENAI_API_INSTANCE_NAME=...
+AZURE_OPENAI_API_KEY=...
+AZURE_OPENAI_API_VERSION=...
+
+# Claude Models
+AWS_ACCESS_KEY_ID=...
+AWS_SECRET_ACCESS_KEY=...
+AWS_REGION=...
 ```
 
 Then run the script via:
 ```sh
-node index.js --action <action> --url <url> [--device <device>] [--skip-cache]
+node index.js --action <action> --url <url> [--device <device>] [--skip-cache] [--model <model>]
 ```
 
 or for batch processing:
 ```sh
-node index.js --action <action> --urls <path-to-json-file> [--device <device>] [--skip-cache]
+node index.js --action <action> --urls <path-to-json-file> [--device <device>] [--skip-cache] [--model <model>]
 ```
 
 ### Options
@@ -36,10 +50,26 @@ Options:
   --device, -d  Device type
                 [string] [choices: "mobile", "desktop"] [default: "mobile"]
   --skip-cache, -s  Skip using cached data and force new collection       [boolean] [default: false]
+  --model, -m   LLM model to use (e.g., "gemini-2.5-pro-exp-03-25", "gpt-4o", "claude-3-opus-20240229")
+                [string] [default: "gemini-2.5-pro-exp-03-25"]
   --help        Show help                                                 [boolean]
 ```
 
 Either `--url` or `--urls` must be provided.
+
+### Supported Models
+
+The agent supports both Gemini (via Vertex AI), OpenAI (via Azure) and Claude (via AWS Bedrock) models:
+
+#### Gemini Models
+- `gemini-2.5-pro-exp-03-25` (default)
+- `gemini-2.0-pro-exp-02-05`
+
+#### OpenAI Models
+- `gpt-4o`
+
+#### Claude Models via Amazon Bedrock
+- `claude-3-7-sonnet-20250219`
 
 ### Batch Processing
 
@@ -82,10 +112,10 @@ Collects the artifacts and runs the predefined rules against the web page to ide
 ### Running the LLM analysis
 
 ```sh
-node index.js --action prompt --url <url> [--device <device>]
+node index.js --action prompt --url <url> [--device <device>] [--model <model>]
 ```
 
-Collects all the artefacts and then prompts the LLM (Gemini 1.5 Pro) for the performance analysis
+Collects all the artefacts and then prompts the LLM for the performance analysis
 and recommendations.
 
 ### Cache Management

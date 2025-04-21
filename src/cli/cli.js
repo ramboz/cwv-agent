@@ -1,5 +1,6 @@
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
+import { DEFAULT_MODEL } from '../models/config.js';
 
 export function parseArguments() {
   return yargs(hideBin(process.argv))
@@ -31,6 +32,12 @@ export function parseArguments() {
       describe: 'Skip using cached data and force new collection',
       type: 'boolean',
       default: false
+    })
+    .option('model', {
+      alias: 'm',
+      describe: 'LLM model to use (e.g., "gemini-2.5-pro-exp-03-25", "gpt-4o")',
+      type: 'string',
+      default: DEFAULT_MODEL
     })
     .option('output-suffix', {
       alias: 'o',

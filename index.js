@@ -16,6 +16,8 @@ async function main() {
   const skipCache = argv.skipCache;
   const outputSuffix = argv.outputSuffix;
   const blockRequests = argv.blockRequests;
+  const model = argv.model;
+  
   // Load URLs
   const urls = loadUrls(argv);
   
@@ -23,10 +25,13 @@ async function main() {
   if (skipCache) {
     console.log('Cache is disabled. Forcing new data collection.');
   }
+  if (model) {
+    console.log(`Using model: ${model}`);
+  }
   
   // Process each URL
   for (const url of urls) {
-    await processUrl(url, action, deviceType, skipCache, outputSuffix, blockRequests);
+    await processUrl(url, action, deviceType, skipCache, outputSuffix, blockRequests, model);
     
     // Small delay between processing URLs
     if (urls.length > 1) {

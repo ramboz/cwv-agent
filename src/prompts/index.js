@@ -7,6 +7,7 @@ import {
   harStep,
   harSummaryStep,
   perfStep,
+  perfSummaryStep,
   htmlStep,
   codeStep,
   rulesStep
@@ -22,6 +23,7 @@ export {
   harStep,
   harSummaryStep,
   perfStep,
+  perfSummaryStep,
   htmlStep,
   codeStep,
   rulesStep,
