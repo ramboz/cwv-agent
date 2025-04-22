@@ -50,7 +50,7 @@ Options:
   --device, -d  Device type
                 [string] [choices: "mobile", "desktop"] [default: "mobile"]
   --skip-cache, -s  Skip using cached data and force new collection       [boolean] [default: false]
-  --model, -m   LLM model to use (e.g., "gemini-2.5-pro-exp-03-25", "gpt-4o", "claude-3-opus-20240229")
+  --model, -m   LLM model to use (e.g., "gemini-2.5-pro-exp-03-25", "gpt-4.1", "claude-3-7-sonnet-20250219")
                 [string] [default: "gemini-2.5-pro-exp-03-25"]
   --help        Show help                                                 [boolean]
 ```
@@ -66,10 +66,11 @@ The agent supports both Gemini (via Vertex AI), OpenAI (via Azure) and Claude (v
 - `gemini-2.0-pro-exp-02-05`
 
 #### OpenAI Models
+- `gpt-4.1`
 - `gpt-4o`
 
 #### Claude Models via Amazon Bedrock
-- `claude-3-7-sonnet-20250219`
+- `claude-3-7-sonnet-20250219` (coming soon)
 
 ### Batch Processing
 

@@ -18,6 +18,7 @@
     "@langchain/google-vertexai": "0.2.4",
     "@langchain/langgraph": "0.2.64",
     "@langchain/openai": "0.0.14",
+    "@smithy/eventstream-codec": "^2.2.0",
     "dotenv": "16.5.0",
     "htmlfy": "0.7.2",
     "js-tiktoken": "1.0.19",

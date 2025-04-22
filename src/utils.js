@@ -38,17 +38,18 @@ export function estimateTokenSize(obj) {
   return encoder.encode(JSON.stringify(obj)).length;
 }
 
-export function getCachedResults(urlString, deviceType, type, suffix = '') {
+export function getCachedResults(urlString, deviceType, type, suffix = '', model = '') {
+  const modelSuffix = model ? `.${model.replace(/[^a-zA-Z0-9]/g, '')}` : '';
   if (type === 'code') {
     const url = new URL(urlString);
     const filename = getFilename(url);
     if (fs.existsSync(`${OUTPUT_DIR}/${url.hostname}/${filename}`)) {
       return fs.readFileSync(`${OUTPUT_DIR}/${url.hostname}/${filename}`, { encoding: 'utf8' });
     }
-  } else if (type === 'html' && fs.existsSync(`${getFilePrefix(urlString, deviceType, 'full')}${suffix ? `.${suffix}` : ''}.html`)) {
-    return fs.readFileSync(`${getFilePrefix(urlString, deviceType, 'full')}${suffix ? `.${suffix}` : ''}.html`, { encoding: 'utf8' });
-  } else if (fs.existsSync(`${getFilePrefix(urlString, deviceType, type)}${suffix ? `.${suffix}` : ''}.json`)) {
-    const content = fs.readFileSync(`${getFilePrefix(urlString, deviceType, type)}${suffix ? `.${suffix}` : ''}.json`, { encoding: 'utf8' });
+  } else if (type === 'html' && fs.existsSync(`${getFilePrefix(urlString, deviceType, 'full')}${suffix ? `.${suffix}` : ''}${modelSuffix}.html`)) {
+    return fs.readFileSync(`${getFilePrefix(urlString, deviceType, 'full')}${suffix ? `.${suffix}` : ''}${modelSuffix}.html`, { encoding: 'utf8' });
+  } else if (fs.existsSync(`${getFilePrefix(urlString, deviceType, type)}${suffix ? `.${suffix}` : ''}${modelSuffix}.json`)) {
+    const content = fs.readFileSync(`${getFilePrefix(urlString, deviceType, type)}${suffix ? `.${suffix}` : ''}${modelSuffix}.json`, { encoding: 'utf8' });
     return JSON.parse(content);
   }
   return null;
@@ -61,47 +62,51 @@ export function getCachedResults(urlString, deviceType, type, suffix = '') {
  * @param {string} type - Type of data (e.g., 'psi', 'crux', 'html', 'code')
  * @param {string} [suffix] - Optional suffix to append to the filename
  * @param {boolean} [isSummary=false] - Whether this is a summary file
+ * @param {string} [model=''] - Optional model name to include in the filename
  * @returns {string} The path where the cache would be stored
  */
-export function getCachePath(urlString, deviceType, type, suffix = '', isSummary = false) {
+export function getCachePath(urlString, deviceType, type, suffix = '', isSummary = false, model = '') {
   const url = new URL(urlString);
+  const modelSuffix = model ? `.${model.replace(/[^a-zA-Z0-9]/g, '')}` : '';
   
   if (type === 'code') {
     const filename = getFilename(url);
     return `${OUTPUT_DIR}/${url.hostname}/${filename}`;
   } else if (type === 'html') {
-    return `${getFilePrefix(urlString, deviceType, 'full')}${suffix ? `.${suffix}` : ''}.html`;
+    return `${getFilePrefix(urlString, deviceType, 'full')}${suffix ? `.${suffix}` : ''}${modelSuffix}.html`;
   } else if (isSummary) {
-    return `${getFilePrefix(urlString, deviceType, type)}${suffix ? `.${suffix}` : ''}.summary.md`;
+    return `${getFilePrefix(urlString, deviceType, type)}${suffix ? `.${suffix}` : ''}${modelSuffix}.summary.md`;
   } else {
-    return `${getFilePrefix(urlString, deviceType, type)}${suffix ? `.${suffix}` : ''}.json`;
+    return `${getFilePrefix(urlString, deviceType, type)}${suffix ? `.${suffix}` : ''}${modelSuffix}.json`;
   }
 }
 
 // Save some results in the cache on the file system
-export function cacheResults(urlString, deviceType, type, results, suffix) {
+export function cacheResults(urlString, deviceType, type, results, suffix = '', model = '') {
   let outputFile = '';
   ensureDir(OUTPUT_DIR);
   const url = new URL(urlString);
+  const modelSuffix = model ? `.${model.replace(/[^a-zA-Z0-9]/g, '')}` : '';
+  
   if (type === 'code') {
     ensureDir(`${OUTPUT_DIR}/${url.hostname}`);
     const filename = getFilename(url);
     outputFile = `${OUTPUT_DIR}/${url.hostname}/${filename}`;
     fs.writeFileSync(outputFile, results);
   } else if (type === 'html') {
-    outputFile = `${getFilePrefix(urlString, deviceType, 'full')}${suffix ? `.${suffix}` : ''}.html`;
+    outputFile = `${getFilePrefix(urlString, deviceType, 'full')}${suffix ? `.${suffix}` : ''}${modelSuffix}.html`;
     fs.writeFileSync(
       outputFile,
       results,
     );
   } else if (typeof results === 'string') {
-    outputFile = `${getFilePrefix(urlString, deviceType, type)}${suffix ? `.${suffix}` : ''}.summary.md`;
+    outputFile = `${getFilePrefix(urlString, deviceType, type)}${suffix ? `.${suffix}` : ''}${modelSuffix}.summary.md`;
     fs.writeFileSync(
       outputFile,
       results,
     );
   } else {
-    outputFile = `${getFilePrefix(urlString, deviceType, type)}${suffix ? `.${suffix}` : ''}.json`;
+    outputFile = `${getFilePrefix(urlString, deviceType, type)}${suffix ? `.${suffix}` : ''}${modelSuffix}.json`;
     fs.writeFileSync(
       outputFile,
       typeof results === 'string' ? results : JSON.stringify(results, null, 2),

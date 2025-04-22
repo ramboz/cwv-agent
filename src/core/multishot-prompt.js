@@ -32,9 +32,9 @@ export default async function runPrompt(pageUrl, deviceType, options = {}) {
   // Check cache first if not skipping
   let result;
   if (!options.skipCache) {
-    result = getCachedResults(pageUrl, deviceType, 'report');
+    result = getCachedResults(pageUrl, deviceType, 'report', '', model);
     if (result) {
-      const path = getCachePath(pageUrl, deviceType, 'report', '', true);
+      const path = getCachePath(pageUrl, deviceType, 'report', '', true, model);
       console.log('Report already exists at', path);
       return result;
     }
@@ -108,8 +108,8 @@ export default async function runPrompt(pageUrl, deviceType, options = {}) {
   try {
     // Direct invocation
     const result = await llm.invoke(messages);
-    cacheResults(pageUrl, deviceType, 'report', result);
-    const path = cacheResults(pageUrl, deviceType, 'report', result.content);
+    cacheResults(pageUrl, deviceType, 'report', result, '', model);
+    const path = cacheResults(pageUrl, deviceType, 'report', result.content, '', model);
     console.log('✅ CWV report generated at:', path);
     return result;
 
