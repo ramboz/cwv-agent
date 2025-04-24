@@ -63,7 +63,7 @@ export default async function runPrompt(pageUrl, deviceType, options = {}) {
     console.log('✅ Processed rules. Estimated token size: ~', estimateTokenSize(rulesSummary));
   }
 
-  const cms = detectAEMVersion(har.log.entries[0].headers, resources[pageUrl]);
+  const cms = detectAEMVersion(har.log.entries[0].headers, fullHtml);
   console.log('AEM Version:', cms);
 
   if (Object.values(resources).some((url) => url.includes('/cdn-cgi/challenge-platform/'))) {

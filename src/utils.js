@@ -27,6 +27,22 @@ function ensureDir(dir) {
   }
 }
 
+function modelSuffix(model) {
+  if (!model) return '';
+
+  // Extract the model name and major version using regex
+  // This matches patterns like 'gemini-2.5', 'gpt-4.1', 'claude-3-7'
+  const match = model.match(/^([a-z]+)[-]?(\d+)\.?(\d+)?/);
+
+  if (match) {
+    const [, name, majorVer, minorVer] = match;
+    return `.${name}${majorVer}${minorVer || ''}`;
+  }
+
+  // Fallback for other models
+  return `.${model.replace(/[^a-zA-Z0-9]/g, '')}`;
+}
+
 // A crude approximation of the number of tokens in a string
 export function estimateTokenSize(obj) {
   if (!obj) {
@@ -39,17 +55,16 @@ export function estimateTokenSize(obj) {
 }
 
 export function getCachedResults(urlString, deviceType, type, suffix = '', model = '') {
-  const modelSuffix = model ? `.${model.replace(/[^a-zA-Z0-9]/g, '')}` : '';
   if (type === 'code') {
     const url = new URL(urlString);
     const filename = getFilename(url);
     if (fs.existsSync(`${OUTPUT_DIR}/${url.hostname}/${filename}`)) {
       return fs.readFileSync(`${OUTPUT_DIR}/${url.hostname}/${filename}`, { encoding: 'utf8' });
     }
-  } else if (type === 'html' && fs.existsSync(`${getFilePrefix(urlString, deviceType, 'full')}${suffix ? `.${suffix}` : ''}${modelSuffix}.html`)) {
-    return fs.readFileSync(`${getFilePrefix(urlString, deviceType, 'full')}${suffix ? `.${suffix}` : ''}${modelSuffix}.html`, { encoding: 'utf8' });
-  } else if (fs.existsSync(`${getFilePrefix(urlString, deviceType, type)}${suffix ? `.${suffix}` : ''}${modelSuffix}.json`)) {
-    const content = fs.readFileSync(`${getFilePrefix(urlString, deviceType, type)}${suffix ? `.${suffix}` : ''}${modelSuffix}.json`, { encoding: 'utf8' });
+  } else if (type === 'html' && fs.existsSync(`${getFilePrefix(urlString, deviceType, 'full')}${suffix ? `.${suffix}` : ''}${modelSuffix(model)}.html`)) {
+    return fs.readFileSync(`${getFilePrefix(urlString, deviceType, 'full')}${suffix ? `.${suffix}` : ''}${modelSuffix(model)}.html`, { encoding: 'utf8' });
+  } else if (fs.existsSync(`${getFilePrefix(urlString, deviceType, type)}${suffix ? `.${suffix}` : ''}${modelSuffix(model)}.json`)) {
+    const content = fs.readFileSync(`${getFilePrefix(urlString, deviceType, type)}${suffix ? `.${suffix}` : ''}${modelSuffix(model)}.json`, { encoding: 'utf8' });
     return JSON.parse(content);
   }
   return null;
@@ -67,17 +82,16 @@ export function getCachedResults(urlString, deviceType, type, suffix = '', model
  */
 export function getCachePath(urlString, deviceType, type, suffix = '', isSummary = false, model = '') {
   const url = new URL(urlString);
-  const modelSuffix = model ? `.${model.replace(/[^a-zA-Z0-9]/g, '')}` : '';
-  
+
   if (type === 'code') {
     const filename = getFilename(url);
     return `${OUTPUT_DIR}/${url.hostname}/${filename}`;
   } else if (type === 'html') {
-    return `${getFilePrefix(urlString, deviceType, 'full')}${suffix ? `.${suffix}` : ''}${modelSuffix}.html`;
+    return `${getFilePrefix(urlString, deviceType, 'full')}${suffix ? `.${suffix}` : ''}${modelSuffix(model)}.html`;
   } else if (isSummary) {
-    return `${getFilePrefix(urlString, deviceType, type)}${suffix ? `.${suffix}` : ''}${modelSuffix}.summary.md`;
+    return `${getFilePrefix(urlString, deviceType, type)}${suffix ? `.${suffix}` : ''}${modelSuffix(model)}.summary.md`;
   } else {
-    return `${getFilePrefix(urlString, deviceType, type)}${suffix ? `.${suffix}` : ''}${modelSuffix}.json`;
+    return `${getFilePrefix(urlString, deviceType, type)}${suffix ? `.${suffix}` : ''}${modelSuffix(model)}.json`;
   }
 }
 
@@ -86,7 +100,6 @@ export function cacheResults(urlString, deviceType, type, results, suffix = '', 
   let outputFile = '';
   ensureDir(OUTPUT_DIR);
   const url = new URL(urlString);
-  const modelSuffix = model ? `.${model.replace(/[^a-zA-Z0-9]/g, '')}` : '';
   
   if (type === 'code') {
     ensureDir(`${OUTPUT_DIR}/${url.hostname}`);
@@ -94,19 +107,19 @@ export function cacheResults(urlString, deviceType, type, results, suffix = '', 
     outputFile = `${OUTPUT_DIR}/${url.hostname}/${filename}`;
     fs.writeFileSync(outputFile, results);
   } else if (type === 'html') {
-    outputFile = `${getFilePrefix(urlString, deviceType, 'full')}${suffix ? `.${suffix}` : ''}${modelSuffix}.html`;
+    outputFile = `${getFilePrefix(urlString, deviceType, 'full')}${suffix ? `.${suffix}` : ''}${modelSuffix(model)}.html`;
     fs.writeFileSync(
       outputFile,
       results,
     );
   } else if (typeof results === 'string') {
-    outputFile = `${getFilePrefix(urlString, deviceType, type)}${suffix ? `.${suffix}` : ''}${modelSuffix}.summary.md`;
+    outputFile = `${getFilePrefix(urlString, deviceType, type)}${suffix ? `.${suffix}` : ''}${modelSuffix(model)}.summary.md`;
     fs.writeFileSync(
       outputFile,
       results,
     );
   } else {
-    outputFile = `${getFilePrefix(urlString, deviceType, type)}${suffix ? `.${suffix}` : ''}${modelSuffix}.json`;
+    outputFile = `${getFilePrefix(urlString, deviceType, type)}${suffix ? `.${suffix}` : ''}${modelSuffix(model)}.json`;
     fs.writeFileSync(
       outputFile,
       typeof results === 'string' ? results : JSON.stringify(results, null, 2),
