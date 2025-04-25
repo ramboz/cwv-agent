@@ -24,10 +24,92 @@ import { estimateTokenSize, cacheResults, getCachedResults, getCachePath } from 
 import { LLMFactory } from '../models/llm-factory.js';
 import { DEFAULT_MODEL, getTokenLimits } from '../models/config.js';
 
+/**
+ * Creates message array with either full or summarized content
+ */
+function createMessages(pageData, useSummarized = false) {
+  const {
+    pageUrl, deviceType, cms, rulesSummary,
+    resources, crux, psi, perfEntries, har,
+    cruxSummary, psiSummary, perfEntriesSummary, harSummary
+  } = pageData;
+
+  if (useSummarized) {
+    return [
+      new SystemMessage(initializeSystem(cms)),
+      new HumanMessage(cruxSummaryStep(cruxSummary)),
+      new HumanMessage(psiSummaryStep(psiSummary)),
+      new HumanMessage(perfSummaryStep(perfEntriesSummary)),
+      new HumanMessage(harSummaryStep(harSummary)),
+      new HumanMessage(htmlStep(pageUrl, resources)),
+      new HumanMessage(rulesStep(rulesSummary)),
+      new HumanMessage(codeStep(pageUrl, resources, 10_000)),
+      new HumanMessage(actionPrompt(pageUrl, deviceType)),
+    ];
+  } else {
+    return [
+      new SystemMessage(initializeSystem(cms)),
+      new HumanMessage(cruxStep(crux)),
+      new HumanMessage(psiStep(psi)),
+      new HumanMessage(perfStep(perfEntries)),
+      new HumanMessage(harStep(har)),
+      new HumanMessage(htmlStep(pageUrl, resources)),
+      new HumanMessage(rulesStep(rulesSummary)),
+      new HumanMessage(codeStep(pageUrl, resources)),
+      new HumanMessage(actionPrompt(pageUrl, deviceType)),
+    ];
+  }
+}
+
+/**
+ * Invokes the LLM with a set of messages
+ */
+async function invokeLLM(llm, pageData, model, useSummarized = false) {
+  const { pageUrl, deviceType } = pageData;
+  const tokenLimits = getTokenLimits(model);
+  const messages = createMessages(pageData, useSummarized);
+
+  cacheResults(pageUrl, deviceType, 'prompt', messages);
+  cacheResults(pageUrl, deviceType, 'prompt', messages.map((m) => m.content).join('\n---\n'));
+
+  // Calculate token usage
+  const enc = new Tiktoken(cl100k_base);
+  const tokensLength = messages.map((m) => enc.encode(m.content).length).reduce((a, b) => a + b, 0);
+  console.log(`Prompt Tokens${useSummarized ? ' (simplified)' : ''}:`, tokensLength);
+
+  // Check if we need to switch to summarized version
+  if (!useSummarized && tokensLength > (tokenLimits.input - tokenLimits.output) * .9) {
+    console.log('Context window limit hit. Trying with summarized prompt...');
+    return invokeLLM(llm, pageData, model, true);
+  }
+
+  try {
+    // Direct invocation
+    const result = await llm.invoke(messages);
+    cacheResults(pageUrl, deviceType, 'report', result, '', model);
+    const path = cacheResults(pageUrl, deviceType, 'report', result.content, '', model);
+    console.log('✅ CWV report generated at:', path);
+    return result;
+  } catch (error) {
+    console.error('❌ Failed to generate report for', pageData.pageUrl);
+
+    if (error.code === 400 && !useSummarized) { // Token limit reached, retry with summarized if we haven't yet
+      console.log('Context window limit hit. Retrying with summarized prompt...');
+      return invokeLLM(llm, pageData, model, true);
+    } else if (error.code === 400) {
+      console.log('Context window limit hit, even with summarized prompt.', error);
+    } else if (error.status === 429) {
+      console.log('Rate limit hit. Try again in 5 mins...', error);
+    } else {
+      console.error(error);
+    }
+    return error;
+  }
+}
+
 export default async function runPrompt(pageUrl, deviceType, options = {}) {
   // Get model from options or use default
   const model = options.model || DEFAULT_MODEL;
-  const tokenLimits = getTokenLimits(model);
   
   // Check cache first if not skipping
   let result;
@@ -73,63 +155,13 @@ export default async function runPrompt(pageUrl, deviceType, options = {}) {
   // Create LLM instance using the factory
   const llm = LLMFactory.createLLM(model, options.llmOptions || {});
 
-  let messages = [
-    new SystemMessage(initializeSystem(cms)),
-    new HumanMessage(cruxStep(crux)),
-    new HumanMessage(psiStep(psi)),
-    new HumanMessage(perfStep(perfEntries)),
-    new HumanMessage(harStep(har)),
-    new HumanMessage(htmlStep(pageUrl, resources)),
-    new HumanMessage(rulesStep(rulesSummary)),
-    new HumanMessage(codeStep(pageUrl, resources)),
-    new HumanMessage(actionPrompt(pageUrl, deviceType)),
-  ];
+  // Organize all data into one object for easier passing
+  const pageData = {
+    pageUrl, deviceType, cms, rulesSummary, resources,
+    crux, psi, perfEntries, har,
+    cruxSummary, psiSummary, perfEntriesSummary, harSummary
+  };
 
-  const enc = new Tiktoken(cl100k_base);
-  let tokensLength = messages.map((m) => enc.encode(m.content).length).reduce((a, b) => a + b, 0);
-  console.log('Prompt Tokens:', tokensLength);
-  if (tokensLength > (tokenLimits.input - tokenLimits.output) * .9) {
-    console.log('Context window limit hit. Trying with summarized prompt...');
-    messages = [
-      new SystemMessage(initializeSystem(cms)),
-      new HumanMessage(cruxSummaryStep(cruxSummary)),
-      new HumanMessage(psiSummaryStep(psiSummary)),
-      new HumanMessage(perfSummaryStep(perfEntriesSummary)),
-      new HumanMessage(harSummaryStep(harSummary)),
-      new HumanMessage(htmlStep(pageUrl, resources)),
-      new HumanMessage(rulesStep(rulesSummary)),
-      new HumanMessage(codeStep(pageUrl, resources, 10_000)),
-      new HumanMessage(actionPrompt(pageUrl, deviceType)),
-    ]
-    tokensLength = messages.map((m) => enc.encode(m.content).length).reduce((a, b) => a + b, 0);
-    console.log('Prompt Tokens (simplified):', tokensLength);
-  }
-
-  try {
-    // Direct invocation
-    const result = await llm.invoke(messages);
-    cacheResults(pageUrl, deviceType, 'report', result, '', model);
-    const path = cacheResults(pageUrl, deviceType, 'report', result.content, '', model);
-    console.log('✅ CWV report generated at:', path);
-    return result;
-
-    // Streaming results
-    // const stream = await llm.stream(messages);
-    // let response = '';
-    // for await (const chunk of stream) {
-    //   response += chunk?.lc_kwargs?.content?.toString();
-    // }
-    // return { content: response };
-  } catch (error) {
-    console.error('❌ Failed to generate report for', pageUrl);
-    if (error.code === 400) { // Token limit reached, try with shorter prompt
-      console.log('Context window limit hit, even with summarized prompt.', error);
-    }
-    else if (error.status === 429) { // Reached rate limit
-      console.log('Rate limit hit. Try again in 5 mins...', error);
-    } else {
-      console.error(error);
-    }
-    return error;
-  }
+  // Invoke LLM and handle retries automatically
+  return invokeLLM(llm, pageData, model, false);
 }

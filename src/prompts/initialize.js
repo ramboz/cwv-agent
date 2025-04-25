@@ -99,6 +99,8 @@ Present your findings as:
   - a short title
   - a description for the issue targeted towards business users
   - a recommenation in the form of a diff-like code sample that a developer can easily apply to the codebase
+  You will skip recommendations that are just generic, and only include those were you can point to concrete issues
 4. Implementation roadmap highlighting quick wins vs. strategic improvements
  
-Phase 1 will start with the next message.`; 
+Phase 1 will start with the next message.
+`; 
