@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start-mcp": "node src/bin/start-mcp-server.js",
+    "start": "node index.js"
   },
   "author": "",
   "license": "ISC",
@@ -18,16 +20,21 @@
     "@langchain/google-vertexai": "0.2.4",
     "@langchain/langgraph": "0.2.64",
     "@langchain/openai": "0.0.14",
+    "@modelcontextprotocol/sdk": "^1.10.2",
     "@smithy/eventstream-codec": "^2.2.0",
+    "cors": "^2.8.5",
     "dotenv": "16.5.0",
+    "express": "^4.19.2",
     "htmlfy": "0.7.2",
     "js-tiktoken": "1.0.19",
     "langchain": "0.3.22",
+    "node-fetch": "^3.3.2",
     "node-html-parser": "7.0.1",
     "openai": "4.62.1",
     "psi": "4.1.0",
     "puppeteer": "24.6.1",
     "puppeteer-har": "1.1.2",
+    "source-map": "^0.7.4",
     "undici": "7.8.0",
     "yargs": "17.7.2",
     "zod": "3.24.3"

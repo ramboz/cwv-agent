@@ -18,12 +18,13 @@ import {
   actionPrompt,
   resetStepCounter
 } from '../prompts/index.js';
-import { detectAEMVersion } from '../tools/aem.js';
-import merge from '../tools/merge.js';
-import { applyRules } from '../tools/rules.js';
+import MCPClient from '../services/mcp-client.js';
 import { estimateTokenSize, cacheResults, getCachedResults, getCachePath } from '../utils.js';
 import { LLMFactory } from '../models/llm-factory.js';
 import { DEFAULT_MODEL, getTokenLimits } from '../models/config.js';
+
+// Create an MCP client
+const mcpClient = new MCPClient();
 
 /**
  * Creates message array with either full or summarized content
@@ -128,46 +129,17 @@ export default async function runPrompt(pageUrl, deviceType, options = {}) {
     }
   }
 
-  // Perform data collection before running the model, so we don't waste calls if an error occurs
-  const {
-    har,
-    harSummary,
-    psi,
-    psiSummary,
-    resources,
-    crux,
-    cruxSummary,
-    perfEntries,
-    perfEntriesSummary,
-    fullHtml,
-    jsApi,
-  } = await collectArtifacts(pageUrl, deviceType, options);
+  // Perform data collection using the MCP client
+  const artifacts = await collectArtifacts(pageUrl, deviceType, options);
 
-  const report = merge(pageUrl, deviceType);
-  const { summary: rulesSummary, fromCache } = await applyRules(pageUrl, deviceType, options, { crux, psi, har, perfEntries, resources, fullHtml, jsApi, report });
-  if (fromCache) {
-    console.log('✓ Loaded rules from cache. Estimated token size: ~', estimateTokenSize(rulesSummary));
-  } else {
-    console.log('✅ Processed rules. Estimated token size: ~', estimateTokenSize(rulesSummary));
-  }
-
-  const cms = detectAEMVersion(har.log.entries[0].headers, fullHtml);
-  console.log('AEM Version:', cms);
-
-  if (Object.values(resources).some((url) => url.includes('/cdn-cgi/challenge-platform/'))) {
+  // Check for Cloudflare challenge
+  if (Object.values(artifacts.resources).some((url) => url.includes('/cdn-cgi/challenge-platform/'))) {
     return new Error('Cloudflare challenge detected.');
   }
 
   // Create LLM instance using the factory
   const llm = LLMFactory.createLLM(model, options.llmOptions || {});
 
-  // Organize all data into one object for easier passing
-  const pageData = {
-    pageUrl, deviceType, cms, rulesSummary, resources,
-    crux, psi, perfEntries, har,
-    cruxSummary, psiSummary, perfEntriesSummary, harSummary
-  };
-
   // Invoke LLM and handle retries automatically
-  return invokeLLM(llm, pageData, model, false);
+  return invokeLLM(llm, artifacts, model, false);
 }
