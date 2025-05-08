@@ -16,6 +16,7 @@ import {
   codeStep,
   rulesStep,
   actionPrompt,
+  resetStepCounter
 } from '../prompts/index.js';
 import { detectAEMVersion } from '../tools/aem.js';
 import merge from '../tools/merge.js';
@@ -33,6 +34,9 @@ function createMessages(pageData, useSummarized = false) {
     resources, crux, psi, perfEntries, har,
     cruxSummary, psiSummary, perfEntriesSummary, harSummary
   } = pageData;
+
+  // Reset step counter before creating a new sequence of messages
+  resetStepCounter();
 
   if (useSummarized) {
     return [
@@ -98,6 +102,8 @@ async function invokeLLM(llm, pageData, model, useSummarized = false) {
       return invokeLLM(llm, pageData, model, true);
     } else if (error.code === 400) {
       console.log('Context window limit hit, even with summarized prompt.', error);
+    } else if (error.code === 403) {
+      console.log('Invalid API key.', error.message);
     } else if (error.status === 429) {
       console.log('Rate limit hit. Try again in 5 mins...', error);
     } else {

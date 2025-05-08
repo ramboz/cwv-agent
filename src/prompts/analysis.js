@@ -4,6 +4,13 @@ import { estimateTokenSize } from '../utils.js';
 let stepCounter = 0;
 
 /**
+ * Resets the step counter to zero
+ */
+export function resetStepCounter() {
+  stepCounter = 0;
+}
+
+/**
  * Helper function to generate phase transition text
  * @returns {string} Phase transition text with incremented step number
  */
