@@ -32,11 +32,11 @@ function modelSuffix(model) {
 
   // Extract the model name and major version using regex
   // This matches patterns like 'gemini-2.5', 'gpt-4.1', 'claude-3-7'
-  const match = model.match(/^([a-z]+)[-]?(\d+)\.?(\d+)?/);
+  const match = model.match(/^([a-z]+)[-]?(\d+)\.?(\d+)?[-]?([a-z]+)?/);
 
   if (match) {
-    const [, name, majorVer, minorVer] = match;
-    return `.${name}${majorVer}${minorVer || ''}`;
+    const [, name, majorVer, minorVer, variant] = match;
+    return `.${name}${majorVer}${minorVer || ''}${variant || ''}`;
   }
 
   // Fallback for other models

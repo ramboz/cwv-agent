@@ -6,6 +6,7 @@
 export const MAX_TOKENS = {
   // Gemini models
   'gemini-2.5-pro-exp-03-25': { input: 1_048_576, output: 65_535 },
+  'gemini-2.5-flash-preview-04-17': { input: 1_048_576, output: 65_535 },
   'gemini-2.0-pro-exp-02-05': { input: 2_097_152, output: 8_191 },
   
   // OpenAI models
