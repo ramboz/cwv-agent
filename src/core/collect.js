@@ -24,16 +24,6 @@ export async function getCode(pageUrl, deviceType, requests, options) {
 }
 
 export default async function collectArtifacts(pageUrl, deviceType, options) {
-  // Check if we should use the all-in-one endpoint for better performance
-  if (options.useOptimizedCollection !== false) {
-    try {
-      return await mcpClient.collectAllArtifacts(pageUrl, deviceType, options);
-    } catch (error) {
-      console.warn('Failed to use optimized collection, falling back to individual calls:', error.message);
-      // Fall through to individual calls if the all-in-one fails
-    }
-  }
-
   // Traditional approach with individual calls
   const { full: crux, summary: cruxSummary } = await getCrux(pageUrl, deviceType, options);
   const { full: psi, summary: psiSummary } = await getPsi(pageUrl, deviceType, options);

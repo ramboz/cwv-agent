@@ -11,7 +11,6 @@ class MCPClient {
 
   async connect() {
     if (this.client) return;
-    
     this.client = new Client({
       name: "cwv-mcp-client",
       version: "1.0.0"
@@ -22,6 +21,7 @@ class MCPClient {
     );
     
     await this.client.connect(this.transport);
+    console.log("Connected using Streamable HTTP transport");
   }
 
   async _callTool(toolName, params) {
@@ -31,17 +31,21 @@ class MCPClient {
       name: toolName,
       arguments: params
     });
-    
+
     // Extract the JSON result from the content
     if (result.content && result.content.length > 0) {
       for (const item of result.content) {
-        if (item.type === 'json') {
-          return item.json;
+        if (item.type === 'text') {
+          try {
+            return JSON.parse(item.text);
+          } catch (error) {
+            return item.text;
+          }
         }
       }
     }
     
-    throw new Error(`No JSON result found in response from ${toolName}`);
+    throw new Error(`No text result found in response from ${toolName}`);
   }
 
   async health() {
@@ -132,10 +136,6 @@ class MCPClient {
 
   async mergeReports(pageUrl, deviceType) {
     return this._callTool('merge', { pageUrl, deviceType });
-  }
-
-  async collectAllArtifacts(pageUrl, deviceType, options = {}) {
-    return this._callTool('collect-all', { pageUrl, deviceType, options });
   }
 }
 

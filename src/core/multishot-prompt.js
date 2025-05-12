@@ -131,6 +131,8 @@ export default async function runPrompt(pageUrl, deviceType, options = {}) {
 
   // Perform data collection using the MCP client
   const artifacts = await collectArtifacts(pageUrl, deviceType, options);
+  artifacts.pageUrl = pageUrl;
+  artifacts.deviceType = deviceType;
 
   // Check for Cloudflare challenge
   if (Object.values(artifacts.resources).some((url) => url.includes('/cdn-cgi/challenge-platform/'))) {

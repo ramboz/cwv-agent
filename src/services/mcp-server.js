@@ -1,6 +1,8 @@
+import { randomUUID } from "node:crypto";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js"
 import express from 'express';
 import { z } from 'zod';
 import { collect as collectCrux } from '../tools/crux.js';
@@ -11,27 +13,36 @@ import { applyRules } from '../tools/rules.js';
 import { detectAEMVersion } from '../tools/aem.js';
 import merge from '../tools/merge.js';
 import { estimateTokenSize } from '../utils.js';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 // Create MCP Server
 const server = new McpServer({
   name: "cwv-mcp-server",
-  version: "1.0.0"
+  version: "1.0.0",
+  defaultRequestOptions: {
+    timeout: 300000, // 300 seconds (5 minutes)
+    resetTimeoutOnProgress: true
+  }
 });
 
 // Define schemas for tool parameters
-const PageUrlDeviceOptionsSchema = z.object({
+const PageUrlDeviceOptionsSchema = {
   pageUrl: z.string().url(),
   deviceType: z.enum(["mobile", "desktop"]),
   options: z.record(z.any()).optional().default({})
-});
+};
 
-const CodeCollectionSchema = PageUrlDeviceOptionsSchema.extend({
+const CodeCollectionSchema = {
+  ...PageUrlDeviceOptionsSchema,
   requests: z.array(z.string())
-});
+};
 
-const RulesSchema = PageUrlDeviceOptionsSchema.extend({
+const RulesSchema = {
+  ...PageUrlDeviceOptionsSchema,
   data: z.record(z.any())
-});
+};
 
 const AemDetectionSchema = z.object({
   headers: z.array(z.record(z.any())),
@@ -53,7 +64,7 @@ server.tool(
     } else {
       console.log('✅ Processed CrUX data. Estimated token size: ~', estimateTokenSize(result.full));
     }
-    return { content: [{ type: "json", json: result }] };
+    return { content: [{ type: "text", text: JSON.stringify(result) }] };
   }
 );
 
@@ -67,7 +78,7 @@ server.tool(
     } else {
       console.log('✅ Processed PSI data. Estimated token size: ~', estimateTokenSize(result.full));
     }
-    return { content: [{ type: "json", json: result }] };
+    return { content: [{ type: "text", text: JSON.stringify(result) }] };
   }
 );
 
@@ -87,7 +98,7 @@ server.tool(
       console.log('✅ Processed full rendered HTML markup. Estimated token size: ~', estimateTokenSize(result.fullHtml));
       console.log('✅ Processed JS API data. Estimated token size: ~', estimateTokenSize(result.jsApi));
     }
-    return { content: [{ type: "json", json: result }] };
+    return { content: [{ type: "text", text: JSON.stringify(result) }] };
   }
 );
 
@@ -105,7 +116,7 @@ server.tool(
     } else {
       console.log('✅ Processed project code. Estimated token size: ~', estimateTokenSize(result.codeFiles));
     }
-    return { content: [{ type: "json", json: result }] };
+    return { content: [{ type: "text", text: JSON.stringify(result) }] };
   }
 );
 
@@ -119,7 +130,7 @@ server.tool(
     } else {
       console.log('✅ Processed rules. Estimated token size: ~', estimateTokenSize(result.summary));
     }
-    return { content: [{ type: "json", json: result }] };
+    return { content: [{ type: "text", text: JSON.stringify(result) }] };
   }
 );
 
@@ -129,7 +140,7 @@ server.tool(
   async ({ headers, fullHtml }) => {
     const version = detectAEMVersion(headers, fullHtml);
     console.log('AEM Version:', version);
-    return { content: [{ type: "json", json: { version } }] };
+    return { content: [{ type: "text", text: version }] };
   }
 );
 
@@ -138,7 +149,7 @@ server.tool(
   z.object({ pageUrl: z.string(), deviceType: z.string() }),
   async ({ pageUrl, deviceType }) => {
     const result = merge(pageUrl, deviceType);
-    return { content: [{ type: "json", json: result }] };
+    return { content: [{ type: "text", text: JSON.stringify(result) }] };
   }
 );
 
@@ -151,10 +162,8 @@ server.tool(
       const cruxResult = await collectCrux(pageUrl, deviceType, options);
       const psiResult = await collectPsi(pageUrl, deviceType, options);
       const harResult = await collectHar(pageUrl, deviceType, options);
-      
       const requests = harResult.har.log.entries.map((e) => e.request.url);
       const codeResult = await collectCode(pageUrl, deviceType, requests, options);
-      
       const report = merge(pageUrl, deviceType);
       const rulesResult = await applyRules(pageUrl, deviceType, options, {
         crux: cruxResult.full,
@@ -185,7 +194,7 @@ server.tool(
         rulesSummary: rulesResult.summary
       };
       
-      return { content: [{ type: "json", json: result }] };
+      return { content: [{ type: "text", text: JSON.stringify(result) }] };
     } catch (error) {
       console.error('Collect All Error:', error);
       return { content: [{ type: "text", text: `Error: ${error.message}` }] };
@@ -209,15 +218,49 @@ app.get('/health', (req, res) => {
 const transports = {};
 
 // MCP endpoint
-app.all('/mcp', async (req, res) => {
-  const transport = new StreamableHTTPServerTransport(req, res);
-  transports[transport.sessionId] = transport;
-  
-  res.on('close', () => {
-    delete transports[transport.sessionId];
-  });
-  
-  await server.connect(transport);
+app.post('/mcp', async (req, res) => {
+  // Check for existing session ID
+  const sessionId = req.headers['mcp-session-id'];
+  let transport;
+
+  if (sessionId && transports[sessionId]) {
+    // Reuse existing transport
+    transport = transports[sessionId];
+  } else if (!sessionId && isInitializeRequest(req.body)) {
+    // New initialization request
+    transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: () => randomUUID(),
+      onsessioninitialized: (sessionId) => {
+        // Store the transport by session ID
+        transports[sessionId] = transport;
+      }
+    });
+
+    // Clean up transport when closed
+    transport.onclose = () => {
+      if (transport.sessionId) {
+        delete transports[transport.sessionId];
+      }
+    };
+
+    // ... set up server resources, tools, and prompts ...
+
+    // Connect to the MCP server
+    await server.connect(transport);
+  } else {
+    // Invalid request
+    res.status(400).json({
+      jsonrpc: '2.0',
+      error: {
+        code: -32000,
+        message: 'Bad Request: No valid session ID provided',
+      },
+      id: null,
+    });
+    return;
+  }
+  // Handle the request
+  await transport.handleRequest(req, res, req.body);
 });
 
 // Start HTTP server
