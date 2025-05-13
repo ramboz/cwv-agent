@@ -78,7 +78,15 @@ export async function collect(pageUrl, deviceType, resources, { skipCache, skipT
       }
 
       // Fetch the resource
-      const response = await fetch(url, fetchOptions);
+      let response;
+      if (url.includes('.min.')) {
+        const nonMinifiedUrl = url.replace('.min.', '.');
+        response = await fetch(nonMinifiedUrl, fetchOptions);
+      }
+
+      if (!response || !response.ok) {
+        response = await fetch(url, fetchOptions);
+      }
 
       if (!response.ok) {
         console.warn(`Failed to fetch resource: ${url}. Error: ${response.status} - ${response.statusText}`);
