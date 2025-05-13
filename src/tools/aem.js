@@ -22,7 +22,9 @@ export function detectAEMVersion(headers, htmlSource) {
     // Franklin-specific markup patterns
     /scripts\.js/i,
     // Block HTML patterns
-    /<div class="[^"]*block[^"]*"[^>]*>/i
+    /<div class="[^"]*block[^"]*"[^>]*>/i,
+    // RUM data-routing for EDS
+    /data-routing="[^"]*eds=([^,"]*)/i
   ];
 
   // CS Indicators (Cloud Service)
@@ -32,13 +34,17 @@ export function detectAEMVersion(headers, htmlSource) {
     // Modern clientlib paths
     /\/etc\.clientlibs\//i,
     /\/libs\.clientlibs\//i,
+    // CS-specific clientlib pattern with lc- prefix/suffix
+    /\/etc\.clientlibs\/[^"']+\.lc-[a-f0-9]+-lc\.min\.js/i,
     // Core components comments or data attributes
     /data-cmp-/i,
     /data-sly-/i,
     // Cloud Manager references
     /content\/experience-fragments\//i,
     // SPA editor references
-    /data-cq-/i
+    /data-cq-/i,
+    // RUM data-routing for CS
+    /data-routing="[^"]*cs=([^,"]*)/i
   ];
 
   // AMS Indicators (Managed Services) - typically older AEM patterns
@@ -46,6 +52,8 @@ export function detectAEMVersion(headers, htmlSource) {
     // Legacy clientlib paths
     /\/etc\/clientlibs\//i,
     /\/etc\/designs\//i,
+    // AMS-specific clientlib pattern with fingerprinted hashes
+    /\/etc\.clientlibs\/[^"']+\.min\.[a-f0-9]{32}\.js/i,
     // Classic UI patterns
     /foundation-/i,
     /cq:template/i,
@@ -54,7 +62,9 @@ export function detectAEMVersion(headers, htmlSource) {
     /parsys/i,
     // Legacy CQ references
     /\/CQ\//i,
-    /\/apps\//i
+    /\/apps\//i,
+    // RUM data-routing for AMS
+    /data-routing="[^"]*ams=([^,"]*)/i
   ];
 
   const aemHeadlessPatterns = [
@@ -106,6 +116,29 @@ export function detectAEMVersion(headers, htmlSource) {
   
   if (normalizedHtml.includes('/etc/designs/') || normalizedHtml.includes('foundation-')) {
     amsMatches += 2;
+  }
+  
+  // Give extra weight to AMS clientlib format pattern as it's very distinctive
+  if (/\/etc\.clientlibs\/[^"']+\.min\.[a-f0-9]{32}\.js/i.test(normalizedHtml)) {
+    amsMatches += 3;
+  }
+  
+  // Give extra weight to CS clientlib format pattern as it's very distinctive
+  if (/\/etc\.clientlibs\/[^"']+\.lc-[a-f0-9]+-lc\.min\.js/i.test(normalizedHtml)) {
+    csMatches += 3;
+  }
+  
+  // Give significant weight to explicit RUM data-routing indicators
+  if (/data-routing="[^"]*ams=([^,"]*)/i.test(normalizedHtml)) {
+    amsMatches += 5;
+  }
+  
+  if (/data-routing="[^"]*eds=([^,"]*)/i.test(normalizedHtml)) {
+    edsMatches += 5;
+  }
+  
+  if (/data-routing="[^"]*cs=([^,"]*)/i.test(normalizedHtml)) {
+    csMatches += 5;
   }
 
   // Determine the most likely version based on match counts
