@@ -155,7 +155,12 @@ export default async function runPrompt(pageUrl, deviceType, options = {}) {
   console.log('AEM Version:', cms);
 
   if (Object.values(resources).some((url) => url.includes('/cdn-cgi/challenge-platform/'))) {
-    return new Error('Cloudflare challenge detected.');
+    console.error('❌ Failed to generate report for', pageUrl, 'Cloudflare challenge detected.');
+    return;
+  }
+  if (Object.values(resources).some((url) => url.includes('Incapsula'))) {
+    console.error('❌ Failed to generate report for', pageUrl, 'Imperva/Incapsula bot protection in place.');
+    return;
   }
 
   // Create LLM instance using the factory
