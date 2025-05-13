@@ -8,7 +8,7 @@ export default function evaluate({ summary, fullHtml }) {
       category: 'critical-path',
       message: 'Inline SVGs found on the page',
       recommendation: 'Remove inline SVGs from the page, and replace them by <img> tags with loading="lazy" attribute.',
-      element: el.outerHTML,
+      element: el.outerHTML.substring(0, 256),
       passing: false,
     }));
   }
