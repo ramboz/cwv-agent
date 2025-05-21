@@ -18,7 +18,9 @@ export async function processUrl(pageUrl, action, deviceType, skipCache, outputS
     if (!normalizedUrl?.url) {
       throw new Error(`Failed to access: ${pageUrl}`);
     }
-    console.log('Normalized URL:', normalizedUrl.url, normalizedUrl.skipTlsCheck ? '(invalid TLS check)' : '');
+    if (normalizedUrl !== pageUrl) {
+      console.log('Normalized URL:', normalizedUrl.url, normalizedUrl.skipTlsCheck ? '(invalid TLS check)' : '');
+    }
     
     let result;
     

@@ -5,8 +5,8 @@
 // Model token limits
 export const MAX_TOKENS = {
   // Gemini models
-  'gemini-2.5-pro-exp-03-25': { input: 1_048_576, output: 65_535 },
-  'gemini-2.5-flash-preview-04-17': { input: 1_048_576, output: 65_535 },
+  'gemini-2.5-pro-preview-05-06': { input: 1_048_576, output: 65_535 },
+  'gemini-2.5-flash-preview-05-20	': { input: 1_048_576, output: 65_535 },
   
   // OpenAI models
   'gpt-4.1': { input: 1_048_576, output: 32_768 },
@@ -17,7 +17,7 @@ export const MAX_TOKENS = {
 };
 
 // Default model
-export const DEFAULT_MODEL = 'gemini-2.5-pro-exp-03-25';
+export const DEFAULT_MODEL = 'gemini-2.5-pro-preview-05-06';
 
 // Model provider types
 export const PROVIDERS = {

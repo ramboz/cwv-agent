@@ -9,7 +9,7 @@ import { initializeSystem } from '../prompts/index.js';
 dotenv.config();
 
 const llm = new ChatVertexAI({
-  model: "gemini-2.5-pro-exp-03-25",
+  model: "gemini-2.5-pro-preview-05-06",
   // model: "gemini-2.0-pro-exp-02-05",
   temperature: 0
 });

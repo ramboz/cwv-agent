@@ -35,7 +35,7 @@ export function parseArguments() {
     })
     .option('model', {
       alias: 'm',
-      describe: 'LLM model to use (e.g., "gemini-2.5-pro-exp-03-25", "gpt-4o")',
+      describe: 'LLM model to use (e.g., "gemini-2.5-pro-preview-05-06", "gpt-4o")',
       type: 'string',
       default: DEFAULT_MODEL
     })
