@@ -14,11 +14,11 @@ export async function processUrl(pageUrl, action, deviceType, skipCache, outputS
   console.group(`Processing: ${pageUrl}`);
   
   try {
-    const normalizedUrl = await getNormalizedUrl(pageUrl);
+    const normalizedUrl = await getNormalizedUrl(pageUrl, deviceType);
     if (!normalizedUrl?.url) {
       throw new Error(`Failed to access: ${pageUrl}`);
     }
-    if (normalizedUrl !== pageUrl) {
+    if (normalizedUrl.url !== pageUrl) {
       console.log('Normalized URL:', normalizedUrl.url, normalizedUrl.skipTlsCheck ? '(invalid TLS check)' : '');
     }
     

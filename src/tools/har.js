@@ -1,7 +1,7 @@
 import puppeteer from 'puppeteer';
 import { PredefinedNetworkConditions } from 'puppeteer';
 import PuppeteerHar from 'puppeteer-har';
-import { cacheResults, getCachedResults } from '../utils.js';
+import { cacheResults, getCachedResults, USER_AGENTS } from '../utils.js';
 
 const simulationConfig = {
   desktop: {
@@ -18,7 +18,7 @@ const simulationConfig = {
       isMobile: false,
       isLandscape: true,
     },
-    userAgent: 'Spacecat/1.0'
+    psiUserAgent: USER_AGENTS.psi.desktop
   },
   mobile: {
     cpuThrottling: 4,
@@ -30,7 +30,7 @@ const simulationConfig = {
       isMobile: true,
       isLandscape: false,
     },
-    userAgent: 'Spacecat/1.0'
+    psiUserAgent: USER_AGENTS.psi.mobile
   }
 };
 
@@ -288,18 +288,19 @@ export async function collect(pageUrl, deviceType, { skipCache, skipTlsCheck, bl
   await page.setViewport(simulationConfig[deviceType].viewport);
   await page.emulateCPUThrottling(simulationConfig[deviceType].cpuThrottling);
   await page.emulateNetworkConditions(simulationConfig[deviceType].networkThrottling);
-  await page.setUserAgent(simulationConfig[deviceType].userAgent);
+  
+  // Always use the PSI user agent
+  await page.setUserAgent(simulationConfig[deviceType].psiUserAgent);
   const har = new PuppeteerHar(page);
 
   if (blockRequests) {
     const blockedUrls = blockRequests.split(',');
-    // // block certain requests
+    // block certain requests
     await page.setRequestInterception(true);
     page.on('request', (request) => {
       const url = request.url();
       // check if the url is in the blockedUrls array
       const filtered = blockedUrls.some(b => url.includes(b.trim()));
-      // if (url.includes('/assets/') || url.includes('/s.go-mpulse.net/') || url.includes('KGO4l5Qk3zIB7zm9p50Y99tr') || url.includes('tags.tiqcdn.com')) {
       if (filtered) {
         console.log('Blocking', url);
         request.abort();
@@ -343,7 +344,9 @@ export async function collect(pageUrl, deviceType, { skipCache, skipTlsCheck, bl
   } catch (err) {
     console.error('Page did not idle after 120s. Force continuing.', err.message);
   }
-  await new Promise(resolve => setTimeout(resolve, 30_000));
+  
+  // Add waiting time
+  await new Promise(resolve => setTimeout(resolve, 15_000));
 
   if (!perfEntries || skipCache) {
     perfEntries = JSON.parse(await page.evaluate(async () => {

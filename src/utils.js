@@ -55,19 +55,51 @@ export function estimateTokenSize(obj) {
 }
 
 export function getCachedResults(urlString, deviceType, type, suffix = '', model = '') {
+  // Handle code files
   if (type === 'code') {
     const url = new URL(urlString);
     const filename = getFilename(url);
-    if (fs.existsSync(`${OUTPUT_DIR}/${url.hostname}/${filename}`)) {
-      return fs.readFileSync(`${OUTPUT_DIR}/${url.hostname}/${filename}`, { encoding: 'utf8' });
+    const filePath = `${OUTPUT_DIR}/${url.hostname}/${filename}`;
+    
+    if (fs.existsSync(filePath)) {
+      return fs.readFileSync(filePath, { encoding: 'utf8' });
     }
-  } else if (type === 'html' && fs.existsSync(`${getFilePrefix(urlString, deviceType, 'full')}${suffix ? `.${suffix}` : ''}${modelSuffix(model)}.html`)) {
-    return fs.readFileSync(`${getFilePrefix(urlString, deviceType, 'full')}${suffix ? `.${suffix}` : ''}${modelSuffix(model)}.html`, { encoding: 'utf8' });
-  } else if (fs.existsSync(`${getFilePrefix(urlString, deviceType, type)}${suffix ? `.${suffix}` : ''}${modelSuffix(model)}.json`)) {
-    const content = fs.readFileSync(`${getFilePrefix(urlString, deviceType, type)}${suffix ? `.${suffix}` : ''}${modelSuffix(model)}.json`, { encoding: 'utf8' });
+    return null;
+  }
+  
+  // Handle HTML files
+  if (type === 'html') {
+    const filePath = `${getFilePrefix(urlString, deviceType, 'full')}${suffix ? `.${suffix}` : ''}${modelSuffix(model)}.html`;
+    
+    if (fs.existsSync(filePath)) {
+      return fs.readFileSync(filePath, { encoding: 'utf8' });
+    }
+    return null;
+  }
+  
+  // Handle JSON files (default case)
+  const filePath = `${getFilePrefix(urlString, deviceType, type)}${suffix ? `.${suffix}` : ''}${modelSuffix(model)}.json`;
+  
+  if (fs.existsSync(filePath)) {
+    const content = fs.readFileSync(filePath, { encoding: 'utf8' });
     return JSON.parse(content);
   }
+  
   return null;
+}
+
+/**
+ * Builds a path with optional suffix and model info
+ * @param {string} basePrefix - Base prefix for the path
+ * @param {string} suffix - Optional suffix to append
+ * @param {string} model - Optional model name
+ * @param {string} extension - File extension
+ * @returns {string} - Constructed file path
+ */
+function buildPath(basePrefix, suffix = '', model = '', extension) {
+  const suffixPart = suffix ? `.${suffix}` : '';
+  const modelPart = modelSuffix(model);
+  return `${basePrefix}${suffixPart}${modelPart}.${extension}`;
 }
 
 /**
@@ -81,50 +113,50 @@ export function getCachedResults(urlString, deviceType, type, suffix = '', model
  * @returns {string} The path where the cache would be stored
  */
 export function getCachePath(urlString, deviceType, type, suffix = '', isSummary = false, model = '') {
-  const url = new URL(urlString);
-
+  // Special case for code files
   if (type === 'code') {
+    const url = new URL(urlString);
     const filename = getFilename(url);
     return `${OUTPUT_DIR}/${url.hostname}/${filename}`;
-  } else if (type === 'html') {
-    return `${getFilePrefix(urlString, deviceType, 'full')}${suffix ? `.${suffix}` : ''}${modelSuffix(model)}.html`;
-  } else if (isSummary) {
-    return `${getFilePrefix(urlString, deviceType, type)}${suffix ? `.${suffix}` : ''}${modelSuffix(model)}.summary.md`;
-  } else {
-    return `${getFilePrefix(urlString, deviceType, type)}${suffix ? `.${suffix}` : ''}${modelSuffix(model)}.json`;
   }
+  
+  // Handle HTML files
+  if (type === 'html') {
+    return buildPath(getFilePrefix(urlString, deviceType, 'full'), suffix, model, 'html');
+  }
+  
+  // Handle summary files
+  if (isSummary) {
+    return buildPath(getFilePrefix(urlString, deviceType, type), suffix, model, 'summary.md');
+  }
+  
+  // Default: JSON files
+  return buildPath(getFilePrefix(urlString, deviceType, type), suffix, model, 'json');
 }
 
 // Save some results in the cache on the file system
 export function cacheResults(urlString, deviceType, type, results, suffix = '', model = '') {
-  let outputFile = '';
   ensureDir(OUTPUT_DIR);
-  const url = new URL(urlString);
   
+  // Get the appropriate file path based on type
+  let outputFile = getCachePath(urlString, deviceType, type, suffix, typeof results === 'string' && type !== 'html', model);
+  
+  // For code files we need to ensure the parent directory exists
   if (type === 'code') {
+    const url = new URL(urlString);
     ensureDir(`${OUTPUT_DIR}/${url.hostname}`);
-    const filename = getFilename(url);
-    outputFile = `${OUTPUT_DIR}/${url.hostname}/${filename}`;
-    fs.writeFileSync(outputFile, results);
-  } else if (type === 'html') {
-    outputFile = `${getFilePrefix(urlString, deviceType, 'full')}${suffix ? `.${suffix}` : ''}${modelSuffix(model)}.html`;
+  }
+  
+  // Write the content appropriately based on type
+  if (type === 'json' || (typeof results !== 'string' && type !== 'html' && type !== 'code')) {
     fs.writeFileSync(
       outputFile,
-      results,
-    );
-  } else if (typeof results === 'string') {
-    outputFile = `${getFilePrefix(urlString, deviceType, type)}${suffix ? `.${suffix}` : ''}${modelSuffix(model)}.summary.md`;
-    fs.writeFileSync(
-      outputFile,
-      results,
+      typeof results === 'string' ? results : JSON.stringify(results, null, 2)
     );
   } else {
-    outputFile = `${getFilePrefix(urlString, deviceType, type)}${suffix ? `.${suffix}` : ''}${modelSuffix(model)}.json`;
-    fs.writeFileSync(
-      outputFile,
-      typeof results === 'string' ? results : JSON.stringify(results, null, 2),
-    );
+    fs.writeFileSync(outputFile, results);
   }
+  
   return outputFile;
 }
 
@@ -151,53 +183,80 @@ function ensureHttps(url) {
   return urlObj.toString();
 }
 
-// Headers needed to bypass basic bot detection
-export const AGENT_HTTP_HEADERS = {
-  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-  'Accept-Encoding': 'gzip, deflate, br, zstd',
-  'Accept-Language': 'en-US,en;q=0.5',
-  'Cache-Control': 'no-cache',
-  'Pragma': 'no-cache',
-  'User-Agent': 'Spacecat 1/0'
+// Standard User Agents for different scenarios
+export const USER_AGENTS = {
+  psi: {
+    desktop: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36 Spacecat/1.0',
+    mobile: 'Mozilla/5.0 (Linux; Android 11; moto g power (2022)) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36 Spacecat/1.0'    
+  }
+};
+
+/**
+ * Gets HTTP headers with appropriate user agent for the request type
+ * @param {string} deviceType - 'desktop' or 'mobile'
+ * @returns {Object} - HTTP headers object
+ */
+export function getRequestHeaders(deviceType) {
+  return {
+    'Accept': 'text/html,application/xhtml+xml,application/xml,text/css,application/javascript,text/javascript;q=0.9,image/avif,image/webp,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.5',
+    'Cache-Control': 'no-cache',
+    'Pragma': 'no-cache',
+    'Referer': 'https://www.adobe.com/',
+    'User-Agent': USER_AGENTS.psi[deviceType],
+  };
 }
 
-export async function getNormalizedUrl(urlString) {
+export async function getNormalizedUrl(urlString, deviceType) {
+  const headers = getRequestHeaders(deviceType);
+  let resp;
+  
   // Try a HEAD request first
-  let resp
   try {
-    resp = await fetch(urlString, { headers: AGENT_HTTP_HEADERS, method: 'HEAD' });
+    resp = await fetch(urlString, { headers, method: 'HEAD' });
     if (resp.ok) {
       return { url: ensureHttps(resp.url) };
     }
   } catch (err) {
     // Handle TLS errors
     if (err.cause?.code) {
-      resp = await fetch(urlString, {
-        headers: AGENT_HTTP_HEADERS,
-        method: 'HEAD',
-        dispatcher: new Agent({
-          connect: {
-            rejectUnauthorized: false,
-          },
-        }),
-      });
-      if (resp.ok) {
-        return { url: ensureHttps(resp.url), skipTlsCheck: true };
+      try {
+        resp = await fetch(urlString, {
+          headers,
+          method: 'HEAD',
+          dispatcher: new Agent({
+            connect: {
+              rejectUnauthorized: false,
+            },
+          }),
+        });
+        
+        if (resp.ok) {
+          return { url: ensureHttps(resp.url), skipTlsCheck: true };
+        }
+      } catch (tlsErr) {
+        console.warn('TLS bypass request failed:', tlsErr.message);
+        // Continue to GET request
       }
     }
   }
 
-  // If that fails, try a GET request
-  resp = await fetch(urlString, { headers: AGENT_HTTP_HEADERS });
-  if (resp.ok) {
-    return { url: ensureHttps(resp.headers.get('Location') || resp.url) };
+  // If HEAD fails, try a GET request
+  try {
+    resp = await fetch(urlString, { headers });
+    
+    if (resp.ok) {
+      return { url: ensureHttps(resp.headers.get('Location') || resp.url) };
+    }
+    
+    // Handle redirect chains
+    if (urlString !== resp.url) {
+      console.log('Redirected to', resp.url);
+      return getNormalizedUrl(resp.url, deviceType);
+    }
+    
+    throw new Error(`HTTP error! status: ${resp.status}`);
+  } catch (getErr) {
+    throw new Error(`Failed to retrieve URL (${urlString}): ${getErr.message}`);
   }
-
-  // Handle redirect chains
-  if (urlString !== resp.url) {
-    console.log('Redirected to', resp.url);
-    return getNormalizedUrl(resp.url);
-  }
-
-  throw new Error(`HTTP error! status: ${resp.status}`);
 }

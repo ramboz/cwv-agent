@@ -1,4 +1,4 @@
-import { cacheResults, getCachedResults, AGENT_HTTP_HEADERS } from '../utils.js';
+import { cacheResults, getCachedResults, getRequestHeaders } from '../utils.js';
 import { Agent } from 'undici';
 
 /**
@@ -8,20 +8,112 @@ import { Agent } from 'undici';
  * @returns {boolean} - Whether the URL should be processed
  */
 function shouldProcessUrl(requestUrl, baseUrl) {
-  const { hostname, pathname } = baseUrl;
-
-  if (requestUrl.hostname !== hostname) {
+  // Check if different hostname - early return
+  if (requestUrl.hostname !== baseUrl.hostname) {
     return false;
   }
 
-  return (
-    requestUrl.pathname === pathname ||
-    requestUrl.pathname.endsWith('.html') ||
-    (requestUrl.pathname.endsWith('.js') &&
-      (requestUrl.pathname.startsWith('/etc.clientlibs/') || !requestUrl.pathname.endsWith('.min.js'))) ||
-    (requestUrl.pathname.endsWith('.css') &&
-      (requestUrl.pathname.includes('/etc.clientlibs/') || !requestUrl.pathname.endsWith('.min.css')))
-  );
+  const { pathname } = requestUrl;
+  
+  // Process if it's the same path as the base URL
+  if (pathname === baseUrl.pathname) {
+    return true;
+  }
+  
+  // Process HTML files
+  if (pathname.endsWith('.html')) {
+    return true;
+  }
+  
+  // Process JS files that are either from clientlibs or not minified
+  if (pathname.endsWith('.js') && !pathname.includes('.rum/@adobe/helix-rum-js')) {
+    return pathname.startsWith('/etc.clientlibs/') || !pathname.endsWith('.min.js');
+  }
+  
+  // Process CSS files that are either from clientlibs or not minified
+  if (pathname.endsWith('.css')) {
+    return pathname.includes('/etc.clientlibs/') || !pathname.endsWith('.min.css');
+  }
+  
+  return false;
+}
+
+/**
+ * Creates fetch options with appropriate headers and TLS settings
+ * @param {string} deviceType - Device type for headers
+ * @param {boolean} skipTlsCheck - Whether to skip TLS certificate validation
+ * @returns {Object} - Fetch options object
+ */
+function createFetchOptions(deviceType, skipTlsCheck) {
+  return {
+    headers: getRequestHeaders(deviceType),
+    // Optional TLS validation bypass
+    dispatcher: skipTlsCheck ? new Agent({
+      connect: { rejectUnauthorized: false }
+    }) : undefined
+  };
+}
+
+/**
+ * Fetches a single resource and handles caching
+ * @param {string} url - URL to fetch
+ * @param {string} deviceType - Device type for cache key
+ * @param {Object} fetchOptions - Fetch options
+ * @param {boolean} skipCache - Whether to skip cache lookup
+ * @returns {Promise<Object>} - Object with result and stats
+ */
+async function fetchResource(url, deviceType, fetchOptions, skipCache) {
+  // Check cache first
+  const cachedContent = getCachedResults(url, deviceType, 'code');
+  if (cachedContent && !skipCache) {
+    return { 
+      content: cachedContent, 
+      fromCache: true,
+      failed: false
+    };
+  }
+
+  try {
+    // Try non-minified version first if URL contains .min.
+    let response;
+    if (url.includes('.min.')) {
+      const nonMinifiedUrl = url.replace('.min.', '.');
+      response = await fetch(nonMinifiedUrl, fetchOptions);
+    }
+
+    // If no response or not OK, try original URL
+    if (!response || !response.ok) {
+      response = await fetch(url, fetchOptions);
+    }
+
+    if (!response.ok) {
+      console.warn(`Failed to fetch resource: ${url}. Status: ${response.status} - ${response.statusText}`);
+      return { 
+        content: null, 
+        fromCache: false,
+        failed: true
+      };
+    }
+
+    // Get the response body
+    const body = await response.text();
+    cacheResults(url, deviceType, 'code', body);
+    
+    return { 
+      content: body, 
+      fromCache: false,
+      failed: false
+    };
+  } catch (error) {
+    console.error(`Failed to fetch ${url}:`, error.message);
+    console.error(error.stack);
+    return { 
+      content: null, 
+      fromCache: false,
+      failed: true,
+      error
+    };
+  }
 }
 
 /**
@@ -37,21 +129,8 @@ function shouldProcessUrl(requestUrl, baseUrl) {
 export async function collect(pageUrl, deviceType, resources, { skipCache, skipTlsCheck }) {
   const baseUrl = new URL(pageUrl);
   const codeFiles = {};
-  let totalResources = 0;
   let cachedResources = 0;
   let failedResources = 0;
-
-  const fetchOptions = {
-    headers: {
-      ...AGENT_HTTP_HEADERS,
-      'Accept': 'text/html,application/xhtml+xml,application/xml,text/css,application/javascript,text/javascript;q=0.9,image/avif,image/webp,*/*;q=0.8',
-      'Accept-Encoding': '',
-    },
-    // Optional TLS validation bypass
-    dispatcher: skipTlsCheck ? new Agent({
-      connect: { rejectUnauthorized: false }
-    }) : undefined
-  };
 
   // Filter resources that match our criteria
   const urlsToProcess = resources.filter(url => {
@@ -64,48 +143,21 @@ export async function collect(pageUrl, deviceType, resources, { skipCache, skipT
     }
   });
 
-  totalResources = urlsToProcess.length;
+  const totalResources = urlsToProcess.length;
+  const fetchOptions = createFetchOptions(deviceType, skipTlsCheck);
 
   // Process each resource sequentially to avoid overwhelming the server
   for (const url of urlsToProcess) {
-    try {
-      // Check cache first
-      const cachedContent = getCachedResults(url, deviceType, 'code');
-      if (cachedContent && !skipCache) {
-        codeFiles[url] = cachedContent;
-        cachedResources++;
-        continue;
-      }
-
-      // Fetch the resource
-      let response;
-      if (url.includes('.min.')) {
-        const nonMinifiedUrl = url.replace('.min.', '.');
-        response = await fetch(nonMinifiedUrl, fetchOptions);
-      }
-
-      if (!response || !response.ok) {
-        response = await fetch(url, fetchOptions);
-      }
-
-      if (!response.ok) {
-        console.warn(`Failed to fetch resource: ${url}. Error: ${response.status} - ${response.statusText}`);
-        failedResources++;
-      }
-
-      const body = await response.text();
-
-      // Check for access denied patterns
-      if (body.includes('Access Denied') || body.includes('403 Forbidden')) {
-        console.warn(`Access denied for resource: ${url}`);
-        failedResources++;
-      } else {
-        codeFiles[url] = body;
-        cacheResults(url, deviceType, 'code', body);
-      }
-    } catch (error) {
-      console.error(`Failed to fetch ${url}:`, error.message);
+    const result = await fetchResource(url, deviceType, fetchOptions, skipCache);
+    
+    if (result.fromCache) {
+      cachedResources++;
+    }
+    
+    if (result.failed) {
       failedResources++;
+    } else if (result.content) {
+      codeFiles[url] = result.content;
     }
   }
 
