@@ -1,7 +1,8 @@
 import puppeteer from 'puppeteer';
 import { PredefinedNetworkConditions } from 'puppeteer';
 import PuppeteerHar from 'puppeteer-har';
-import { cacheResults, getCachedResults, USER_AGENTS } from '../utils.js';
+import { cacheResults, getCachedResults, getFilePrefix, USER_AGENTS } from '../utils.js';
+import puppeteerToIstanbul from 'puppeteer-to-istanbul';
 
 // Device configuration profiles
 const simulationConfig = {
@@ -552,6 +553,22 @@ async function collectJSApiData(page) {
   });
 }
 
+// Code Coverage Functions
+async function setupCodeCoverage(page) {
+  await Promise.all([
+    page.coverage.startJSCoverage(),
+    page.coverage.startCSSCoverage(),
+  ]);
+}
+
+async function collectCodeCoverage(page) {
+  const [jsCoverage, cssCoverage] = await Promise.all([
+    page.coverage.stopJSCoverage(),
+    page.coverage.stopCSSCoverage(),
+  ]);
+  return [...jsCoverage, ...cssCoverage];
+}
+
 // Main Data Collection Function
 export async function collect(pageUrl, deviceType, { skipCache, skipTlsCheck, blockRequests }) {
   // Try to get cached results first
@@ -559,8 +576,9 @@ export async function collect(pageUrl, deviceType, { skipCache, skipTlsCheck, bl
   let perfEntries = getCachedResults(pageUrl, deviceType, 'perf');
   let fullHtml = getCachedResults(pageUrl, deviceType, 'html');
   let jsApi = getCachedResults(pageUrl, deviceType, 'jsapi');
+  let coverageData = getCachedResults(pageUrl, deviceType, 'coverage');
   
-  if (harFile && perfEntries && fullHtml && jsApi && !skipCache) {
+  if (harFile && perfEntries && fullHtml && jsApi && coverageData && !skipCache) {
     return {
       har: harFile,
       harSummary: summarizeHAR(harFile, deviceType),
@@ -568,6 +586,7 @@ export async function collect(pageUrl, deviceType, { skipCache, skipTlsCheck, bl
       perfEntriesSummary: summarizePerformanceEntries(perfEntries, deviceType),
       fullHtml,
       jsApi,
+      coverageData,
       fromCache: true
     };
   }
@@ -583,6 +602,9 @@ export async function collect(pageUrl, deviceType, { skipCache, skipTlsCheck, bl
   const client = await page.target().createCDPSession();
   await client.send('Performance.enable');
 
+  // Setup code coverage tracking
+  await setupCodeCoverage(page);
+
   // Setup CSP violation tracking
   await setupCSPViolationTracking(page);
 
@@ -595,15 +617,33 @@ export async function collect(pageUrl, deviceType, { skipCache, skipTlsCheck, bl
   try {
     await page.goto(pageUrl, {
       timeout: 120_000,
-      waitUntil: 'networkidle2',
+      waitUntil: 'domcontentloaded',
     });
   } catch (err) {
     console.error('Page did not idle after 120s. Force continuing.', err.message);
   }
   
-  // Add waiting time for final page stabilization
-  await new Promise(resolve => setTimeout(resolve, 15_000));
 
+  // Collect coverage data at LCP
+  await page.evaluate(() => {
+    return new Promise((resolve) => {
+      new PerformanceObserver((entryList) => {
+        const entries = entryList.getEntries();
+        if (entries.length > 0) {
+          resolve(entries[entries.length - 1]); // Get the last LCP entry
+        }
+      }).observe({ entryTypes: ['largest-contentful-paint'] });
+    });
+  }, { timeout: 30_000 });
+
+  // Collect coverage data at LCP
+  coverageData = await collectCodeCoverage(page);
+
+  // Convert to Istanbul format and write report
+  puppeteerToIstanbul.write(coverageData, { storagePath: getFilePrefix(pageUrl, deviceType, 'nyc') });
+  
+  await page.waitForNetworkIdle({ concurrency: 0 });
+  
   // Collect performance data
   if (!perfEntries || skipCache) {
     perfEntries = await collectPerformanceEntries(page);
@@ -634,6 +674,7 @@ export async function collect(pageUrl, deviceType, { skipCache, skipTlsCheck, bl
   // Close browser and save results
   await browser.close();
   cacheResults(pageUrl, deviceType, 'har', harFile);
+  cacheResults(pageUrl, deviceType, 'coverage', coverageData);
   
   // Generate HAR summary
   const harSummary = summarizeHAR(harFile, deviceType);
@@ -646,6 +687,7 @@ export async function collect(pageUrl, deviceType, { skipCache, skipTlsCheck, bl
     perfEntries, 
     perfEntriesSummary, 
     fullHtml, 
-    jsApi 
+    jsApi,
+    coverageData
   };
 }

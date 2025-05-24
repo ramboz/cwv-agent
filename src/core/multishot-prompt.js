@@ -141,6 +141,7 @@ export default async function runPrompt(pageUrl, deviceType, options = {}) {
     perfEntriesSummary,
     fullHtml,
     jsApi,
+    coverageData,
   } = await collectArtifacts(pageUrl, deviceType, options);
 
   const report = merge(pageUrl, deviceType);
