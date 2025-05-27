@@ -18,7 +18,7 @@ export default function evaluate({ report }) {
         recommendation: `Having multiple LCPs might lead to performance issues as the critical path might be optimized for the first FCP. Or you have async content coming in late that overshadows the LCP itself.`,
         passing: false,
         time: start,
-        elements: lcps.map(l => l.element),
+        elements: lcps.map(l => l.element).filter(e => !!e),
       });
     }
     if (lcp.end > THRESHOLDS.average) {
