@@ -68,6 +68,7 @@ You know the following about AEM CS.
 
 ### Anti-patterns
 
+- Do not inline critical CSS for above-the-fold content in the <head>. It would require a build system
 - Do not rely on excessive client-side rendering for critical content
 - Avoid using monolithic clientlibs that load everything at once
 - Do not use synchronous XMLHttpRequest for component data loading

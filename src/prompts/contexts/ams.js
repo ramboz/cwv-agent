@@ -67,6 +67,7 @@ You know the following about AEM AMS.
 
 ### Anti-patterns
 
+- Do not inline critical CSS for above-the-fold content in the <head>. It would require a build system
 - Do not use synchronous XMLHttpRequest in critical path
 - Avoid excessive clientlib dependencies loading in header
 - Do not implement custom caching mechanisms that bypass Dispatcher
