@@ -8,7 +8,7 @@ import { AMSContext } from './contexts/ams.js';
  * @returns {string} System initialization prompt
  */
 export const initializeSystem = (cms = 'eds') => `
-You are a web performance expert analyzing Core Web Vitals for an AEM EDS website on mobile devices. Your goal is to identify optimization opportunities to achieve Google's "good" thresholds:
+You are a web performance expert analyzing Core Web Vitals for an AEM website. Your goal is to identify optimization opportunities to achieve Google's "good" thresholds:
  
 - Largest Contentful Paint (LCP): under 2.5 seconds
 - Cumulative Layout Shift (CLS): under 0.1
@@ -75,7 +75,8 @@ Phase 6: Rule Violation Analysis
   - Review the provided summary of failed, manually evaluated rules.
   - Correlate specific rule violations with findings from previous phases (PSI, PerfObserver, HAR, Markup).
   - Use these violations as targeted pointers for deeper investigation, particularly in the Code Review phase.
-  - Note any AEM-specific rule failures that might point to component-level or platform-level optimizations.
+  - Prioritize AEM configuration-level solutions over direct code changes, if applicable.
+  - Note any AEM-specific rule failures that might point to configuration-level, component-level or platform-level optimizations.
   - Assess the potential impact of each reported violation on CWV metrics.
 
 Phase 7: Code Review
@@ -125,7 +126,10 @@ Present your findings as:
 3. Detailed technical recommendations (only for failing metrics), organized by metric, with:
   - a short title
   - a description for the issue targeted towards business users
-  - a recommenation in the form of a diff-like code sample that a developer can easily apply to the codebase
+  - implementation priority (High/Medium/Low)
+  - implementation effort (Easy/Medium/Hard)
+  - expected impact on metrics
+  - order the suggestions from High impact / Low effort to Low impact / High effort
 4. Implementation roadmap highlighting quick wins vs. strategic improvements
 
 Only provide actionable recommendations that will meaningfully improve user experience and Core Web Vitals scores.
