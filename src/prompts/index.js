@@ -11,7 +11,9 @@ import {
   htmlStep,
   codeStep,
   rulesStep,
-  resetStepCounter
+  resetStepCounter,
+  coverageStep,
+  coverageSummaryStep,
 } from './analysis.js';
 import { actionPrompt } from './action.js';
 
@@ -29,5 +31,7 @@ export {
   codeStep,
   rulesStep,
   actionPrompt,
-  resetStepCounter
+  resetStepCounter,
+  coverageStep,
+  coverageSummaryStep,
 }

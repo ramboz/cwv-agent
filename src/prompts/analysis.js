@@ -157,4 +157,26 @@ ${code}
   } catch (err) {
     return `Could not collect actual website code.`;
   }
-}; 
+};
+
+/**
+ * Prompt for code coverage analysis
+ * @param {string} codeCoverage - Code coverage JSON
+ * @returns {string} Code coverage analysis prompt
+ */
+export const coverageStep = (codeCoverage) => `
+${step()} here is the detailed JSON with code coverage data for the CSS and JS files in the page:
+
+${JSON.stringify(codeCoverage, null, 2)}
+`;
+
+/**
+ * Prompt for code coverage summary analysis
+ * @param {string} codeCoverageSummary - Code coverage summary text
+ * @returns {string} Code coverage summary analysis prompt
+ */
+export const coverageSummaryStep = (codeCoverageSummary) => `
+${step()} here is the summarized code coverage data for the page:
+
+${codeCoverageSummary}
+`;

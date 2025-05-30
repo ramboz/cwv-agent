@@ -79,8 +79,24 @@ Phase 6: Rule Violation Analysis
   - Note any AEM-specific rule failures that might point to configuration-level, component-level or platform-level optimizations.
   - Assess the potential impact of each reported violation on CWV metrics.
 
-Phase 7: Code Review
-  - Analyze provided JS/CSS for optimization opportunities
+Phase 7: Code Coverage Analysis
+  - Analyze JavaScript and CSS coverage data from page load simulation
+  - Identify unused code portions that can be safely removed or deferred
+  - Correlate unused code with resource loading performance impact
+  - Identify code that's loaded but only used for specific user interactions
+  - Determine opportunities for code splitting and lazy loading strategies
+  - Assess the potential savings from removing dead code entirely
+  - Prioritize deferral/removal candidates based on:
+    * Size of unused portions (target >20KB savings)
+    * Impact on critical rendering path
+    * Execution timing relative to user interactions
+    * Dependencies and bundling considerations
+  - Map unused code to specific functions, components, or libraries
+  - Evaluate trade-offs between code removal complexity and performance gains
+  - Identify patterns where entire third-party libraries are loaded but minimally used
+
+Phase 8: Code Review
+  - Analyze provided JS/CSS for optimization opportunities, informed by coverage analysis in Phase 7
   - Evaluate rendering sequence and execution patterns in scripts.js
   - Identify load phase assignments (eager, lazy, delayed) for resources
   - Examine JS patterns that might cause long tasks

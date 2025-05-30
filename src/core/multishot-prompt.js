@@ -16,7 +16,9 @@ import {
   codeStep,
   rulesStep,
   actionPrompt,
-  resetStepCounter
+  resetStepCounter,
+  coverageStep,
+  coverageSummaryStep,
 } from '../prompts/index.js';
 import { detectAEMVersion } from '../tools/aem.js';
 import merge from '../tools/merge.js';
@@ -32,7 +34,8 @@ function createMessages(pageData, useSummarized = false) {
   const {
     pageUrl, deviceType, cms, rulesSummary,
     resources, crux, psi, perfEntries, har,
-    cruxSummary, psiSummary, perfEntriesSummary, harSummary
+    cruxSummary, psiSummary, perfEntriesSummary, harSummary,
+    coverageData, coverageDataSummary,
   } = pageData;
 
   // Reset step counter before creating a new sequence of messages
@@ -47,6 +50,7 @@ function createMessages(pageData, useSummarized = false) {
       new HumanMessage(harSummaryStep(harSummary)),
       new HumanMessage(htmlStep(pageUrl, resources)),
       new HumanMessage(rulesStep(rulesSummary)),
+      new HumanMessage(coverageSummaryStep(coverageDataSummary)),
       new HumanMessage(codeStep(pageUrl, resources, 10_000)),
       new HumanMessage(actionPrompt(pageUrl, deviceType)),
     ];
@@ -59,6 +63,7 @@ function createMessages(pageData, useSummarized = false) {
       new HumanMessage(harStep(har)),
       new HumanMessage(htmlStep(pageUrl, resources)),
       new HumanMessage(rulesStep(rulesSummary)),
+      new HumanMessage(coverageStep(coverageData)),
       new HumanMessage(codeStep(pageUrl, resources)),
       new HumanMessage(actionPrompt(pageUrl, deviceType)),
     ];
@@ -142,6 +147,7 @@ export default async function runPrompt(pageUrl, deviceType, options = {}) {
     fullHtml,
     jsApi,
     coverageData,
+    coverageDataSummary,
   } = await collectArtifacts(pageUrl, deviceType, options);
 
   const report = merge(pageUrl, deviceType);
@@ -161,8 +167,8 @@ export default async function runPrompt(pageUrl, deviceType, options = {}) {
   // Organize all data into one object for easier passing
   const pageData = {
     pageUrl, deviceType, cms, rulesSummary, resources,
-    crux, psi, perfEntries, har,
-    cruxSummary, psiSummary, perfEntriesSummary, harSummary
+    crux, psi, perfEntries, har, coverageData, 
+    cruxSummary, psiSummary, perfEntriesSummary, harSummary, coverageDataSummary,
   };
 
   // Invoke LLM and handle retries automatically
