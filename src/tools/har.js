@@ -3,6 +3,7 @@ import { PredefinedNetworkConditions } from 'puppeteer';
 import PuppeteerHar from 'puppeteer-har';
 import { cacheResults, getCachedResults, getFilePrefix, USER_AGENTS } from '../utils.js';
 import puppeteerToIstanbul from 'puppeteer-to-istanbul';
+import PTI from 'puppeteer-to-istanbul/lib/puppeteer-to-istanbul.js';
 
 // Device configuration profiles
 const simulationConfig = {
@@ -520,7 +521,7 @@ async function collectPerformanceEntries(page) {
     }));
 
     return JSON.stringify(entries, null, 2);
-  }));
+  }, { timeout: 30_000 }));
 }
 
 async function collectJSApiData(page) {
@@ -550,13 +551,16 @@ async function collectJSApiData(page) {
         .reduce((set, val) => { set[val[0]] = []; val.splice(1).forEach((v) => set[val[0]].push(v)); return set; }, {}),
       cspViolations: window.CSP_VIOLATIONS || [],
     };
-  });
+  }, { timeout: 30_000 });
 }
 
 // Code Coverage Functions
 async function setupCodeCoverage(page) {
-  await Promise.all([
-    page.coverage.startJSCoverage(),
+  return Promise.all([
+    page.coverage.startJSCoverage({
+      includeRawScriptCoverage: true,
+      useBlockCoverage: false,
+    }),
     page.coverage.startCSSCoverage(),
   ]);
 }
@@ -569,6 +573,368 @@ async function collectCodeCoverage(page) {
   return [...jsCoverage, ...cssCoverage];
 }
 
+async function waitForLCP(page) {
+  return page.evaluate(() => {
+    return new Promise((resolve) => {
+      new PerformanceObserver((entryList) => {
+        const entries = entryList.getEntries();
+        if (entries.length > 0) {
+          resolve(entries[entries.length - 1]); // Get the last LCP entry
+        }
+      }).observe({ entryTypes: ['largest-contentful-paint'] });
+    });
+  }, { timeout: 30_000 });
+}
+
+function mergeCoverage(report1Entries, report2Entries) {
+  const mergedCoverageMap = new Map();
+
+  // Process first report
+  for (const entry of report1Entries) {
+      const ranges = entry.ranges.map(r => ({ ...r })); // Deep copy ranges
+      const key = entry.url || entry.text;
+      const mergedEntry = { // Use text as key for inline styles/scripts
+          url: entry.url,
+          text: entry.text,
+          ranges: ranges
+      };
+
+      // Copy rawScriptCoverage if it exists (for JavaScript files)
+      if (entry.rawScriptCoverage) {
+          mergedEntry.rawScriptCoverage = {
+              ...entry.rawScriptCoverage,
+              functions: entry.rawScriptCoverage.functions?.map(func => ({
+                  ...func,
+                  ranges: func.ranges.map(r => ({ ...r }))
+              })) || []
+          };
+      }
+
+      mergedCoverageMap.set(key, mergedEntry);
+  }
+
+  // Merge second report
+  for (const entry of report2Entries) {
+      const key = entry.url || entry.text;
+      if (mergedCoverageMap.has(key)) {
+          const existingEntry = mergedCoverageMap.get(key);
+
+          // Merge ranges
+          const combinedRanges = [...existingEntry.ranges, ...entry.ranges.map(r => ({ ...r }))];
+          combinedRanges.sort((a, b) => a.start - b.start);
+
+          const mergedRanges = [];
+          if (combinedRanges.length > 0) {
+              let currentRange = { ...combinedRanges[0] };
+              for (let i = 1; i < combinedRanges.length; i++) {
+                  const nextRange = combinedRanges[i];
+                  if (nextRange.start < currentRange.end) { // Overlap or adjacent
+                      currentRange.end = Math.max(currentRange.end, nextRange.end);
+                  } else {
+                      mergedRanges.push(currentRange);
+                      currentRange = { ...nextRange };
+                  }
+              }
+              mergedRanges.push(currentRange);
+          }
+          existingEntry.ranges = mergedRanges;
+
+          // Merge rawScriptCoverage if both entries have it
+          if (entry.rawScriptCoverage && existingEntry.rawScriptCoverage) {
+              existingEntry.rawScriptCoverage = mergeRawScriptCoverage(
+                  existingEntry.rawScriptCoverage,
+                  entry.rawScriptCoverage,
+                  existingEntry.text || ''
+              );
+          } else if (entry.rawScriptCoverage && !existingEntry.rawScriptCoverage) {
+              // Add rawScriptCoverage if only the new entry has it
+              existingEntry.rawScriptCoverage = {
+                  ...entry.rawScriptCoverage,
+                  functions: entry.rawScriptCoverage.functions?.map(func => ({
+                      ...func,
+                      ranges: func.ranges.map(r => ({ ...r }))
+                  })) || []
+              };
+          }
+      } else {
+          // New entry from the second report
+          const newEntry = {
+              url: entry.url,
+              text: entry.text,
+              ranges: entry.ranges.map(r => ({ ...r }))
+          };
+
+          // Copy rawScriptCoverage if it exists
+          if (entry.rawScriptCoverage) {
+              newEntry.rawScriptCoverage = {
+                  ...entry.rawScriptCoverage,
+                  functions: entry.rawScriptCoverage.functions?.map(func => ({
+                      ...func,
+                      ranges: func.ranges.map(r => ({ ...r }))
+                  })) || []
+              };
+          }
+
+          mergedCoverageMap.set(key, newEntry);
+      }
+  }
+  return Array.from(mergedCoverageMap.values());
+}
+
+function mergeRawScriptCoverage(coverage1, coverage2, sourceText) {
+    const merged = { ...coverage1 };
+
+    if (!coverage1.functions || !coverage2.functions) {
+        return merged;
+    }
+
+    // Create a map of functions by their identifier (functionName + line number)
+    const functionMap = new Map();
+
+    // Add functions from first coverage
+    coverage1.functions.forEach(func => {
+        if (!func.functionName) return;
+        const startOffset = func.ranges[0]?.startOffset || 0;
+        const lineNumber = getLineNumberFromOffset(sourceText, startOffset);
+        const key = `${func.functionName}:L${lineNumber}`;
+        functionMap.set(key, {
+            ...func,
+            ranges: func.ranges.map(r => ({ ...r }))
+        });
+    });
+
+    // Merge functions from second coverage
+    coverage2.functions.forEach(func => {
+        if (!func.functionName) return;
+        const startOffset = func.ranges[0]?.startOffset || 0;
+        const lineNumber = getLineNumberFromOffset(sourceText, startOffset);
+        const key = `${func.functionName}:L${lineNumber}`;
+
+        if (functionMap.has(key)) {
+            const existingFunc = functionMap.get(key);
+            // Merge the ranges and execution counts
+            existingFunc.ranges = existingFunc.ranges.map((range, index) => {
+                const newRange = func.ranges[index];
+                return {
+                    ...range,
+                    count: range.count + (newRange?.count || 0)
+                };
+            });
+        } else {
+            functionMap.set(key, {
+                ...func,
+                ranges: func.ranges.map(r => ({ ...r }))
+            });
+        }
+    });
+
+    merged.functions = Array.from(functionMap.values());
+    return merged;
+}
+
+// Code Coverage Analysis Functions
+
+/**
+ * Analyzes code coverage data to categorize usage as pre LCP, post LCP, or unused.
+ *
+ * @param {Array} lcpCoverageData - Coverage data collected at LCP (Largest Contentful Paint)
+ * @param {Array} pageCoverageData - Coverage data collected at end of page load
+ * @returns {Object} Analysis results in JSON format with file paths as keys and usage categorization
+ *
+ * Output format:
+ * {
+ *   "file_path_or_url": {
+ *     "function_name:offset" | "css_selector": "pre-lcp" | "post-lcp" | "not-used"
+ *   }
+ * }
+ *
+ * For JavaScript: Functions executed during LCP are "pre-lcp",
+ * functions executed only after LCP are "post-lcp", unused functions are "not-used"
+ *
+ * For CSS: Selectors used during LCP are "pre-lcp",
+ * selectors used only after LCP are "post-lcp", unused selectors are "not-used"
+ */
+export function analyzeCoverageUsage(lcpCoverageData, pageCoverageData) {
+  const result = {};
+
+  // Create maps for easier lookup
+  const lcpCoverageMap = new Map();
+  const pageCoverageMap = new Map();
+
+  // Process LCP coverage data
+  lcpCoverageData.forEach(entry => {
+    const key = entry.url || 'inline';
+    lcpCoverageMap.set(key, entry);
+  });
+
+  // Process page coverage data
+  pageCoverageData.forEach(entry => {
+    const key = entry.url || 'inline';
+    pageCoverageMap.set(key, entry);
+  });
+
+  // Get all unique files from both datasets
+  const allFiles = new Set([...lcpCoverageMap.keys(), ...pageCoverageMap.keys()]);
+
+  allFiles.forEach(filePath => {
+    const lcpEntry = lcpCoverageMap.get(filePath);
+    const pageEntry = pageCoverageMap.get(filePath);
+
+    // Skip if no page entry (shouldn't happen due to merging)
+    if (!pageEntry) return;
+
+    result[filePath] = {};
+
+    // Analyze JavaScript coverage
+    if (pageEntry.rawScriptCoverage) {
+      analyzeJSCoverage(lcpEntry, pageEntry, result[filePath]);
+    }
+
+    // Analyze CSS coverage
+    if (pageEntry.ranges && !pageEntry.rawScriptCoverage) {
+      analyzeCSSCoverage(lcpEntry, pageEntry, result[filePath]);
+    }
+  });
+
+  return result;
+}
+
+function analyzeJSCoverage(lcpEntry, pageEntry, fileResult) {
+  const lcpFunctions = new Map();
+  const pageFunctions = new Map();
+
+  // Get the source text for line number conversion
+  const sourceText = pageEntry.text || '';
+
+  // Process LCP functions if available
+  if (lcpEntry?.rawScriptCoverage?.functions) {
+    lcpEntry.rawScriptCoverage.functions.forEach(func => {
+      if (!func.functionName) return;
+      const startOffset = func.ranges[0]?.startOffset || 0;
+      const lineNumber = getLineNumberFromOffset(sourceText, startOffset);
+      const key = `${func.functionName}:L${lineNumber}`;
+      const isUsed = func.ranges.some(range => range.count > 0);
+      lcpFunctions.set(key, isUsed);
+    });
+  }
+
+  // Process page functions
+  if (pageEntry?.rawScriptCoverage?.functions) {
+    pageEntry.rawScriptCoverage.functions.forEach(func => {
+      if (!func.functionName) return;
+      const startOffset = func.ranges[0]?.startOffset || 0;
+      const lineNumber = getLineNumberFromOffset(sourceText, startOffset);
+      const key = `${func.functionName}:L${lineNumber}`;
+      const isUsed = func.ranges.some(range => range.count > 0);
+      pageFunctions.set(key, isUsed);
+
+      // Determine usage category
+      let usageCategory;
+      const usedInLCP = lcpFunctions.get(key) || false;
+
+      if (usedInLCP) {
+        usageCategory = 'pre-lcp';
+      } else if (isUsed) {
+        usageCategory = 'post-lcp';
+      } else {
+        usageCategory = 'not-used';
+      }
+
+      fileResult[key] = usageCategory;
+    });
+  }
+}
+
+function analyzeCSSCoverage(lcpEntry, pageEntry, fileResult) {
+  // For CSS, we need to parse the text and map ranges to selectors
+  // This is a simplified approach - in practice, you might want to use a CSS parser
+
+  const lcpRanges = lcpEntry?.ranges || [];
+  const pageRanges = pageEntry?.ranges || [];
+  const cssText = pageEntry.text || '';
+
+  if (!cssText) return;
+
+  // Create coverage maps
+  const lcpCoverageMap = createCoverageMap(lcpRanges);
+  const pageCoverageMap = createCoverageMap(pageRanges);
+
+  // Extract CSS rules and their positions
+  const cssRules = extractCSSRules(cssText);
+
+  cssRules.forEach(rule => {
+    const isUsedInLCP = isRangeCovered(rule.start, rule.end, lcpCoverageMap);
+    const isUsedInPage = isRangeCovered(rule.start, rule.end, pageCoverageMap);
+
+    let usageCategory;
+    if (isUsedInLCP) {
+      usageCategory = 'pre-lcp';
+    } else if (isUsedInPage) {
+      usageCategory = 'post-lcp';
+    } else {
+      usageCategory = 'not-used';
+    }
+
+    const lineNumber = getLineNumberFromOffset(cssText, rule.start);
+    fileResult[`${rule.selector}:L${lineNumber}`] = usageCategory;
+  });
+}
+
+function createCoverageMap(ranges) {
+  const coverageMap = new Array();
+  ranges.forEach(range => {
+    for (let i = range.start; i < range.end; i++) {
+      coverageMap[i] = true;
+    }
+  });
+  return coverageMap;
+}
+
+function isRangeCovered(start, end, coverageMap) {
+  // Check if any part of the range is covered
+  for (let i = start; i < end; i++) {
+    if (coverageMap[i]) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function extractCSSRules(cssText) {
+  const rules = [];
+  const ruleRegex = /([^{]+)\s*\{[^}]*\}/g;
+  let match;
+
+  while ((match = ruleRegex.exec(cssText)) !== null) {
+    const selector = match[1].trim();
+    const start = match.index;
+    const end = match.index + match[0].length;
+
+    // Skip @-rules and focus on selectors
+    if (!selector.startsWith('@') && selector) {
+      rules.push({
+        selector: selector,
+        start: start,
+        end: end
+      });
+    }
+  }
+
+  return rules;
+}
+
+function getLineNumberFromOffset(text, offset) {
+  if (!text || offset < 0) return 1;
+
+  let lineNumber = 1;
+  for (let i = 0; i < offset && i < text.length; i++) {
+    if (text[i] === '\n') {
+      lineNumber++;
+    }
+  }
+  return lineNumber;
+}
+
 // Main Data Collection Function
 export async function collect(pageUrl, deviceType, { skipCache, skipTlsCheck, blockRequests }) {
   // Try to get cached results first
@@ -576,9 +942,11 @@ export async function collect(pageUrl, deviceType, { skipCache, skipTlsCheck, bl
   let perfEntries = getCachedResults(pageUrl, deviceType, 'perf');
   let fullHtml = getCachedResults(pageUrl, deviceType, 'html');
   let jsApi = getCachedResults(pageUrl, deviceType, 'jsapi');
-  let coverageData = getCachedResults(pageUrl, deviceType, 'coverage');
+  let lcpCoverageData = getCachedResults(pageUrl, deviceType, 'coverage.lcp');
+  let pageCoverageData = getCachedResults(pageUrl, deviceType, 'coverage.page');
+  let coverageUsageAnalysis = getCachedResults(pageUrl, deviceType, 'coverage');
   
-  if (harFile && perfEntries && fullHtml && jsApi && coverageData && !skipCache) {
+  if (harFile && perfEntries && fullHtml && jsApi && lcpCoverageData && coverageUsageAnalysis && !skipCache) {
     return {
       har: harFile,
       harSummary: summarizeHAR(harFile, deviceType),
@@ -586,7 +954,9 @@ export async function collect(pageUrl, deviceType, { skipCache, skipTlsCheck, bl
       perfEntriesSummary: summarizePerformanceEntries(perfEntries, deviceType),
       fullHtml,
       jsApi,
-      coverageData,
+      lcpCoverageData,
+      pageCoverageData,
+      coverageUsageAnalysis,
       fromCache: true
     };
   }
@@ -598,7 +968,7 @@ export async function collect(pageUrl, deviceType, { skipCache, skipTlsCheck, bl
   // Setup request blocking if needed
   await setupRequestBlocking(page, blockRequests);
   
-  // Setup CDP session for Performance metrics
+  // Setup CDP session for Performance metrics and coverage
   const client = await page.target().createCDPSession();
   await client.send('Performance.enable');
 
@@ -623,24 +993,16 @@ export async function collect(pageUrl, deviceType, { skipCache, skipTlsCheck, bl
     console.error('Page did not idle after 120s. Force continuing.', err.message);
   }
   
-
   // Collect coverage data at LCP
-  await page.evaluate(() => {
-    return new Promise((resolve) => {
-      new PerformanceObserver((entryList) => {
-        const entries = entryList.getEntries();
-        if (entries.length > 0) {
-          resolve(entries[entries.length - 1]); // Get the last LCP entry
-        }
-      }).observe({ entryTypes: ['largest-contentful-paint'] });
-    });
-  }, { timeout: 30_000 });
+  await waitForLCP(page);
+  lcpCoverageData = await collectCodeCoverage(page);
 
-  // Collect coverage data at LCP
-  coverageData = await collectCodeCoverage(page);
+  await setupCodeCoverage(page);
 
   // Convert to Istanbul format and write report
-  puppeteerToIstanbul.write(coverageData, { storagePath: getFilePrefix(pageUrl, deviceType, 'nyc') });
+  puppeteerToIstanbul.write(lcpCoverageData, { storagePath: getFilePrefix(pageUrl, deviceType, 'nyc-lcp') });
+  // Clear the istanbul report cache so LCP data doesn't leak into the page coverage data
+  PTI.resetJSONPart();
   
   await page.waitForNetworkIdle({ concurrency: 0 });
   
@@ -671,14 +1033,25 @@ export async function collect(pageUrl, deviceType, { skipCache, skipTlsCheck, bl
   }
   cacheResults(pageUrl, deviceType, 'jsapi', jsApi);
 
+  pageCoverageData = await collectCodeCoverage(page);
+  pageCoverageData = mergeCoverage(lcpCoverageData, pageCoverageData);
+
+  // Convert to Istanbul format and write report
+  puppeteerToIstanbul.write(pageCoverageData, { storagePath: getFilePrefix(pageUrl, deviceType, 'nyc-page') });
+
   // Close browser and save results
   await browser.close();
   cacheResults(pageUrl, deviceType, 'har', harFile);
-  cacheResults(pageUrl, deviceType, 'coverage', coverageData);
+  cacheResults(pageUrl, deviceType, 'coverage.lcp', lcpCoverageData);
+  cacheResults(pageUrl, deviceType, 'coverage.page', pageCoverageData);
   
   // Generate HAR summary
   const harSummary = summarizeHAR(harFile, deviceType);
   cacheResults(pageUrl, deviceType, 'har', harSummary);
+
+  // Analyze coverage usage
+  coverageUsageAnalysis = analyzeCoverageUsage(lcpCoverageData, pageCoverageData);
+  cacheResults(pageUrl, deviceType, 'coverage', coverageUsageAnalysis);
 
   // Return collected data
   return { 
@@ -688,6 +1061,8 @@ export async function collect(pageUrl, deviceType, { skipCache, skipTlsCheck, bl
     perfEntriesSummary, 
     fullHtml, 
     jsApi,
-    coverageData
+    lcpCoverageData,
+    pageCoverageData,
+    coverageUsageAnalysis
   };
 }
