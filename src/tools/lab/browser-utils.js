@@ -76,9 +76,11 @@ export async function setupRequestBlocking(page, blockRequests) {
 export async function waitForLCP(page) {
   return page.evaluate(() => {
     return new Promise((resolve) => {
+      const lcpTimeout = window.setTimeout(() => resolve(null), 30_000);
       new PerformanceObserver((entryList) => {
         const entries = entryList.getEntries();
         if (entries.length > 0) {
+          window.clearTimeout(lcpTimeout);
           resolve(entries[entries.length - 1]); // Get the last LCP entry
         }
       }).observe({ entryTypes: ['largest-contentful-paint'] });
