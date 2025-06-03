@@ -1,5 +1,5 @@
 import psi from 'psi';
-import { cacheResults, getCachedResults } from '../utils.js';
+import { cacheResults, getCachedResults } from '../../utils.js';
 
 function cleanup(psiAudit) {
   // removing all base 64 encoded images from the json

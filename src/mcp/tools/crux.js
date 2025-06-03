@@ -1,4 +1,4 @@
-import { cacheResults, getCachedResults } from '../utils.js';
+import { cacheResults, getCachedResults } from '../../utils.js';
 
 // Helper function for consistent formatting and threshold checking
 function checkMetric(metricName, value, good, needsImprovement) {
