@@ -9,6 +9,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@adobe/rum-distiller": "github:adobe/rum-distiller",
     "@aws-crypto/sha256-js": "5.2.0",
     "@aws-sdk/credential-provider-node": "3.787.0",
     "@aws-sdk/types": "3.775.0",
@@ -25,7 +26,7 @@
     "langchain": "0.3.22",
     "node-html-parser": "7.0.1",
     "openai": "4.62.1",
-    "psi": "4.1.0",
+    "psi": "^3.1.0",
     "puppeteer": "24.6.1",
     "puppeteer-har": "1.1.2",
     "puppeteer-to-istanbul": "1.4.0",

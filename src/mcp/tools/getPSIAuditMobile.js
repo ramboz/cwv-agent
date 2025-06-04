@@ -1,4 +1,4 @@
-import { callMCP } from '../client.js';
+import { callMCP } from '../client.js'; // adjust path if different
 
 /**
  * Get the latest audit for a given site and audit type.
@@ -17,26 +17,26 @@ export async function getLatestAuditByTypeAndSite(siteId, auditType, extraHeader
 
   const result = await callMCP('resources/read', extraHeaders, { uri });
 
-  return result;
+  if (!result?.contents || result.contents.length === 0) {
+    throw new Error(`No site found for baseURL: ${baseURL}`);
+  }
+
+  const siteData = JSON.parse(result.contents[0].text);
+  return siteData;
 }
 
-/**
- * TESTING
- */
-async function main() {
+async function run(siteId, imsOrgId) {
   try {
-    const siteId = '***';
     const headers = { 
-        'x-gw-ims-org-id': '***@AdobeOrg',
+        'x-gw-ims-org-id': imsOrgId,
     };
 
-    const site = await getLatestAuditByTypeAndSite(siteId, "cwv", headers);
-    console.log('Site ID:', site.siteId);
-    console.log('Full Site Resource:', site);
+    return await getLatestAuditByTypeAndSite(siteId, "lhs-mobile", headers);
   } catch (err) {
-    console.error('Error fetching site ID:', err);
+    console.error('Error fetching mobile audit:', err);
     console.error(err.stack);
+    throw err; // rethrow to handle in main
   }
 }
 
-main();
+//run('****', '***');

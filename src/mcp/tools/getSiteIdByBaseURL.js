@@ -20,18 +20,13 @@ export async function getSiteIdByBaseURL(baseURL, extraHeaders = {}) {
   return siteData;
 }
 
-async function main() {
+export async function run(baseURL) {
   try {
-    const baseURL = 'https://petplace.com';
-    const headers = { 'x-api-key': process.env.MCP_API_KEY };
-
-    const site = await getSiteIdByBaseURL(baseURL, headers);
-    console.log('Site ID:', site.siteId);
-    console.log('Full Site Resource:', site);
+    return await getSiteIdByBaseURL(baseURL);
   } catch (err) {
     console.error('Error fetching site ID:', err);
     console.error(err.stack);
   }
 }
 
-main();
+//run("https://petplace.com");

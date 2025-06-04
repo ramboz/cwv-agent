@@ -31,9 +31,13 @@ export async function callMCP(method, extraHeaders = {}, params = {}) {
   });
 
   const text  = await res.text();        // read as text first
-  let   json;
-  try   { json = JSON.parse(text); }
-  catch { throw new Error(`Server did not return JSON:\n${text}`); }
+  let json;
+  try  { 
+    json = JSON.parse(text); 
+  }
+  catch { 
+    throw new Error(`Server did not return JSON:\n${text}`); 
+ }
 
   if (json.error) {
     throw new Error(`[MCP] ${json.error.message || 'Unknown MCP error'}`);
