@@ -93,7 +93,7 @@ export async function getStatistic(dataChunks, aggregation, statistic) {
     }
 }
 
-async function run(url, domainkey, startdate, enddate, aggregation, statistic) {
+export async function run(url, domainkey, startdate, enddate, aggregation, statistic) {
   try {
     const dataChunks = await getDataChunks(url, domainkey, startdate, enddate, aggregation, statistic);
     const stat = await getStatistic(dataChunks, aggregation, statistic);

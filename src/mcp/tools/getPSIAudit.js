@@ -8,9 +8,13 @@ import { callMCP } from '../client.js'; // adjust path if different
  * @param {object} [extraHeaders] - Optional additional headers (e.g., org ID, authorization).
  * @returns {Promise<object>} - The latest audit result.
  */
-export async function getLatestAuditByTypeAndSite(siteId, auditType, extraHeaders = {}) {
+export async function getLatestAuditByTypeAndSite(siteId, auditType, extraHeaders = {}, deviceType = 'desktop') {
   if (!siteId || !auditType) {
     throw new Error('Both siteId and auditType are required.');
+  }
+
+  if (deviceType !== 'desktop' && deviceType !== 'mobile') {
+    throw new Error('Invalid deviceType. Must be "desktop" or "mobile".');
   }
 
   const uri = `spacecat-data://audits/latest/${auditType}/${siteId}`;
@@ -25,18 +29,18 @@ export async function getLatestAuditByTypeAndSite(siteId, auditType, extraHeader
   return siteData;
 }
 
-async function run(siteId, imsOrgId) {
+export async function run(siteId, imsOrgId) {
   try {
     const headers = { 
         'x-gw-ims-org-id': imsOrgId,
     };
 
-    return await getLatestAuditByTypeAndSite(siteId, "lhs-mobile", headers);
+    return await getLatestAuditByTypeAndSite(siteId, `lhs-${deviceType}`, headers);
   } catch (err) {
-    console.error('Error fetching mobile audit:', err);
+    console.error('Error fetching desktop audit:', err);
     console.error(err.stack);
     throw err; // rethrow to handle in main
   }
 }
 
-//run('****', '***');
+//run('***', '***');
