@@ -85,18 +85,18 @@ export async function getStatistic(dataChunks, aggregation, statistic) {
         return d.totals[aggregation].min;
     } else if (statistic === 'sum') {
         return d.totals[aggregation].sum;
+    } 
+    else if (statistic === 'percentile.p75') {
+        return d.totals[aggregation].percentile(75);
     } else {
         throw new Error(`Unsupported statistic: ${statistic}`);
     }
 }
 
-async function run(url, domainkey, startdate, enddate) {
+async function run(url, domainkey, startdate, enddate, aggregation, statistic) {
   try {
-
-    const dataChunks = await getDataChunks(url, domainkey, startdate, enddate);
-    const aggregation = 'pageviews';
-    const statistic = 'mean';
-    const stat = await getStatistic(dataChunks, 'cls', 'mean');
+    const dataChunks = await getDataChunks(url, domainkey, startdate, enddate, aggregation, statistic);
+    const stat = await getStatistic(dataChunks, aggregation, statistic);
     console.log(`${aggregation} ${statistic}:`, stat);
   } catch (err) {
     console.error('Error fetching site ID:', err);
@@ -104,4 +104,4 @@ async function run(url, domainkey, startdate, enddate) {
   }
 }
 
-//run("www.hersheyland.com", '**', '2025/05/20', '2025/05/28');
+//run("***", '***', '2025/05/20', '2025/06/03', 'inp', 'percentile.p75');
