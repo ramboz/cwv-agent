@@ -90,10 +90,6 @@ export async function getStatistic(dataChunks, aggregation, statistic) {
     }
 }
 
-
-/**
- * TESTING
- */
 async function run(url, domainkey, startdate, enddate) {
   try {
 
@@ -108,4 +104,4 @@ async function run(url, domainkey, startdate, enddate) {
   }
 }
 
-run("www.hersheyland.com", '**', '2025/05/20', '2025/05/28');
+//run("www.hersheyland.com", '**', '2025/05/20', '2025/05/28');
