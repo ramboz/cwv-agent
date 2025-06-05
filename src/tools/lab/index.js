@@ -61,15 +61,23 @@ export async function collect(pageUrl, deviceType, { skipCache, blockRequests })
   }
 
   // Collect coverage data at LCP
-  await waitForLCP(page);
-  
+  try {
+    await waitForLCP(page);
+  } catch (err) {
+    console.error('LCP not found after 30s. Force continuing.', err.message);
+  }
+
   let lcpCoverageData = null;
   if (!coverageData || skipCache) {
     lcpCoverageData = await collectLcpCoverage(page, pageUrl, deviceType);
   }
 
   // Waiting for page to finish loading
-  await page.waitForNetworkIdle({ concurrency: 0, idleTime: 1_000 });
+  try {
+    await page.waitForNetworkIdle({ concurrency: 0, idleTime: 1_000 });
+  } catch (err) {
+    // Do nothing
+  }
 
   // Collect performance data
   if (!perfEntries || skipCache) {
