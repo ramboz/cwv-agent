@@ -340,7 +340,12 @@ function formatFileUsage(fileInfo, fileType) {
     return '';
   }
 
-  let output = `- \`${new URL(path).pathname}\`: ${stats.postLcpPercent}% post LCP / ${stats.unusedPercent}% unused`;
+  let output;
+  try {
+    output = `- \`${new URL(path).pathname}\`: ${stats.postLcpPercent}% post LCP / ${stats.unusedPercent}% unused`;
+  } catch (err) {
+    return '';
+  }
 
   if (stats.postLcp > stats.preLcp) {
     output += ` (consider code splitting to defer post-LCP code)`;
