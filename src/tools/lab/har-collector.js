@@ -19,33 +19,42 @@ export function summarizeHAR(harData, deviceType) {
 
   const entries = harData.log.entries;
   let report = '**Additional Bottlenecks from HAR Data:**\n\n';
-  let hasBottlenecks = false;
 
   // Check for different types of bottlenecks
-  hasBottlenecks = analyzeBottlenecks(entries, report, deviceType);
-
-  //No significant bottlenecks found
-  if (!hasBottlenecks) {
+  const bottleneckReports = analyzeBottlenecks(entries, deviceType);
+  
+  if (bottleneckReports.length > 0) {
+    report += bottleneckReports.join('\n');
+  } else {
     report += '* No significant bottlenecks found based on provided HAR data.\n';
   }
 
   return report;
 }
 
-function analyzeBottlenecks(entries, report, deviceType) {
-  let hasBottlenecks = false;
+function analyzeBottlenecks(entries, deviceType) {
+  const reports = [];
   
   // Add bottleneck analyses
-  hasBottlenecks = findLargeTransfers(entries, report) || hasBottlenecks;
-  hasBottlenecks = findLongBlockingTimes(entries, report) || hasBottlenecks;
-  hasBottlenecks = findLongTTFB(entries, report, deviceType) || hasBottlenecks;
-  hasBottlenecks = findHTTP1Resources(entries, report) || hasBottlenecks;
-  hasBottlenecks = findRedirects(entries, report) || hasBottlenecks;
+  const largeTransfers = findLargeTransfers(entries);
+  if (largeTransfers) reports.push(largeTransfers);
   
-  return hasBottlenecks;
+  const longBlocking = findLongBlockingTimes(entries);
+  if (longBlocking) reports.push(longBlocking);
+  
+  const longTTFB = findLongTTFB(entries, deviceType);
+  if (longTTFB) reports.push(longTTFB);
+  
+  const http1Resources = findHTTP1Resources(entries);
+  if (http1Resources) reports.push(http1Resources);
+  
+  const redirects = findRedirects(entries);
+  if (redirects) reports.push(redirects);
+  
+  return reports;
 }
 
-function findLargeTransfers(entries, report) {
+function findLargeTransfers(entries) {
   // 1. Large Transfer Sizes (Top 5, > 100KB)
   const largeFiles = entries
     .filter(entry => entry.response && entry.response._transferSize > 100 * 1024) // > 100KB
@@ -53,23 +62,23 @@ function findLargeTransfers(entries, report) {
     .slice(0, 5); // Limit to top 5
 
   if (largeFiles.length > 0) {
-    report += '* **Large File Transfers:**\n';
+    let report = '* **Large File Transfers:**\n';
     largeFiles.forEach(entry => {
       report += `    * ${entry.request.url} (${Math.round(entry.response._transferSize / 1024)} KB)\n`;
     });
-    return true;
+    return report;
   }
-  return false;
+  return null;
 }
 
-function findLongBlockingTimes(entries, report) {
+function findLongBlockingTimes(entries) {
   // 2. Long Blocking Times (> 10ms)
   const longBlocking = entries
     .filter(entry => entry.timings && entry.timings.blocked > 10)
     .sort((a, b) => b.timings.blocked - a.timings.blocked);
 
   if (longBlocking.length > 0) {
-    report += '* **Significant Blocking Times (DNS, Connect, SSL):**\n';
+    let report = '* **Significant Blocking Times (DNS, Connect, SSL):**\n';
     longBlocking.forEach(entry => {
       report += `    * ${entry.request.url}:  Blocked: ${Math.round(entry.timings.blocked)}ms`;
       if (entry.timings.dns > 0) {
@@ -83,12 +92,12 @@ function findLongBlockingTimes(entries, report) {
       }
       report += '\n';
     });
-    return true;
+    return report;
   }
-  return false;
+  return null;
 }
 
-function findLongTTFB(entries, report, deviceType) {
+function findLongTTFB(entries, deviceType) {
   // 3. Long Wait Times (> 500ms desktop / >1s mobile) - TTFB
   const ttfbThreshold = deviceType === 'desktop' ? 500 : 1000;
   const longTTFB = entries
@@ -96,32 +105,32 @@ function findLongTTFB(entries, report, deviceType) {
     .sort((a, b) => b.timings.wait - a.timings.wait);
 
   if (longTTFB.length > 0) {
-    report += '* **High Time to First Byte (TTFB) - Server Response Times:**\n';
+    let report = '* **High Time to First Byte (TTFB) - Server Response Times:**\n';
     longTTFB.forEach(entry => {
       report += `    * ${entry.request.url}: ${Math.round(entry.timings.wait)}ms\n`;
     });
-    return true;
+    return report;
   }
-  return false;
+  return null;
 }
 
-function findHTTP1Resources(entries, report) {
+function findHTTP1Resources(entries) {
   // 4. HTTP/1.1 Connections
   const http1Resources = entries.filter(entry => 
     entry.response && entry.response.httpVersion.toLowerCase().startsWith('http/1.1')
   );
 
   if (http1Resources.length > 0) {
-    report += '* **Resources using HTTP/1.1 (not HTTP/2 or HTTP/3):**\n';
+    let report = '* **Resources using HTTP/1.1 (not HTTP/2 or HTTP/3):**\n';
     http1Resources.forEach(entry => {
       report += `   * ${entry.request.url}\n`;
     });
-    return true;
+    return report;
   }
-  return false;
+  return null;
 }
 
-function findRedirects(entries, report) {
+function findRedirects(entries) {
   // 5. Redirects
   const redirectStatusCodes = [301, 302, 307, 308];
   const redirects = entries.filter(entry => 
@@ -129,13 +138,13 @@ function findRedirects(entries, report) {
   );
   
   if(redirects.length > 0) {
-    report += `* **Redirects:**\n`;
+    let report = `* **Redirects:**\n`;
     redirects.forEach(entry => {
       report += `    * ${entry.request.url} -> ${entry.response.redirectURL} (Status: ${entry.response.status})\n`;
     });
-    return true;
+    return report;
   }
-  return false;
+  return null;
 }
 
 // HAR Recording Functions
