@@ -211,6 +211,13 @@ export async function getNormalizedUrl(urlString, deviceType) {
   const headers = getRequestHeaders(deviceType);
   let resp;
   
+  let search = '';
+  try {
+    search = new URL(urlString).search;
+  } catch (err) {
+    // Do nothing
+  }
+
   // Try a HEAD request first
   try {
     resp = await fetch(urlString, { headers, method: 'HEAD' });
@@ -232,7 +239,7 @@ export async function getNormalizedUrl(urlString, deviceType) {
         });
         
         if (resp.ok) {
-          return { url: ensureHttps(resp.url), skipTlsCheck: true };
+          return { url: ensureHttps(resp.url) + search, skipTlsCheck: true };
         }
       } catch (tlsErr) {
         console.warn('TLS bypass request failed:', tlsErr.message);
