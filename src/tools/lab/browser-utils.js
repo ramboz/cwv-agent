@@ -83,5 +83,5 @@ export async function waitForLCP(page) {
         }
       }).observe({ entryTypes: ['largest-contentful-paint'] });
     });
-  }, { timeout: 30_000 });
+  }, { timeout: 600_000 });
 }

@@ -53,7 +53,7 @@ export async function collectPerformanceEntries(page) {
     }));
 
     return JSON.stringify(entries, null, 2);
-  }, { timeout: 30_000 }));
+  }, { timeout: 600_000 }));
 }
 
 // Performance Entry Analysis Functions

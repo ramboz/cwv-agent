@@ -46,5 +46,5 @@ export async function collectJSApiData(page) {
         .reduce((set, val) => { set[val[0]] = []; val.splice(1).forEach((v) => set[val[0]].push(v)); return set; }, {}),
       cspViolations: window.CSP_VIOLATIONS || [],
     };
-  }, { timeout: 30_000 });
+  }, { timeout: 600_000 });
 } 
