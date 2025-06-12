@@ -6,6 +6,14 @@ import cl100k_base from 'js-tiktoken/ranks/cl100k_base';
 const OUTPUT_DIR = './.cache';
 let encoder;
 
+export async function loadBundles(url, date, domainkey, ckpt) {
+  const endpoint = `https://bundles.aem.page/bundles/${url}/${date}?domainkey=${domainkey}`;
+  const resp = await fetch(endpoint);
+  const data = await resp.json();
+
+  return data;
+}
+
 export function getFilePrefix(urlString, deviceType, type) {
   return `${OUTPUT_DIR}/${urlString.replace('https://', '').replace(/[^A-Za-z0-9-]/g, '-').replace(/\//g, '--').replace(/(^-+|-+$)/, '')}.${deviceType}.${type}`
 }
