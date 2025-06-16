@@ -31,11 +31,10 @@ export function detectAEMVersion(headers, htmlSource) {
   const csPatterns = [
     // Core Components patterns
     /<div class="[^"]*cmp-[^"]*"[^>]*>/i,
-    // Modern clientlib paths
-    /\/etc\.clientlibs\//i,
+    // CS-specific clientlib pattern with lc- prefix/suffix (more specific than general etc.clientlibs)
+    /\/etc\.clientlibs\/[^"']+\.lc-[a-f0-9]+-lc\.min\.(js|css)/i,
+    // Modern libs clientlib paths
     /\/libs\.clientlibs\//i,
-    // CS-specific clientlib pattern with lc- prefix/suffix
-    /\/etc\.clientlibs\/[^"']+\.lc-[a-f0-9]+-lc\.min\.js/i,
     // Core components comments or data attributes
     /data-cmp-/i,
     /data-sly-/i,
@@ -52,8 +51,8 @@ export function detectAEMVersion(headers, htmlSource) {
     // Legacy clientlib paths
     /\/etc\/clientlibs\//i,
     /\/etc\/designs\//i,
-    // AMS-specific clientlib pattern with fingerprinted hashes
-    /\/etc\.clientlibs\/[^"']+\.min\.[a-f0-9]{32}\.js/i,
+    // AMS-specific clientlib pattern with fingerprinted hashes (both JS and CSS)
+    /\/etc\.clientlibs\/[^"']+\.min\.[a-f0-9]{32}\.(js|css)/i,
     // Classic UI patterns
     /foundation-/i,
     /cq:template/i,
@@ -110,8 +109,9 @@ export function detectAEMVersion(headers, htmlSource) {
     edsMatches += 3;
   }
   
-  if (normalizedHtml.includes('/etc.clientlibs/') || normalizedHtml.match(/class="[^"]*cmp-[^"]*"/)) {
-    csMatches += 2;
+  // Only give CS weight for core components, but reduced since they can exist in AMS too
+  if (normalizedHtml.match(/class="[^"]*cmp-[^"]*"/)) {
+    csMatches += 1; // Reduced weight since core components can exist in both AMS and CS
   }
   
   if (normalizedHtml.includes('/etc/designs/') || normalizedHtml.includes('foundation-')) {
@@ -119,12 +119,12 @@ export function detectAEMVersion(headers, htmlSource) {
   }
   
   // Give extra weight to AMS clientlib format pattern as it's very distinctive
-  if (/\/etc\.clientlibs\/[^"']+\.min\.[a-f0-9]{32}\.js/i.test(normalizedHtml)) {
-    amsMatches += 3;
+  if (/\/etc\.clientlibs\/[^"']+\.min\.[a-f0-9]{32}\.(js|css)/i.test(normalizedHtml)) {
+    amsMatches += 5; // Increased weight since this is a very reliable AMS indicator
   }
   
   // Give extra weight to CS clientlib format pattern as it's very distinctive
-  if (/\/etc\.clientlibs\/[^"']+\.lc-[a-f0-9]+-lc\.min\.js/i.test(normalizedHtml)) {
+  if (/\/etc\.clientlibs\/[^"']+\.lc-[a-f0-9]+-lc\.min\.(js|css)/i.test(normalizedHtml)) {
     csMatches += 3;
   }
   
@@ -150,7 +150,7 @@ export function detectAEMVersion(headers, htmlSource) {
   if (maxMatches < MIN_THRESHOLD) {
     return null;
   }
-  
+
   if (edsMatches === maxMatches && edsMatches > csMatches && edsMatches > amsMatches && edsMatches > aemHeadlessMatches) {
     return 'eds';
   } else if (csMatches === maxMatches && csMatches > edsMatches && csMatches > amsMatches && csMatches > aemHeadlessMatches) {
