@@ -11,6 +11,7 @@ export const MAX_TOKENS = {
   // OpenAI models
   'gpt-4.1': { input: 1_048_576, output: 32_768 },
   'gpt-4o': { input: 128_000, output: 4_096 },
+  'gpt-o3': { input: 1_048_576, output: 32_768 },
   
   // Claude models via Amazon Bedrock
   'claude-3-7-sonnet-20250219': { input: 200_000, output: 128_000 },
