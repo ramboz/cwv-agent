@@ -9,7 +9,7 @@ dotenv.config();
 async function main() {
   // Parse command line arguments
   const argv = parseArguments();
-  
+
   // Extract parameters
   const action = argv.action;
   const deviceType = argv.device;
@@ -17,10 +17,11 @@ async function main() {
   const outputSuffix = argv.outputSuffix;
   const blockRequests = argv.blockRequests;
   const model = argv.model;
-  
+  const agentMode = argv.agentMode;
+
   // Load URLs
   const urls = loadUrls(argv);
-  
+
   console.log(`Running ${action} for ${urls.length} URL(s) on ${deviceType}...`);
   if (skipCache) {
     console.log('Cache is disabled. Forcing new data collection.');
@@ -28,11 +29,11 @@ async function main() {
   if (model) {
     console.log(`Using model: ${model}`);
   }
-  
+
   // Process each URL
   for (const url of urls) {
-    await processUrl(url, action, deviceType, skipCache, outputSuffix, blockRequests, model);
-    
+    await processUrl(url, action, deviceType, skipCache, outputSuffix, blockRequests, model, agentMode);
+
     // Small delay between processing URLs
     if (urls.length > 1) {
       await new Promise(resolve => setTimeout(resolve, 60_000)); // 1min

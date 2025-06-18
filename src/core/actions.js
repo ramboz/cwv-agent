@@ -10,9 +10,9 @@ export async function handleAgentAction(pageUrl, deviceType) {
   return { error: "Agent action not implemented yet" };
 }
 
-export async function processUrl(pageUrl, action, deviceType, skipCache, outputSuffix, blockRequests, model) {
+export async function processUrl(pageUrl, action, deviceType, skipCache, outputSuffix, blockRequests, model, agentMode) {
   console.group(`Processing: ${pageUrl}`);
-  
+
   try {
     const normalizedUrl = await getNormalizedUrl(pageUrl, deviceType);
     if (!normalizedUrl?.url) {
@@ -21,20 +21,21 @@ export async function processUrl(pageUrl, action, deviceType, skipCache, outputS
     if (normalizedUrl.url !== pageUrl) {
       console.log('Normalized URL:', normalizedUrl.url, normalizedUrl.skipTlsCheck ? '(invalid TLS check)' : '');
     }
-    
+
     let result;
-    
+
     switch (action) {
       case 'prompt':
-        result = await runPrompt(normalizedUrl.url, deviceType, { 
-          skipCache, 
-          skipTlsCheck: normalizedUrl.skipTlsCheck, 
-          outputSuffix, 
+        result = await runPrompt(normalizedUrl.url, deviceType, {
+          skipCache,
+          skipTlsCheck: normalizedUrl.skipTlsCheck,
+          outputSuffix,
           blockRequests,
-          model
+          model,
+          agentMode
         });
         break;
-        
+
       case 'collect':
         result = await collecetAction(normalizedUrl.url, deviceType, { skipCache, skipTlsCheck: normalizedUrl.skipTlsCheck, outputSuffix, blockRequests });
         console.log('Done. Check the `.cache` folder');
@@ -43,7 +44,7 @@ export async function processUrl(pageUrl, action, deviceType, skipCache, outputS
       case 'rules':
         result = await rulesAction(normalizedUrl.url, deviceType, { skipCache, skipTlsCheck: normalizedUrl.skipTlsCheck, outputSuffix, blockRequests });
         break;
-        
+
        case 'agent':
         result = await handleAgentAction(normalizedUrl.url, deviceType);
         console.log(result.messages?.at(-1)?.content || result.content || result);
@@ -51,7 +52,7 @@ export async function processUrl(pageUrl, action, deviceType, skipCache, outputS
           console.log(result.usage_metadata);
         }
         break;
-        
+
       default:
         throw new Error(`Unknown action: ${action}`);
     }
@@ -63,4 +64,4 @@ export async function processUrl(pageUrl, action, deviceType, skipCache, outputS
     console.groupEnd();
     return { error: error.message };
   }
-} 
+}
