@@ -39,6 +39,12 @@ export function parseArguments() {
       type: 'string',
       default: DEFAULT_MODEL
     })
+    .option('agent-mode', { // single agent mode or multi-agent mode
+      alias: 'g',
+      describe: 'Run in single agent mode or multi-agent mode',
+      type: 'string',
+      default: 'multi',
+    })
     .option('output-suffix', {
       alias: 'o',
       describe: 'Suffix for output recommendations file',
@@ -63,4 +69,4 @@ export function parseArguments() {
     })
     .help()
     .argv;
-} 
+}

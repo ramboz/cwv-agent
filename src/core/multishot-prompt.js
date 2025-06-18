@@ -26,6 +26,7 @@ import { applyRules } from '../tools/rules.js';
 import { estimateTokenSize, cacheResults, getCachedResults, getCachePath } from '../utils.js';
 import { LLMFactory } from '../models/llm-factory.js';
 import { DEFAULT_MODEL, getTokenLimits } from '../models/config.js';
+import {runMultiAgents} from "./multi-agents.js";
 
 /**
  * Extract structured JSON from the AI response and validate it
@@ -191,10 +192,44 @@ async function invokeLLM(llm, pageData, model, useSummarized = false) {
   }
 }
 
+/**
+ * Invokes the LLM with a set of messages using multiple agents
+ * @param pageData
+ * @param model
+ * @param llm
+ * @returns {Promise<*>}
+ */
+async function invokeMultiAgentLLM(pageData, model, llm) {
+  const {pageUrl, deviceType} = pageData;
+  const tokenLimits = getTokenLimits(model);
+
+  try {
+    // Direct invocation
+    const result = await runMultiAgents(pageData, tokenLimits, llm);
+    cacheResults(pageUrl, deviceType, 'report', result, 'multi_agent', model);
+    const resultPath = cacheResults(pageUrl, deviceType, 'report', result, 'multi_agent', model);
+    console.log('✅ CWV report generated at:', resultPath);
+    return result;
+
+  } catch (error) {
+    console.error('❌ Failed to generate report for', pageData.pageUrl);
+    if (error.code === 400) {
+      console.log('Context window limit hit, even with summarized prompt.', error);
+    } else if (error.code === 403) {
+      console.log('Invalid API key.', error.message);
+    } else if (error.status === 429) {
+      console.log('Rate limit hit. Try again in 5 mins...', error);
+    } else {
+      console.error(error);
+    }
+    return error;
+  }
+}
+
 export default async function runPrompt(pageUrl, deviceType, options = {}) {
   // Get model from options or use default
   const model = options.model || DEFAULT_MODEL;
-  
+
   // Check cache first if not skipping
   let result;
   if (!options.skipCache) {
@@ -240,10 +275,14 @@ export default async function runPrompt(pageUrl, deviceType, options = {}) {
   // Organize all data into one object for easier passing
   const pageData = {
     pageUrl, deviceType, cms, rulesSummary, resources,
-    crux, psi, perfEntries, har, coverageData, 
+    crux, psi, perfEntries, har, coverageData,
     cruxSummary, psiSummary, perfEntriesSummary, harSummary, coverageDataSummary,
   };
 
   // Invoke LLM and handle retries automatically
-  return invokeLLM(llm, pageData, model, false);
+  if(options.agentMode === 'single') {
+    return invokeLLM(llm, pageData, model, false);
+  } else {
+    return invokeMultiAgentLLM(pageData, model, llm);
+  }
 }
