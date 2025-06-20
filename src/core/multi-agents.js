@@ -3,7 +3,7 @@ import {ChatPromptTemplate} from "@langchain/core/prompts";
 import {DynamicTool} from "@langchain/core/tools";
 import {RunnableSequence} from "@langchain/core/runnables";
 import {StringOutputParser} from "@langchain/core/output_parsers";
-
+import {cacheResults} from '../utils.js';
 
 import {
     actionPrompt, codeStep, coverageStep, coverageSummaryStep,
@@ -184,6 +184,8 @@ export async function runMultiAgents(pageData, tokenLimits, llm) {
         }
         return agent;
     });
+
+    cacheResults(pageData.pageUrl, pageData.deviceType, 'prompt', agentsConfig.map(a => a.systemPrompt).join('\n') + '\n' + agentsConfig.map(a => a.humanPrompt).join('\n' + '-'.repeat(64) + '\n'));
 
     const system = new MultiAgentSystem({
         llm,
