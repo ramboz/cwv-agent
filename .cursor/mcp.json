@@ -1,0 +1,22 @@
+{
+  "mcpServers": {
+    "aem_sites_optimizer": {
+      "command": "npx",
+      "args": [
+        "mcp-remote-with-okta",
+        "https://spacecat.experiencecloud.live/api/v1/mcp"
+      ],
+      "env": {
+        "ADOBE_SCOPE": "openid,AdobeID,additional_info.projectedProductContext,additional_info.roles,read_organizations",
+        "ADOBE_CLIENT_ID": "pss-user"
+      }
+    },
+    "mystique": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "https://mnm.adobe.io/mcp/"
+      ]
+    }
+  }
+}
