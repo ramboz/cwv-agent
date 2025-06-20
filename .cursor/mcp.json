@@ -17,6 +17,16 @@
         "mcp-remote",
         "https://mnm.adobe.io/mcp/"
       ]
+    },
+    "cwv-suggestions": {
+      "command": "node",
+      "args": ["./cwv-suggestion-reviewer/mcp-server.js"],
+      "cwd": "/Users/ramboz/Projects/spacecat/cwv-agent",
+      "env": {
+        "NODE_ENV": "development",
+        "ADOBE_CLIENT_ID": "pss-user",
+        "ADOBE_SCOPE": "openid,AdobeID,additional_info.projectedProductContext,additional_info.roles,read_organizations"
+      }
     }
   }
 }
