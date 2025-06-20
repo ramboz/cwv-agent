@@ -132,7 +132,9 @@ Do not provide recommendations for:
 
 If any metric already meets Google's "good" thresholds, explicitly state this and skip all recommendations for that metric.
 
-Present your findings as:
+**CRITICAL REQUIREMENT**: You MUST provide your findings in EXACTLY TWO formats:
+
+### 1. MARKDOWN REPORT (for human review):
 1. Executive summary with the url that was tested, key metrics and impact estimates
 2. Prioritized recommendations table (only for metrics that fail thresholds) with:
   - Impact rating (High/Medium/Low)
@@ -147,6 +149,48 @@ Present your findings as:
   - expected impact on metrics
   - order the suggestions from High impact / Low effort to Low impact / High effort
 4. Implementation roadmap highlighting quick wins vs. strategic improvements
+
+### 2. STRUCTURED JSON (for automation) - **MANDATORY**:
+**IMMEDIATELY AFTER** the markdown report, you MUST include this exact section:
+
+---
+
+## STRUCTURED DATA FOR AUTOMATION
+
+\`\`\`json
+{
+  "url": "string - tested URL",
+  "deviceType": "string - mobile or desktop",
+  "timestamp": "string - ISO timestamp of analysis",
+  "summary": {
+    "lcp": { "current": "string", "target": "2.5s", "status": "good|needs-improvement|poor" },
+    "cls": { "current": "string", "target": "0.1", "status": "good|needs-improvement|poor" },
+    "inp": { "current": "string", "target": "200ms", "status": "good|needs-improvement|poor" }
+  },
+  "suggestions": [
+    {
+      "id": "number - sequential ID starting from 1",
+      "title": "string - short, actionable title",
+      "description": "string - business-friendly description of the issue",
+      "metric": "string - primary metric affected (LCP, CLS, INP)",
+      "priority": "string - High, Medium, or Low",
+      "effort": "string - Easy, Medium, or Hard", 
+      "impact": "string - expected improvement range",
+      "implementation": "string - technical implementation details",
+      "codeExample": "string - code snippet or example (optional)",
+      "category": "string - performance category (images, css, javascript, fonts, third-party, etc.)"
+    }
+  ]
+}
+\`\`\`
+
+**CRITICAL INSTRUCTIONS for JSON extraction:**
+- Extract individual numbered recommendations from Section 3 "Detailed Technical Recommendations" 
+- Each "#### X. Title" item becomes one suggestion object
+- Combine the issue description + recommendation into the "description" field
+- Put technical details and code examples in "implementation" and "codeExample" fields
+- Ensure the JSON is valid and properly escaped
+- Include ALL actionable recommendations, not just the table items
 
 Only provide actionable recommendations that will meaningfully improve user experience and Core Web Vitals scores.
 
