@@ -18,14 +18,18 @@
         "https://mnm.adobe.io/mcp/"
       ]
     },
-    "cwv-suggestions": {
+    "cwv-reviewer": {
       "command": "node",
-      "args": ["./cwv-suggestion-reviewer/mcp-server.js"],
-      "cwd": "./",
+      "args": [
+        "./index.js",
+        "--action",
+        "mcp-reviewer"
+      ],
+      "cwd": ".",
       "env": {
-        "NODE_ENV": "development",
+        "ADOBE_SCOPE": "openid,AdobeID,additional_info.projectedProductContext,additional_info.roles,read_organizations",
         "ADOBE_CLIENT_ID": "pss-user",
-        "ADOBE_SCOPE": "openid,AdobeID,additional_info.projectedProductContext,additional_info.roles,read_organizations"
+        "ADOBE_DEBUG": "true"
       }
     }
   }

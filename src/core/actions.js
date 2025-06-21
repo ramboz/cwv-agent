@@ -2,6 +2,7 @@ import collecetAction from './collect.js';
 import rulesAction from './rules.js';
 // import runAgent from './agent.js';
 import runPrompt from './multishot-prompt.js';
+import { startMCPReviewer } from './mcp-reviewer.js';
 import { getNormalizedUrl } from '../utils.js';
 
 export async function handleAgentAction(pageUrl, deviceType) {
@@ -11,6 +12,13 @@ export async function handleAgentAction(pageUrl, deviceType) {
 }
 
 export async function processUrl(pageUrl, action, deviceType, skipCache, outputSuffix, blockRequests, model) {
+  // Handle MCP reviewer action separately (doesn't need URL processing)
+  if (action === 'mcp-reviewer') {
+    // Note: No console output for MCP mode - it interferes with JSON-RPC protocol
+    return await startMCPReviewer();
+    // This should never return since startMCPReviewer() runs indefinitely
+  }
+  
   console.group(`Processing: ${pageUrl}`);
   
   try {
