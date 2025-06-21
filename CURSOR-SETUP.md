@@ -25,27 +25,20 @@ The MCP server configuration is already set up in the repository. Verify the con
   "mcpServers": {
     "cwv-reviewer": {
       "command": "node",
-      "args": ["index.js", "--action", "mcp-reviewer"],
-      "cwd": "./"
-    }
-  }
-}
-```
-
-**Alternative Configuration** (`cwv-suggestion-reviewer/cursor-mcp-config.json`):
-```json
-{
-  "mcpServers": {
-    "cwv-reviewer": {
-      "command": "node",
-      "args": ["./cwv-suggestion-reviewer/mcp-server.js"],
-      "cwd": "./",
+      "args": [
+        "./index.js",
+        "--action",
+        "mcp-reviewer"
+      ],
+      "cwd": ".",
       "env": {
-        "NODE_ENV": "development"
+        "ADOBE_SCOPE": "openid,AdobeID,additional_info.projectedProductContext,additional_info.roles,read_organizations",
+        "ADOBE_CLIENT_ID": "pss-user",
+        "ADOBE_DEBUG": "true"
       }
     }
   }
-}
+} 
 ```
 
 ### 2. Cursor IDE Configuration
