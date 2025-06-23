@@ -35,7 +35,7 @@ jobs:
           node index.js --action prompt --url ${{ steps.build_url.outputs.PREVIEW_URL }} --device desktop --model gpt-4o
 
       - name: Upload All CWV Summary Reports
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: cwv-summaries
           path: .cache/*.report.gpt4o.summary.md
