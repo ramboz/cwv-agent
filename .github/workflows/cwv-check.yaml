@@ -1,0 +1,41 @@
+name: CWV PR Check
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  run-cwv-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install CWV Agent
+        run: npm install --no-save git+https://github.com/ramboz/cwv-agent.git
+
+      - name: Build Preview URL
+        id: build_url
+        run: |
+          BRANCH=${{ github.head_ref }}
+          REPO=${{ github.event.repository.name }}
+          OWNER=${{ github.event.repository.owner.name }}
+          PREVIEW_URL="https://${BRANCH}--${REPO}--${OWNER}.aem.page"
+          echo "PREVIEW_URL=$PREVIEW_URL" >> $GITHUB_OUTPUT
+
+      - name: Run CWV Agent
+        run: |
+          node index.js --action prompt --url ${{ steps.build_url.outputs.PREVIEW_URL }} --device mobile --model gpt-4o
+          node index.js --action prompt --url ${{ steps.build_url.outputs.PREVIEW_URL }} --device desktop --model gpt-4o
+
+      - name: Upload All CWV Summary Reports
+        uses: actions/upload-artifact@v3
+        with:
+          name: cwv-summaries
+          path: .cache/*.report.gpt4o.summary.md
