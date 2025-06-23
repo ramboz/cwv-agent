@@ -31,8 +31,8 @@ jobs:
 
       - name: Run CWV Agent
         run: |
-          node index.js --action prompt --url ${{ steps.build_url.outputs.PREVIEW_URL }} --device mobile --model gpt-4o
-          node index.js --action prompt --url ${{ steps.build_url.outputs.PREVIEW_URL }} --device desktop --model gpt-4o
+          node node_modules/cwv-agent/index.js --action prompt --url ${{ steps.build_url.outputs.PREVIEW_URL }} --device mobile --model gpt-4o
+          node node_modules/cwv-agent/index.js --action prompt --url ${{ steps.build_url.outputs.PREVIEW_URL }} --device desktop --model gpt-4o
 
       - name: Upload All CWV Summary Reports
         uses: actions/upload-artifact@v4
