@@ -39,3 +39,9 @@ jobs:
         with:
           name: cwv-summaries
           path: .cache/*.report.gpt4o.summary.md
+
+      - name: Print project file tree
+        run: |
+          sudo apt-get update && sudo apt-get install -y tree
+          echo "📁 Project structure:"
+          tree -L 3 -a
