@@ -454,7 +454,7 @@ class CWVSuggestionManager {
       // Add path if present (convert slashes to dashes, remove leading slash)
       let pathPart = '';
       if (urlObj.pathname && urlObj.pathname !== '/') {
-        pathPart = urlObj.pathname.replace(/^\//, '').replace(/\//g, '-');
+        pathPart = urlObj.pathname.replace(/^\//, '').replace(/\//g, '-').replace(/\./g, '-');
         if (pathPart) {
           pathPart = '-' + pathPart;
         }
