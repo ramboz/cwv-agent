@@ -4,3 +4,4 @@ credentials*.json
 node_modules
 .vscode
 coverage
+.DS_Store

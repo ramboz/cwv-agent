@@ -20,6 +20,15 @@ async function main() {
   const agentMode = argv.agentMode;
 
   // Load URLs
+
+  // Handle MCP reviewer action separately
+  if (action === 'mcp-reviewer') {
+    // Note: No console output for MCP mode - it interferes with JSON-RPC protocol
+    await processUrl(null, action, deviceType, skipCache, outputSuffix, blockRequests, model);
+    return;
+  }
+
+  // Load URLs for other actions
   const urls = loadUrls(argv);
 
   console.log(`Running ${action} for ${urls.length} URL(s) on ${deviceType}...`);
@@ -43,6 +52,10 @@ async function main() {
 
 // Run the main function
 main().catch(error => {
+  // Only log to stderr (not stdout) and only exit for non-MCP actions
   console.error('Fatal error:', error);
-  process.exit(1);
+  // Don't exit if we're running MCP server (it should handle its own errors)
+  if (!process.argv.includes('mcp-reviewer')) {
+    process.exit(1);
+  }
 });

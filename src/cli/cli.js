@@ -9,7 +9,7 @@ export function parseArguments() {
       describe: 'Action to perform',
       type: 'string',
       default: 'collect',
-      choices: ['collect', 'prompt', 'merge', 'agent', 'rules']
+      choices: ['collect', 'prompt', 'merge', 'agent', 'rules', 'mcp-reviewer']
     })
     .option('url', {
       alias: 'u',
@@ -58,6 +58,10 @@ export function parseArguments() {
       default: ''
     })
     .check((argv) => {
+      if (argv.action === 'mcp-reviewer') {
+        // MCP reviewer doesn't need URL parameters
+        return true;
+      }
       if (!argv.url && !argv.urls) {
         throw new Error('Either --url or --urls must be provided');
       }
