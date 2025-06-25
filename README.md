@@ -73,6 +73,7 @@ Options:
   --device, -d     Device type [mobile|desktop] (default: mobile)
   --skip-cache, -s Skip cached data and force new collection
   --model, -m      LLM model to use (default: gemini-2.5-pro-preview-05-06)
+  --agent-mode, -g Agent mode [single|multi] (default: single)
   --output-suffix  Suffix for output files
   --block-requests Block specific requests (comma-separated)
   --help           Show help

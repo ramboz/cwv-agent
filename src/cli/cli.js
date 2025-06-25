@@ -43,7 +43,7 @@ export function parseArguments() {
       alias: 'g',
       describe: 'Run in single agent mode or multi-agent mode',
       type: 'string',
-      default: 'multi',
+      default: 'single',
     })
     .option('output-suffix', {
       alias: 'o',
