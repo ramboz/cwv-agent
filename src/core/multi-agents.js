@@ -168,6 +168,12 @@ const generateAgentConfig = (isSummary, pageData, cms) => {
     }));
 };
 
+function getBlueText(text) {
+    const blue = '\x1b[34m';
+    const reset = '\x1b[0m';
+    return blue + text + reset;
+}
+
 // -------------------- Main Runner --------------------
 export async function runMultiAgents(pageData, tokenLimits, llm) {
     let agentsConfig = generateAgentConfig(false, pageData, pageData.cms);
@@ -177,10 +183,12 @@ export async function runMultiAgents(pageData, tokenLimits, llm) {
     agentsConfig = agentsConfig.map((agent, i) => {
         const tokenLength = countTokens(agent.systemPrompt) + countTokens(agent.humanPrompt);
         if (!isPromptValid(tokenLength, tokenLimits)) {
-            console.warn(`${agent.name} prompt is too long. Using summarized prompt...`);
+            // Count tokens for the summary prompt
+            const summaryTokenLength = countTokens(summaryConfig[i].systemPrompt) + countTokens(summaryConfig[i].humanPrompt);
+            console.log(`${agent.name} prompt is too long. Estimated token size ~ ${getBlueText(tokenLength)}. Using summarized prompt. Estimated token size ~ ${getBlueText(summaryTokenLength)}.`);
             return {...agent, humanPrompt: summaryConfig[i].humanPrompt};
         } else {
-            console.log(`${agent.name} prompt is valid.`);
+            console.log(`${agent.name} prompt is valid. Estimated token size ~ ${getBlueText(tokenLength)}.`);
         }
         return agent;
     });
