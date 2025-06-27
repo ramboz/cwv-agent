@@ -162,7 +162,9 @@ export function summarize(psiData) {
   return report;
 }
 
-export async function collect(pageUrl, deviceType, { skipCache }) {
+export async function collect(pageUrl, deviceType, options = {}) {
+  const { skipCache = false } = options;
+
   if (!skipCache) {
     const cache = getCachedResults(pageUrl, deviceType, 'psi');
     if (cache) {
@@ -172,7 +174,7 @@ export async function collect(pageUrl, deviceType, { skipCache }) {
 
   const psiAudit = cleanup(await psi(pageUrl, {
     key: process.env.GOOGLE_PAGESPEED_INSIGHTS_API_KEY,
-    strategy: deviceType
+    strategy: deviceType,
   }));
 
   cacheResults(pageUrl, deviceType, 'psi', psiAudit);
