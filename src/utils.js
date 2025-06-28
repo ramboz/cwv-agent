@@ -1,10 +1,60 @@
 import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { Agent } from 'undici';
 import { Tiktoken } from 'js-tiktoken/lite';
 import cl100k_base from 'js-tiktoken/ranks/cl100k_base';
+import { createHash } from 'crypto';
 
-const OUTPUT_DIR = './.cache';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 let encoder;
+
+/**
+ * Finds the project root by searching for a package.json file.
+ * @param {String} [startDir=__dirname] - The starting directory for the search.
+ * @returns {String|null} The project root path or null if not found.
+ */
+export function getProjectRoot(startDir = __dirname) {
+  let currentDir = startDir;
+  // Go up until we find package.json or hit the root
+  while (currentDir !== path.parse(currentDir).root) {
+    if (fs.existsSync(path.join(currentDir, 'package.json'))) {
+      return currentDir;
+    }
+    currentDir = path.dirname(currentDir);
+  }
+  // Check the root directory itself
+  if (fs.existsSync(path.join(currentDir, 'package.json'))) {
+    return currentDir;
+  }
+  return null; // Return null if it reaches the filesystem root
+}
+
+/**
+ * Normalizes a given path to be absolute, resolving it from the project root.
+ * If the path is already absolute, it returns it as is.
+ * @param {String} pathToNormalize - The path to normalize.
+ * @returns {String} The normalized, absolute path.
+ */
+export function normalizePath(pathToNormalize) {
+  if (!pathToNormalize) {
+    return null;
+  }
+  if (path.isAbsolute(pathToNormalize)) {
+    return pathToNormalize;
+  }
+  const projectRoot = getProjectRoot();
+  if (!projectRoot) {
+    // Fallback or error
+    console.warn('normalizePath: Project root not found. Using current working directory.');
+    return path.resolve(pathToNormalize);
+  }
+  return path.join(projectRoot, pathToNormalize);
+}
+
+const projectRoot = getProjectRoot();
+const OUTPUT_DIR = normalizePath('.cache');
 
 export function getFilePrefix(urlString, deviceType, type) {
   return `${OUTPUT_DIR}/${urlString.replace('https://', '').replace(/[^A-Za-z0-9-]/g, '-').replace(/\//g, '--').replace(/(^-+|-+$)/, '')}.${deviceType}.${type}`
