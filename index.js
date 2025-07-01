@@ -17,6 +17,7 @@ async function main() {
   const outputSuffix = argv.outputSuffix;
   const blockRequests = argv.blockRequests;
   const model = argv.model;
+  const repo = argv.repo;
   
   // Load URLs
   const urls = loadUrls(argv);
@@ -28,10 +29,13 @@ async function main() {
   if (model) {
     console.log(`Using model: ${model}`);
   }
+  if (repo) {
+    console.log(`Target repository: ${repo}`);
+  }
   
   // Process each URL
   for (const url of urls) {
-    await processUrl(url, action, deviceType, skipCache, outputSuffix, blockRequests, model);
+    await processUrl(url, action, deviceType, skipCache, outputSuffix, blockRequests, model, repo);
     
     // Small delay between processing URLs
     if (urls.length > 1) {

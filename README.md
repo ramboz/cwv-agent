@@ -27,11 +27,14 @@ AZURE_OPENAI_API_VERSION=...
 AWS_ACCESS_KEY_ID=...
 AWS_SECRET_ACCESS_KEY=...
 AWS_REGION=...
+
+# GitHub Integration (for accessibility PR creation)
+GITHUB_TOKEN=ghp_your_github_personal_access_token_here
 ```
 
 Then run the script via:
 ```sh
-node index.js --action <action> --url <url> [--device <device>] [--skip-cache] [--model <model>]
+node index.js --action <action> --url <url> [--device <device>] [--skip-cache] [--model <model>] [--repo owner/repo-name]
 ```
 
 or for batch processing:
@@ -44,7 +47,7 @@ node index.js --action <action> --urls <path-to-json-file> [--device <device>] [
 ```
 Options:
   --action, -a  Action to perform
-                [string] [choices: "collect", "prompt", "merge", "agent", "rules"] [default: "collect"]
+                [string] [choices: "collect", "prompt", "merge", "agent", "rules", "accessibility", "accessibility-collect", "accessibility-pr"] [default: "collect"]
   --url, -u     URL to analyze                                            [string]
   --urls        Path to JSON file containing URLs to analyze              [string]
   --device, -d  Device type
@@ -52,6 +55,7 @@ Options:
   --skip-cache, -s  Skip using cached data and force new collection       [boolean] [default: false]
   --model, -m   LLM model to use (e.g., "gemini-2.5-pro-preview-05-06", "gpt-4.1", "claude-3-7-sonnet-20250219")
                 [string] [default: "gemini-2.5-pro-preview-05-06"]
+  --repo        GitHub repository for PR creation (format: owner/repo-name, required for accessibility-pr action)
   --help        Show help                                                 [boolean]
 ```
 
@@ -119,6 +123,51 @@ node index.js --action prompt --url <url> [--device <device>] [--model <model>]
 Collects all the artefacts and then prompts the LLM for the performance analysis
 and recommendations.
 
+### Accessibility Analysis
+
+The agent also supports accessibility analysis with WCAG 2.1 AA compliance checking:
+
+#### Complete Accessibility Workflow
+
+To run the full accessibility analysis and create a GitHub PR, follow these steps:
+
+1. **First, collect the basic data** (required for accessibility analysis):
+```sh
+node index.js --action collect --url <url> [--device <device>]
+```
+
+2. **Run accessibility analysis with source code collection**:
+```sh
+node index.js --action accessibility-collect --url <url> [--device <device>]
+```
+
+3. **Create GitHub PR with fixes** (optional):
+```sh
+node index.js --action accessibility-pr --url <url> [--device <device>] --repo owner/repo-name
+```
+
+#### Individual Actions
+
+#### Quick HTML Analysis
+```sh
+node index.js --action accessibility --url <url> [--device <device>]
+```
+Requires existing cached HTML data from a previous `collect` action.
+
+#### Complete Analysis with Source Code
+```sh
+node index.js --action accessibility-collect --url <url> [--device <device>]
+```
+Analyzes both HTML and source code files, generating PR-ready fixes.
+
+#### Automated GitHub PR Creation
+```sh
+node index.js --action accessibility-pr --url <url> [--device <device>] --repo owner/repo-name
+```
+Creates a GitHub pull request with accessibility fixes. Requires GITHUB_TOKEN in .env file.
+
+For GitHub integration, create a personal access token with `repo` scope at GitHub → Settings → Developer settings → Personal access tokens.
+
 ### Cache Management
 
 By default, the tool caches results to avoid unnecessary API calls and speed up repeated analyses.
@@ -141,4 +190,9 @@ Then open the ui and pass the `report` url:
 
 ```
 open http://127.0.0.1:8080/ui/index.html?report=/.cache/host.device.report.json
+```
+
+For accessibility reports:
+```
+open http://127.0.0.1:8080/ui/accessibility.html?report=/.cache/host.device.accessibility-report.md
 ```

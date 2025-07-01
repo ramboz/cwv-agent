@@ -67,6 +67,9 @@
       <li>
         <a id="rules" href="./recommendations.html" target="_blank">Performance Recommendations</a>
       </li>
+      <li>
+        <a id="accessibility" href="./accessibility.html" target="_blank">Accessibility Report</a>
+      </li>
     </ul>
 
     <script>
@@ -83,12 +86,15 @@
 
         const merge = document.getElementById('merge');
         const rules = document.getElementById('rules');
+        const accessibility = document.getElementById('accessibility');
 
         const mergeFile = getFilePrefix(url, type, 'merge');
         const rulesFile = getFilePrefix(url, type, 'rules');
+        const accessibilityFile = getFilePrefix(url, type, 'accessibility-report');
 
         merge.href = `./performance.html?merge=${mergeFile}.json`;
         rules.href = `./recommendations.html?rules=${rulesFile}.json`;
+        accessibility.href = `./accessibility.html?accessibility=${accessibilityFile}.json`;
 
         const reports = document.getElementById('reports');
         reports.classList.add('visible');

@@ -2,6 +2,8 @@ import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import { DEFAULT_MODEL } from '../models/config.js';
 
+const actionChoices = ['collect', 'prompt', 'merge', 'agent', 'rules', 'accessibility', 'accessibility-collect', 'accessibility-pr'];
+
 export function parseArguments() {
   return yargs(hideBin(process.argv))
     .option('action', {
@@ -9,7 +11,7 @@ export function parseArguments() {
       describe: 'Action to perform',
       type: 'string',
       default: 'collect',
-      choices: ['collect', 'prompt', 'merge', 'agent', 'rules']
+      choices: actionChoices
     })
     .option('url', {
       alias: 'u',
@@ -50,6 +52,10 @@ export function parseArguments() {
       describe: 'Block requests - comma separated list of strings, urls containing these strings will be blocked',
       type: 'string',
       default: ''
+    })
+    .option('repo', {
+      describe: 'GitHub repository for PR creation (format: owner/repo-name)',
+      type: 'string'
     })
     .check((argv) => {
       if (!argv.url && !argv.urls) {
