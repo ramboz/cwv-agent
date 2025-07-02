@@ -10,19 +10,31 @@ import path from 'path';
 export class GitHubIntegration {
   constructor(auth) {
     if (auth.type === 'app') {
-      // GitHub App authentication
-      this.octokit = new Octokit({
-        authStrategy: createAppAuth,
-        auth: {
-          appId: auth.appId,
-          privateKey: auth.privateKey,
-          installationId: auth.installationId,
-        },
-      });
+      // Store GitHub App credentials for later use
+      this.appId = auth.appId;
+      this.privateKey = auth.privateKey;
+      this.installationId = auth.installationId;
       this.authType = 'app';
+      
+      // GitHub App authentication
+      if (auth.installationId) {
+        this.octokit = new Octokit({
+          baseUrl: process.env.GITHUB_API_URL || 'https://git.corp.adobe.com/api/v3',
+          authStrategy: createAppAuth,
+          auth: {
+            appId: auth.appId,
+            privateKey: auth.privateKey,
+            installationId: auth.installationId,
+          },
+        });
+      } else {
+        // Will be initialized later when installation ID is detected
+        this.octokit = null;
+      }
     } else {
       // Personal Access Token authentication
       this.octokit = new Octokit({
+        baseUrl: process.env.GITHUB_API_URL || 'https://git.corp.adobe.com/api/v3',
         auth: auth.token,
       });
       this.authType = 'token';
@@ -47,7 +59,7 @@ export class GitHubIntegration {
       });
       return data.id;
     } catch (error) {
-      throw new Error(`CWV Agent App not installed on ${owner}/${repo}. Please install the app first.`);
+      throw new Error(`GitHub App not found on ${owner}/${repo}. Please check: 1) App is installed on this repo, 2) App ID is correct, 3) App has proper permissions.`);
     }
   }
 
@@ -275,19 +287,22 @@ export class GitHubIntegration {
     
     for (const change of changes) {
       try {
+        // Clean file path - remove leading slash if present
+        const cleanPath = change.filePath.startsWith('/') ? change.filePath.substring(1) : change.filePath;
+        
         // Get current file content (if it exists)
         let currentFile = null;
         try {
           const { data } = await this.octokit.rest.repos.getContent({
             owner,
             repo,
-            path: change.filePath,
+            path: cleanPath,
             ref: branch,
           });
           currentFile = data;
         } catch (error) {
           // File doesn't exist, will create new
-          console.log(`File ${change.filePath} doesn't exist, will create new file`);
+          console.log(`File ${cleanPath} doesn't exist, will create new file`);
         }
         
         // Prepare file content
@@ -297,7 +312,7 @@ export class GitHubIntegration {
         const commitData = {
           owner,
           repo,
-          path: change.filePath,
+          path: cleanPath,
           message: `Fix accessibility: ${change.description}`,
           content,
           branch,
@@ -310,10 +325,10 @@ export class GitHubIntegration {
         const { data: commit } = await this.octokit.rest.repos.createOrUpdateFileContents(commitData);
         commits.push(commit);
         
-        console.log(`Applied accessibility fix to ${change.filePath}`);
+        console.log(`Applied accessibility fix to ${cleanPath}`);
         
       } catch (error) {
-        console.error(`Failed to apply changes to ${change.filePath}:`, error.message);
+        console.error(`Failed to apply changes to ${cleanPath}:`, error.message);
       }
     }
     
@@ -434,6 +449,45 @@ ${botSignature}`;
     console.log(`Creating accessibility PR for ${pageUrl} in ${owner}/${repo}`);
     
     try {
+      // For GitHub Apps, auto-detect installation ID if needed
+      if (this.authType === 'app' && !this.installationId) {
+        console.log('Auto-detecting installation ID...');
+        
+        // Create a temporary app-only client to detect installation ID
+        const tempOctokit = new Octokit({
+          baseUrl: process.env.GITHUB_API_URL || 'https://git.corp.adobe.com/api/v3',
+          authStrategy: createAppAuth,
+          auth: {
+            appId: this.appId,
+            privateKey: this.privateKey,
+          },
+        });
+        
+        try {
+          const { data } = await tempOctokit.rest.apps.getRepoInstallation({
+            owner,
+            repo,
+          });
+          const installationId = data.id;
+          console.log(`Found installation ID: ${installationId}`);
+          
+          // Create a new octokit instance with the detected installation ID
+          this.octokit = new Octokit({
+            baseUrl: process.env.GITHUB_API_URL || 'https://git.corp.adobe.com/api/v3',
+            authStrategy: createAppAuth,
+            auth: {
+              appId: this.appId,
+              privateKey: this.privateKey,
+              installationId: installationId,
+            },
+          });
+          this.installationId = installationId;
+        } catch (error) {
+          console.error('GitHub API Error:', error.message);
+          throw new Error(`GitHub App not found on ${owner}/${repo}. Please check: 1) App is installed on this repo, 2) App ID is correct, 3) App has proper permissions.`);
+        }
+      }
+      
       // 1. Create new branch
       const branch = await this.createAccessibilityBranch(owner, repo, baseBranch);
       console.log(`Created branch: ${branch}`);
@@ -508,11 +562,12 @@ export function createGitHubApp(appConfig) {
     throw new Error('GitHub App ID and private key are required');
   }
   
+  // If no installation ID provided, we'll set it to null and detect it later
   return new GitHubIntegration({
     type: 'app',
     appId,
     privateKey,
-    installationId,
+    installationId: installationId || null,
   });
 }
 

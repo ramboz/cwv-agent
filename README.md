@@ -30,6 +30,9 @@ AWS_REGION=...
 
 # GitHub Integration (for accessibility PR creation)
 GITHUB_TOKEN=ghp_your_github_personal_access_token_here
+
+# GitHub Enterprise (for Adobe internal repositories)
+GITHUB_API_URL=https://git.corp.adobe.com/api/v3
 ```
 
 Then run the script via:
@@ -167,6 +170,28 @@ node index.js --action accessibility-pr --url <url> [--device <device>] --repo o
 Creates a GitHub pull request with accessibility fixes. Requires GITHUB_TOKEN in .env file.
 
 For GitHub integration, create a personal access token with `repo` scope at GitHub → Settings → Developer settings → Personal access tokens.
+
+#### GitHub Enterprise Configuration
+
+For Adobe internal repositories on `git.corp.adobe.com`, the tool is pre-configured to use Adobe's GitHub Enterprise API. You can also use GitHub Apps for authentication:
+
+1. **Personal Access Token** (Recommended for individual use):
+   - Create token at: https://git.corp.adobe.com/settings/tokens
+   - Select `repo` scope for repository access
+   - Add to `.env`: `GITHUB_TOKEN=your_token_here`
+
+2. **GitHub App** (Recommended for team/production use):
+   - Create GitHub App at: https://git.corp.adobe.com/settings/apps
+   - Install on target repositories
+   - Add to `.env`:
+     ```
+     GITHUB_APP_ID=your_app_id
+     GITHUB_APP_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\n...\n-----END RSA PRIVATE KEY-----"
+     GITHUB_APP_INSTALLATION_ID=11230
+     ```
+
+The installation ID can be found in your GitHub App installation URL:
+`https://git.corp.adobe.com/organizations/your-org/settings/installations/11230`
 
 ### Cache Management
 

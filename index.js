@@ -3,8 +3,8 @@ import { parseArguments } from './src/cli/cli.js';
 import { loadUrls } from './src/cli/urlLoader.js';
 import { processUrl } from './src/core/actions.js';
 
-// Load environment variables
-dotenv.config();
+// Load environment variables (ES module compatible)
+dotenv.config({ path: '.env' });
 
 async function main() {
   // Parse command line arguments

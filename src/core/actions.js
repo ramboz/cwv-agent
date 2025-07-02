@@ -3,7 +3,7 @@ import rulesAction from './rules.js';
 // import runAgent from './agent.js';
 import runPrompt from './multishot-prompt.js';
 import runAccessibilityAnalysis from './accessibility.js';
-import { createGitHubIntegration } from '../tools/github.js';
+import { createGitHubClient } from '../tools/github.js';
 import { getNormalizedUrl, getCachedResults } from '../utils.js';
 
 export async function handleAgentAction(pageUrl, deviceType) {
@@ -116,12 +116,7 @@ export async function processUrl(pageUrl, action, deviceType, skipCache, outputS
           throw new Error('Repository format should be owner/repo-name');
         }
         
-        const githubToken = process.env.GITHUB_TOKEN;
-        if (!githubToken) {
-          throw new Error('GITHUB_TOKEN environment variable is required for PR creation');
-        }
-        
-        const github = createGitHubIntegration(githubToken);
+        const github = createGitHubClient();
         result = await github.createAccessibilityPR_Complete(normalizedUrl.url, deviceType, owner, repoName, { 
           skipCache, 
           skipTlsCheck: normalizedUrl.skipTlsCheck, 
