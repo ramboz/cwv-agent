@@ -46,7 +46,7 @@ npm install
 }
 ```
 
-**Important**: Replace `/Users/your-username/path/to/cwv-agent` with your actual cwv-agent directory path.
+**Important**: Replace `/Users/your-username/path/to/cwv-agent` with your actual cwv-agent directory path, or just `"."` if you run this from the project repo.
 
 ### Step 3: Set Up Custom CWV Review Mode
 
