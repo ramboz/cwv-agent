@@ -26,10 +26,7 @@ jobs:
 
       - name: Build Preview URL
         run: |
-          BRANCH=${{ github.head_ref }}
-          REPO=${{ github.event.repository.name }}
-          OWNER=${{ github.repository_owner }}
-          PREVIEW_URL="https://${BRANCH}--${REPO}--${OWNER}.aem.page"
+          PREVIEW_URL="https://${{ github.head_ref }}--${{ github.event.repository.name }}--${{ github.repository_owner }}.aem.page"
           echo "Preview URL is: $PREVIEW_URL"
           echo "PREVIEW_URL=$PREVIEW_URL" >> $GITHUB_ENV
 
