@@ -7,7 +7,7 @@ on:
 jobs:
   run-cwv-check:
     runs-on: ubuntu-latest
-    environment: cwv-check-env-junaid  # 🔐 Use secure environment with secrets
+    environment: cwv-check-env-junaid
 
     steps:
       - name: Checkout repo
@@ -23,7 +23,7 @@ jobs:
 
       - name: Validate if DUMMY_TEST_KEY is set
         run: |
-          if [ -z "${{ secrets.DUMMY_TEST_KEY }}" ]; then
+          if [ -z ${{ secrets.DUMMY_TEST_KEY }} ]; then
             echo "❌ Secret DUMMY_TEST_KEY is EMPTY or NOT SET!"
             exit 1
           else
