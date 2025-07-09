@@ -32,22 +32,31 @@ jobs:
           REPO=${{ github.event.repository.name }}
           OWNER=${{ github.repository_owner }}
           PREVIEW_URL="https://${BRANCH}--${REPO}--${OWNER}.aem.page"
-          echo "PREVIEW_URL=$PREVIEW_URL" >> $GITHUB_ENV
+          echo "PREVIEW_URL=$PREVIEW_URL" >> $GITHUB_OUTPUT
+
+      - name: Debug PREVIEW_URL
+        run: echo "PREVIEW_URL is $PREVIEW_URL"
+        env:
+          PREVIEW_URL: ${{ steps.build_url.outputs.PREVIEW_URL }}
 
       - name: Wait for Preview URL to be available
         env:
           PREVIEW_URL: ${{ steps.build_url.outputs.PREVIEW_URL }}
         run: |
+          if [ -z "$PREVIEW_URL" ]; then
+            echo "ERROR: PREVIEW_URL is empty!"
+            exit 2
+          fi
           for i in {1..10}; do
             status=$(curl -o /dev/null -s -w "%{http_code}\n" "$PREVIEW_URL")
             if [ "$status" -eq 200 ]; then
               echo "Preview URL is live!"
               exit 0
             fi
-            echo "Preview not ready yet (status: $status). Retrying in 15s..."
+            echo "Preview not ready yet (status: $status) for $PREVIEW_URL. Retrying in 15s..."
             sleep 15
           done
-          echo "Preview URL did not become available in time."
+          echo "ERROR: Preview URL ($PREVIEW_URL) did not become available in time."
           exit 1
 
       - name: Run CWV Agent (Mobile & Desktop)
@@ -61,6 +70,10 @@ jobs:
           GOOGLE_PAGESPEED_INSIGHTS_API_KEY: ${{ secrets.GOOGLE_PAGESPEED_INSIGHTS_API_KEY }}
           GOOGLE_CRUX_API_KEY: ${{ secrets.GOOGLE_CRUX_API_KEY }}
         run: |
+          if [ -z "$PREVIEW_URL" ]; then
+            echo "ERROR: PREVIEW_URL is empty!"
+            exit 2
+          fi
           node node_modules/cwv-agent/index.js --action prompt --url $PREVIEW_URL --device mobile --model gpt-4o
           node node_modules/cwv-agent/index.js --action prompt --url $PREVIEW_URL --device desktop --model gpt-4o
 
