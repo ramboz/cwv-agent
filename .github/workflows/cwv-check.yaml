@@ -35,9 +35,11 @@ jobs:
           echo "PREVIEW_URL=$PREVIEW_URL" >> $GITHUB_ENV
 
       - name: Wait for Preview URL to be available
+        env:
+          PREVIEW_URL: ${{ steps.build_url.outputs.PREVIEW_URL }}
         run: |
           for i in {1..10}; do
-            status=$(curl -o /dev/null -s -w "%{http_code}\n" "${{ steps.build_url.outputs.PREVIEW_URL }}")
+            status=$(curl -o /dev/null -s -w "%{http_code}\n" "$PREVIEW_URL")
             if [ "$status" -eq 200 ]; then
               echo "Preview URL is live!"
               exit 0
@@ -50,6 +52,7 @@ jobs:
 
       - name: Run CWV Agent (Mobile & Desktop)
         env:
+          PREVIEW_URL: ${{ steps.build_url.outputs.PREVIEW_URL }}
           GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
           AZURE_OPENAI_API_DEPLOYMENT_NAME: ${{ secrets.AZURE_OPENAI_API_DEPLOYMENT_NAME }}
           AZURE_OPENAI_API_INSTANCE_NAME: ${{ secrets.AZURE_OPENAI_API_INSTANCE_NAME }}
@@ -58,8 +61,8 @@ jobs:
           GOOGLE_PAGESPEED_INSIGHTS_API_KEY: ${{ secrets.GOOGLE_PAGESPEED_INSIGHTS_API_KEY }}
           GOOGLE_CRUX_API_KEY: ${{ secrets.GOOGLE_CRUX_API_KEY }}
         run: |
-          node node_modules/cwv-agent/index.js --action prompt --url ${{ steps.build_url.outputs.PREVIEW_URL }} --device mobile --model gpt-4o
-          node node_modules/cwv-agent/index.js --action prompt --url ${{ steps.build_url.outputs.PREVIEW_URL }} --device desktop --model gpt-4o
+          node node_modules/cwv-agent/index.js --action prompt --url $PREVIEW_URL --device mobile --model gpt-4o
+          node node_modules/cwv-agent/index.js --action prompt --url $PREVIEW_URL --device desktop --model gpt-4o
 
       - name: Upload CWV Summary Reports (Public Artifact)
         uses: actions/upload-artifact@v4
