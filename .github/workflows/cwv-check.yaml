@@ -21,9 +21,20 @@ jobs:
       - name: Install CWV Agent
         run: npm install --no-save git+https://github.com/ramboz/cwv-agent.git
 
-      - name: ✅ Validate if DUMMY_TEST_KEY is set
+      - name: 🔍 Debug secret status
         env:
           DUMMY_TEST_KEY: ${{ secrets.DUMMY_TEST_KEY }}
+        run: |
+          if [ -z "$DUMMY_TEST_KEY" ]; then
+            echo "❌ Secret DUMMY_TEST_KEY is EMPTY or NOT SET!"
+            exit 1
+          else
+            echo "✅ Secret DUMMY_TEST_KEY is properly set."
+            echo "Secret exists: true"
+            echo "Secret length: ${#DUMMY_TEST_KEY}"
+            echo "Secret value (first 3 chars): ${DUMMY_TEST_KEY:0:3}..."
+          fi
+          
         run: |
           if [ -z "$DUMMY_TEST_KEY" ]; then
             echo "❌ Secret DUMMY_TEST_KEY is EMPTY or NOT SET!"
