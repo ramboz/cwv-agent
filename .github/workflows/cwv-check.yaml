@@ -34,6 +34,20 @@ jobs:
           PREVIEW_URL="https://${BRANCH}--${REPO}--${OWNER}.aem.page"
           echo "PREVIEW_URL=$PREVIEW_URL" >> $GITHUB_ENV
 
+      - name: Wait for Preview URL to be available
+        run: |
+          for i in {1..10}; do
+            status=$(curl -o /dev/null -s -w "%{http_code}\n" "${{ steps.build_url.outputs.PREVIEW_URL }}")
+            if [ "$status" -eq 200 ]; then
+              echo "Preview URL is live!"
+              exit 0
+            fi
+            echo "Preview not ready yet (status: $status). Retrying in 15s..."
+            sleep 15
+          done
+          echo "Preview URL did not become available in time."
+          exit 1
+
       - name: Run CWV Agent (Mobile & Desktop)
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
