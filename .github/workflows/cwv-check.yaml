@@ -32,7 +32,7 @@ jobs:
           REPO=${{ github.event.repository.name }}
           OWNER=${{ github.repository_owner }}
           PREVIEW_URL="https://${BRANCH}--${REPO}--${OWNER}.aem.page"
-          echo "PREVIEW_URL=$PREVIEW_URL" >> $GITHUB_OUTPUT
+          echo "PREVIEW_URL=$PREVIEW_URL" >> $GITHUB_ENV
 
       - name: Run CWV Agent (Mobile & Desktop)
         env:
