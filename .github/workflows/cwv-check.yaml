@@ -22,14 +22,13 @@ jobs:
         run: npm install --no-save git+https://github.com/ramboz/cwv-agent.git
 
       - name: Print dummy secret for testing
-        run: echo "Dummy key from secret: ${{ secrets.DUMMY_TEST_KEY }}"
+        run: echo 'Dummy key from secret: ${{ secrets.DUMMY_TEST_KEY }}'
 
       - name: Build Preview URL
         run: |
           PREVIEW_URL="https://${{ github.head_ref }}--${{ github.event.repository.name }}--${{ github.repository_owner }}.aem.page"
           echo "Preview URL is: $PREVIEW_URL"
           echo "PREVIEW_URL=$PREVIEW_URL" >> $GITHUB_ENV
-
 
       - name: Run CWV Agent (Mobile & Desktop)
         env:
