@@ -7,6 +7,7 @@ on:
 jobs:
   run-cwv-check:
     runs-on: ubuntu-latest
+    environment: cwv-check-env-junaid  # 🔐 Use secure environment with secrets
 
     steps:
       - name: Checkout repo
@@ -20,6 +21,9 @@ jobs:
       - name: Install CWV Agent
         run: npm install --no-save git+https://github.com/ramboz/cwv-agent.git
 
+      - name: Print dummy secret for testing
+        run: echo "Dummy key from secret: ${{ secrets.DUMMY_TEST_KEY }}"
+
       - name: Build Preview URL
         id: build_url
         run: |
@@ -29,19 +33,29 @@ jobs:
           PREVIEW_URL="https://${BRANCH}--${REPO}--${OWNER}.aem.page"
           echo "PREVIEW_URL=$PREVIEW_URL" >> $GITHUB_OUTPUT
 
-      - name: Run CWV Agent
+      - name: Run CWV Agent (Mobile & Desktop)
+        env:  # 🛡️ Inject secrets here
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
+          AZURE_OPENAI_API_DEPLOYMENT_NAME: ${{ secrets.AZURE_OPENAI_API_DEPLOYMENT_NAME }}
+          AZURE_OPENAI_API_INSTANCE_NAME: ${{ secrets.AZURE_OPENAI_API_INSTANCE_NAME }}
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+          AZURE_OPENAI_API_VERSION: ${{ secrets.AZURE_OPENAI_API_VERSION }}
+          GOOGLE_PAGESPEED_INSIGHTS_API_KEY: ${{ secrets.GOOGLE_PAGESPEED_INSIGHTS_API_KEY }}
+          GOOGLE_CRUX_API_KEY: ${{ secrets.GOOGLE_CRUX_API_KEY }}
         run: |
           node node_modules/cwv-agent/index.js --action prompt --url ${{ steps.build_url.outputs.PREVIEW_URL }} --device mobile --model gpt-4o
           node node_modules/cwv-agent/index.js --action prompt --url ${{ steps.build_url.outputs.PREVIEW_URL }} --device desktop --model gpt-4o
 
-      - name: Upload All CWV Summary Reports
+      - name: Upload CWV Summary Reports (Public Artifact)
         uses: actions/upload-artifact@v4
         with:
           name: cwv-summaries
           path: .cache/*.report.gpt4o.summary.md
+          if-no-files-found: warn
+          retention-days: 7
 
-      - name: Print project file tree
+      - name: Print project file tree (excluding node_modules)
         run: |
           sudo apt-get update && sudo apt-get install -y tree
-          echo "📁 Project structure:"
-          tree -L 3 -a
+          echo "📁 Project structure (excluding node_modules):"
+          tree -L 3 -a -I 'node_modules'
