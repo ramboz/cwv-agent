@@ -27,13 +27,10 @@ jobs:
       - name: Build Preview URL
         id: build_url
         run: |
-          BRANCH=${{ github.head_ref }}
-          REPO=${{ github.event.repository.name }}
-          OWNER=${{ github.repository_owner }}
-          PREVIEW_URL="https://${BRANCH}--${REPO}--${OWNER}.aem.page"
-          echo "PREVIEW_URL is $PREVIEW_URL"
-          echo "PREVIEW_URL=$PREVIEW_URL" >> "$GITHUB_OUTPUT"
-          
+          PREVIEW_URL="https://${{ github.head_ref }}--${{ github.event.repository.name }}--${{ github.repository_owner }}.aem.page"
+          echo "Preview URL is: $PREVIEW_URL"
+          echo "PREVIEW_URL=$PREVIEW_URL" >> $GITHUB_ENV
+
       - name: Run CWV Agent (Mobile & Desktop)
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
@@ -44,8 +41,8 @@ jobs:
           GOOGLE_PAGESPEED_INSIGHTS_API_KEY: ${{ secrets.GOOGLE_PAGESPEED_INSIGHTS_API_KEY }}
           GOOGLE_CRUX_API_KEY: ${{ secrets.GOOGLE_CRUX_API_KEY }}
         run: |
-          node node_modules/cwv-agent/index.js --action prompt --url ${{ steps.build_url.outputs.PREVIEW_URL }} --device mobile --model gpt-4o
-          node node_modules/cwv-agent/index.js --action prompt --url ${{ steps.build_url.outputs.PREVIEW_URL }} --device desktop --model gpt-4o
+          node node_modules/cwv-agent/index.js --action prompt --url $PREVIEW_URL --device mobile --model gpt-4o
+          node node_modules/cwv-agent/index.js --action prompt --url $PREVIEW_URL --device desktop --model gpt-4o
 
       - name: Upload CWV Summary Reports (Public Artifact)
         uses: actions/upload-artifact@v4
