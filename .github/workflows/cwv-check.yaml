@@ -1,4 +1,4 @@
- name: CWV PR Check
+name: CWV PR Check
 
 on:
   pull_request:
