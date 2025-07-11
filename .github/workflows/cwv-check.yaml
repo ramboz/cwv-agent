@@ -1,13 +1,24 @@
 # Works for bbird repo :  
-#Link : https://github.com/aemsites/bbird/actions/runs/16177499972/job/45666039390
 #i made sure that artifacts are generated; ( the artifacts are basically the cwv-agent suggestions, the summary report basically! )
 #by installing that github workfow into the blackbird repo , the below code generates public url artifact !
+
+# Workflow Link :https://github.com/aemsites/bbird/actions/runs/16208435818/job/45763737879
+# PR Link :  
+# Added a 1 day timer to ensure artifacts auto-expire after 24 hours.
+# Uploaded each CWV output (desktop summary, mobile summary, suggestions) as separate artifacts for better granularity.
+# In addition :
+# I published public URLs for each report via GitHub Pages, allowing direct access without login.
+# All report files are committed and versioned under the gh-pages branch for persistence and visibility.
 
 name: CWV PR Check
 
 on:
   pull_request:
     types: [opened, synchronize]
+
+permissions:
+  contents: write
+  pull-requests: write
 
 jobs:
   run-cwv-check:
@@ -65,7 +76,6 @@ jobs:
           mkdir -p cwv-output
           cp node_modules/cwv-agent/.cache/*.report.gpt4o.summary.md cwv-output/
           cp node_modules/cwv-agent/.cache/*.suggestions.gpt4o.json cwv-output/
-          
       - name: Upload All CWV Summary Reports
         uses: actions/upload-artifact@v4
         with:
@@ -73,6 +83,68 @@ jobs:
           path: cwv-output/*
           if-no-files-found: error
 
+      - name: Publish CWV Reports to GitHub Pages
+        if: github.event_name == 'pull_request'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Authenticated clone using GITHUB_TOKEN
+          REPO_URL="https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}"
+
+          git clone --depth 1 --branch gh-pages "$REPO_URL" gh-pages
+
+          # Clean old files for this PR branch
+          rm -f gh-pages/${{ github.head_ref }}.*
+
+          # Copy CWV output reports to gh-pages root
+          cp cwv-output/*.report.gpt4o.summary.md gh-pages/
+          cp cwv-output/*.suggestions.gpt4o.json gh-pages/
+
+          # Commit and push
+          cd gh-pages
+          git add .
+          git commit -m "Add CWV reports for PR #${{ github.event.pull_request.number }}" || echo "No changes to commit"
+          git push "$REPO_URL" gh-pages
+
+
+      - name: Print public CWV URLs
+        run: |
+          REPO="${{ github.event.repository.name }}"
+          OWNER="${{ github.repository_owner }}"
+          BRANCH="${{ github.head_ref }}"
+          BASE_URL="https://${OWNER}.github.io/${REPO}"
+          echo " Public CWV Report Links for Branch: $BRANCH"
+          echo " Desktop Report: $BASE_URL/${BRANCH}--${REPO}--${OWNER}-aem-page.desktop.report.gpt4o.summary.md"
+          echo " Mobile Report:  $BASE_URL/${BRANCH}--${REPO}--${OWNER}-aem-page.mobile.report.gpt4o.summary.md"
+          echo " Suggestions:    $BASE_URL/${BRANCH}--${REPO}--${OWNER}-aem-page.desktop.suggestions.gpt4o.json"
+          echo " Suggestions:    $BASE_URL/${BRANCH}--${REPO}--${OWNER}-aem-page.mobile.suggestions.gpt4o.json"
+
+      - name: Upload Desktop Report Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-report
+          path: cwv-output/*.desktop.report.gpt4o.summary.md
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Upload Mobile Report Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-report
+          path: cwv-output/*.mobile.report.gpt4o.summary.md
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Upload Suggestions JSON Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: suggestions-json
+          path: cwv-output/*.suggestions.gpt4o.json
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Print project file tree (excluding node_modules)
         run: |
