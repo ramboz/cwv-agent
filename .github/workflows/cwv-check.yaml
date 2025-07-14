@@ -48,7 +48,7 @@ jobs:
               pull_number: context.issue.number,
             });
             const body = pr.data.body || '';
-            const urls = [...new Set((body.match(/https:\/\/[\w.-]+--[\w.-]+--[\w.-]+\.aem\.page\/[\S]*/g) || []))];
+            const urls = [...new Set((body.match(/https:\/\/[\w.-]+--[\w.-]+--[\w.-]+\.aem\.(page|live)\/[\S]*/g) || []))];
             if (!urls.length) {
               throw new Error('No valid AEM URLs found in PR description');
             }
