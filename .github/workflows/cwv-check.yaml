@@ -2,10 +2,11 @@
 #i made sure that artifacts are generated; ( the artifacts are basically the cwv-agent suggestions, the summary report basically! )
 #by installing that github workfow into the blackbird repo , the below code generates public url artifact !
 
-# Workflow Link : https://github.com/aemsites/bbird/actions/runs/16208965114/job/45765314958
-# PR Link :  
+# Workflow Link : https://github.com/aemsites/bbird/actions/runs/16258921134/job/45900137143
+# PR  :  
 # Added a 1 day timer to ensure artifacts auto-expire after 24 hours.
 # Uploaded each CWV output (desktop summary, mobile summary, suggestions) as separate artifacts for better granularity.
+# iterate over all the https://<branch>--<repo>--<org>.aem.page/* URLs in the initial comment and runs cwv agent on each of them ! 
 
 name: CWV PR Check
 
@@ -34,20 +35,26 @@ jobs:
       - name: Install CWV Agent
         run: npm install --no-save git+https://github.com/ramboz/cwv-agent.git
 
-      - name: Print dummy secret for testing
-        run: |
-          echo "Dummy key from secret: ${{ secrets.DUMMY_TEST_KEY }}"
+      - name: Extract URLs from PR Description
+        id: extract_urls
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          result-encoding: string
+          script: |
+            const pr = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+            });
+            const body = pr.data.body || '';
+            const urls = [...new Set((body.match(/https:\/\/[\w.-]+--[\w.-]+--[\w.-]+\.aem\.page\/[\S]*/g) || []))];
+            if (!urls.length) {
+              throw new Error('No valid AEM URLs found in PR description');
+            }
+            core.setOutput('urls', JSON.stringify(urls));
 
-      - name: Build Preview URL
-        id: build_url
-        run: |
-          BRANCH=${{ github.head_ref }}
-          REPO=${{ github.event.repository.name }}
-          OWNER=${{ github.repository_owner }}
-          PREVIEW_URL="https://${BRANCH}--${REPO}--${OWNER}.aem.page"
-          echo "PREVIEW_URL=$PREVIEW_URL" >> $GITHUB_OUTPUT
-
-      - name: Run CWV Agent (Mobile & Desktop)
+      - name: Run CWV Agent for Each AEM URL
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
           AZURE_OPENAI_API_DEPLOYMENT_NAME: ${{ secrets.AZURE_OPENAI_API_DEPLOYMENT_NAME }}
@@ -59,13 +66,15 @@ jobs:
           PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: "true"
           PUPPETEER_EXECUTABLE_PATH: "/usr/bin/google-chrome"
         run: |
-          echo "⚡ Using URL: ${{ steps.build_url.outputs.preview_url }}"
-          node node_modules/cwv-agent/index.js --action prompt --url ${{ steps.build_url.outputs.preview_url }} --device mobile --model gpt-4o
-          node node_modules/cwv-agent/index.js --action prompt --url ${{ steps.build_url.outputs.preview_url }} --device desktop --model gpt-4o
-          # Copy results to a top-level folder for uploading
           mkdir -p cwv-output
-          cp node_modules/cwv-agent/.cache/*.report.gpt4o.summary.md cwv-output/
-          cp node_modules/cwv-agent/.cache/*.suggestions.gpt4o.json cwv-output/
+          echo "Running CWV audits for listed AEM URLs..."
+          echo '${{ steps.extract_urls.outputs.urls }}' | jq -r '.[]' | while read URL; do
+            echo "Auditing $URL"
+            node node_modules/cwv-agent/index.js --action prompt --url "$URL" --device mobile --model gpt-4o
+            node node_modules/cwv-agent/index.js --action prompt --url "$URL" --device desktop --model gpt-4o
+          done
+          cp node_modules/cwv-agent/.cache/*.report.gpt4o.summary.md cwv-output/ || echo "No summary reports found."
+          cp node_modules/cwv-agent/.cache/*.suggestions.gpt4o.json cwv-output/ || echo "No suggestions found."
 
       - name: Upload Desktop Report
         uses: actions/upload-artifact@v4
