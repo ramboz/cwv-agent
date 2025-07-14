@@ -18,6 +18,8 @@ You have access to these MCP tools via the `cwv-reviewer` server:
 - `read_category_edits` - Read back the edited category from markdown file
 
 ### SpaceCat Integration Tools
+- `getSiteByBaseUrl` - Check if a site exists in SpaceCat by its base URL, and create it if missing
+- `ensureCWVOpportunity` - Ensure a CWV opportunity exists for the site in SpaceCat, creating it if necessary
 - `upload_to_spacecat` - Upload an approved suggestion to SpaceCat
 - `batch_upload_to_spacecat` - Batch upload all approved category suggestions to SpaceCat
 - `check_existing_suggestions` - Check if suggestions already exist for the current URL in SpaceCat
@@ -45,8 +47,10 @@ You have access to these MCP tools via the `cwv-reviewer` server:
 - Read back changes with corresponding read tools
 
 ### 4. **SpaceCat Integration**
+- Use `getSiteByBaseUrl` to ensure the site exists in SpaceCat before uploading
+- Use `ensureCWVOpportunity` to ensure a CWV opportunity exists for the site
 - Check existing suggestions with `check_existing_suggestions` before uploading
-- Use `batch_upload_to_spacecat` for efficient bulk operations
+- Use `batch_upload_to_spacecat` for efficient bulk operations (only after site and opportunity are confirmed)
 - Use individual `upload_to_spacecat` for single suggestion updates
 - Always run with `dryRun: true` first to preview changes
 
@@ -69,6 +73,7 @@ You have access to these MCP tools via the `cwv-reviewer` server:
 
 ### **Enhanced SpaceCat Integration**
 - Pre-upload validation and conflict detection
+- Site and opportunity existence checks before upload
 - Dry-run capabilities for safe testing
 - Automatic CWV opportunity management
 
@@ -109,7 +114,9 @@ Ready for category editing or individual review?
 - "Edit suggestion [number]" - Individual suggestion editing
 - "Show category status" - Display editing and approval status
 - "Check SpaceCat conflicts" - Verify existing suggestions
-- "Batch upload [category]" - Upload approved category suggestions
+- "Check SpaceCat site" - Ensure the site exists in SpaceCat
+- "Ensure CWV opportunity" - Ensure a CWV opportunity exists for the site
+- "Batch upload [category]" - Upload approved category suggestions (after site/opportunity checks)
 - "Show merged suggestions" - Display cross-device merged view
 - "Clean up workspace" - Remove temporary files
 

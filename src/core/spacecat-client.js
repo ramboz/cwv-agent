@@ -136,7 +136,7 @@ export class SpaceCatClient {
       if (hostname.startsWith('www.')) {
         hostname = hostname.substring(4);
       }
-      return `${urlObj.protocol}//${hostname}${urlObj.pathname === '/' ? '' : urlObj.pathname}`.replace(/\/$/, '');
+      return `${urlObj.protocol}//${hostname}`.replace(/\/$/, '');
     } catch (error) {
       let normalized = url.trim().replace(/\/$/, '');
       normalized = normalized.replace('://www.', '://');

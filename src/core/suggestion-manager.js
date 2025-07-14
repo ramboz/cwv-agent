@@ -358,11 +358,17 @@ export class CWVSuggestionManager {
   }
   
   async getUploadPayload() {
-    if (!this.isReadyForBatchUpload()) return null;
+    if (!this.isReadyForBatchUpload()) {
+      return { success: false, error: 'Not ready for batch upload. Please approve at least one category.' };
+    }
     const site = await this.spaceCatClient.getSiteByBaseUrl(this.currentUrl);
-    if (!site) return null;
+    if (!site) {
+      throw new Error('Failed to generate upload payload. Site not found.');
+    }
     const opportunity = await this.spaceCatClient.ensureCWVOpportunity(site.id);
-    if (!opportunity) return null;
+    if (!opportunity) {
+      throw new Error('Failed to generate upload payload. CWV opportunity not found.');
+    }
 
     const issues = [];
     Object.entries(this.mergedSuggestions)
@@ -400,16 +406,27 @@ export class CWVSuggestionManager {
   }
 
   async batchUploadToSpaceCat(dryRun = false) {
-    const payload = await this.getUploadPayload();
-    if (!payload) {
-      throw new Error('Failed to generate upload payload. No approved suggestions or site/opportunity not found.');
+    try {
+      const isReady = this.isReadyForBatchUpload();
+      if (!isReady) {
+        return { success: false, error: 'Failed to generate upload payload. No approved suggestions or site/opportunity not found.' };
+      }
+
+      const payload = await this.getUploadPayload();
+
+      if (!payload || payload.length === 0) {
+        return { success: false, error: 'No approved suggestions to upload.' };
+      }
+
+      if (dryRun) {
+        return { success: true, dryRun: true, message: 'Dry run successful. Payload is valid.', payload };
+      }
+
+      const result = await this.spaceCatClient.createManySuggestions(payload);
+      return { success: true, ...result };
+    } catch (error) {
+      return { success: false, error: error.message };
     }
-    const { siteId, opportunityId, suggestions } = payload;
-    if (dryRun) {
-      return { success: true, dryRun: true, message: 'Dry run: Payload generated.', payload };
-    }
-    const result = await this.spaceCatClient.updateSuggestions(siteId, opportunityId, suggestions);
-    return { success: true, message: 'Suggestions uploaded successfully.', result };
   }
 
   /**

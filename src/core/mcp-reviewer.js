@@ -195,7 +195,7 @@ export async function startMCPReviewer() {
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
-
+  
   const cleanup = () => {
     if (manager) manager.cleanup();
     server.close();
