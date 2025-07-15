@@ -422,7 +422,8 @@ export class CWVSuggestionManager {
         return { success: true, dryRun: true, message: 'Dry run successful. Payload is valid.', payload };
       }
 
-      const result = await this.spaceCatClient.createManySuggestions(payload);
+      const { siteId, opportunityId, suggestions } = payload;
+      const result = await this.spaceCatClient.updateSuggestions(siteId, opportunityId, suggestions);
       return { success: true, ...result };
     } catch (error) {
       return { success: false, error: error.message };
