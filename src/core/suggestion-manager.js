@@ -357,73 +357,76 @@ export class CWVSuggestionManager {
     return Object.values(this.categoryApprovalStatus).some(status => status === 'approved');
   }
   
-  async getUploadPayload() {
-    if (!this.isReadyForBatchUpload()) {
-      return { success: false, error: 'Not ready for batch upload. Please approve at least one category.' };
-    }
-    const site = await this.spaceCatClient.getSiteByBaseUrl(this.currentUrl);
-    if (!site) {
-      throw new Error('Failed to generate upload payload. Site not found.');
-    }
-    const opportunity = await this.spaceCatClient.ensureCWVOpportunity(site.id);
-    if (!opportunity) {
-      throw new Error('Failed to generate upload payload. CWV opportunity not found.');
-    }
-
-    const issues = [];
-    Object.entries(this.mergedSuggestions)
+  async getUploadPayload(existingSuggestion = null) {
+    const issues = Object.entries(this.mergedSuggestions)
       .filter(([category]) => this.categoryApprovalStatus[category] === 'approved')
-      .forEach(([category, suggestions]) => {
-        if (suggestions.length > 0) {
-          issues.push({
-            type: category.toLowerCase(),
-            value: suggestions.map((s, i) => this.formatSuggestionAsMarkdown(s, i)).join('\n\n---\n\n'),
-          });
-        }
-      });
-    
-    if (issues.length === 0) return null;
-
+      .flatMap(([, suggestions]) => suggestions.map((s, i) => ({
+        type: s.metric.toLowerCase(),
+        value: this.formatSuggestionAsMarkdown(s, i),
+      })));
+  
+    if (issues.length === 0) {
+      return null;
+    }
+  
+    // If updating an existing suggestion, use its ID and merge issues
+    if (existingSuggestion) {
+      existingSuggestion.data.issues = issues; // Replace issues
+      return existingSuggestion;
+    }
+  
+    // If creating a new suggestion
     return {
-      siteId: site.id,
-      opportunityId: opportunity.id,
-      suggestions: [{
-        id: randomUUID(),
-        type: 'CODE_CHANGE',
-        status: 'NEW',
-        rank: 0,
-        data: {
-          url: this.currentUrl,
-          metrics: [
+      id: randomUUID(),
+      type: 'CODE_CHANGE',
+      status: 'NEW',
+      rank: 0,
+      data: {
+        url: this.currentUrl,
+        metrics: [
             { deviceType: 'mobile', pageviews: 0, clsCount: 0, ttfbCount: 0, lcp: 0, inpCount: 0, inp: 0, ttfb: 0, cls: 0, lcpCount: 0 },
             { deviceType: 'desktop', pageviews: 0, clsCount: 0, ttfbCount: 0, lcp: 0, inpCount: 0, inp: 0, ttfb: 0, cls: 0, lcpCount: 0 }
-          ],
-          type: 'url',
-          issues
-        },
-      }],
+        ],
+        type: 'url',
+        issues,
+      },
     };
   }
 
   async batchUploadToSpaceCat(dryRun = false) {
     try {
-      const isReady = this.isReadyForBatchUpload();
-      if (!isReady) {
-        return { success: false, error: 'Failed to generate upload payload. No approved suggestions or site/opportunity not found.' };
-      }
-
-      const payload = await this.getUploadPayload();
-
-      if (!payload || payload.length === 0) {
+      if (!this.isReadyForBatchUpload()) {
         return { success: false, error: 'No approved suggestions to upload.' };
       }
-
-      if (dryRun) {
-        return { success: true, dryRun: true, message: 'Dry run successful. Payload is valid.', payload };
+  
+      const existing = await this.checkExistingSuggestionsForUrl();
+      if (!existing.success) {
+        return existing; // Propagate error
       }
-
-      const { siteId, opportunityId, suggestions } = payload;
-      const result = await this.spaceCatClient.updateSuggestions(siteId, opportunityId, suggestions);
+  
+      const { site, opportunityId, suggestions = [] } = existing;
+      const existingSuggestionForUrl = suggestions.find(s => s.data.url === this.currentUrl);
+  
+      const payload = await this.getUploadPayload(existingSuggestionForUrl);
+  
+      if (!payload) {
+        return { success: false, error: 'No approved suggestions to build payload.' };
+      }
+  
+      if (dryRun) {
+        const action = existingSuggestionForUrl ? 'UPDATE' : 'CREATE';
+        return { success: true, dryRun: true, action, message: `Dry run: Payload for ${action} is valid.`, payload };
+      }
+  
+      let result;
+      if (existingSuggestionForUrl) {
+        // Update existing suggestion
+        result = await this.spaceCatClient.updateSuggestion(payload);
+      } else {
+        // Create new suggestion
+        result = await this.spaceCatClient.createSuggestion(site.id, opportunityId, payload);
+      }
+  
       return { success: true, ...result };
     } catch (error) {
       return { success: false, error: error.message };
