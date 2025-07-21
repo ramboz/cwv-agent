@@ -69,7 +69,12 @@ export async function collect(pageUrl, deviceType, { skipCache, blockRequests })
 
   let lcpCoverageData = null;
   if (!coverageData || skipCache) {
-    lcpCoverageData = await collectLcpCoverage(page, pageUrl, deviceType);
+    try {
+      lcpCoverageData = await collectLcpCoverage(page, pageUrl, deviceType);
+    } catch (err) {
+      console.error('Error collecting LCP coverage data:', err.message);
+      lcpCoverageData = {}
+    }
   }
 
   // Waiting for page to finish loading
@@ -103,7 +108,12 @@ export async function collect(pageUrl, deviceType, { skipCache, blockRequests })
   cacheResults(pageUrl, deviceType, 'jsapi', jsApi);
 
   if (!coverageData || skipCache) {
-    coverageData = await collectPageCoverage(page, pageUrl, deviceType, lcpCoverageData);
+    try {
+      coverageData = await collectPageCoverage(page, pageUrl, deviceType, lcpCoverageData);
+    } catch (err) {
+      console.error('Error collecting page coverage data:', err.message);
+      coverageData = {}
+    }
   }
 
   // Close browser and save results

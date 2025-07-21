@@ -172,14 +172,18 @@ export async function collect(pageUrl, deviceType, options = {}) {
     }
   }
 
-  const psiAudit = cleanup(await psi(pageUrl, {
-    key: process.env.GOOGLE_PAGESPEED_INSIGHTS_API_KEY,
-    strategy: deviceType,
-  }));
+  try {
+    const psiAudit = cleanup(await psi(pageUrl, {
+      key: process.env.GOOGLE_PAGESPEED_INSIGHTS_API_KEY,
+      strategy: deviceType,
+    }));
 
-  cacheResults(pageUrl, deviceType, 'psi', psiAudit);
-  const summary = summarize(psiAudit);
-  cacheResults(pageUrl, deviceType, 'psi', summary);
+    cacheResults(pageUrl, deviceType, 'psi', psiAudit);
+    const summary = summarize(psiAudit);
+    cacheResults(pageUrl, deviceType, 'psi', summary);
 
-  return { full: psiAudit, summary };
+    return { full: psiAudit, summary };
+  } catch (error) {
+    return { full: 'Could not collect PSI data.', summary: 'Could not collect PSI data.' };
+  }
 }

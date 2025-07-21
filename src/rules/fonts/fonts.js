@@ -23,7 +23,7 @@ export default function evaluate({ har, jsApi }) {
   });
 
   // Check "font-display: swap" and fallback fonts
-  const mainFonts = Object.keys(jsApi.usedFonts);
+  const mainFonts = Object.keys(jsApi.usedFonts || {});
   const loadedFonts = jsApi.fonts.filter((f) => f.status === 'loaded' && mainFonts.includes(f.fontFamily));
   loadedFonts.forEach((f) => {
     if (f.display !== 'swap') {
