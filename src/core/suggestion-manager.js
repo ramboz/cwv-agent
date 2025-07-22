@@ -433,6 +433,17 @@ export class CWVSuggestionManager {
     }
   }
 
+  async getSuggestionsByUrlAndType(url, opportunityType = 'cwv') {
+    const site = await this.spaceCatClient.getSiteByBaseUrl(url);
+    if (!site) return { success: false, error: 'Site not found.' };
+
+    const opportunity = await this.spaceCatClient.getOpportunity(site.id, opportunityType);
+    if (!opportunity) return { success: false, error: `Could not find or create opportunity of type '${opportunityType}'.` };
+
+    const existing = await this.spaceCatClient.checkExistingSuggestions(site.id, opportunity.id);
+    return { success: true, site, opportunity, ...existing.filter(s => s.data.url === url) };
+  }
+
   /**
    * Approves all suggestions in a category
    * @param {String} category - The category to approve (LCP, CLS, INP, or TTFB)

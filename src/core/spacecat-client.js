@@ -211,8 +211,7 @@ export class SpaceCatClient {
    * @returns {Promise<{exists: boolean, count: number, suggestions: Array<object>}>}
    */
   async checkExistingSuggestions(siteId, opportunityId) {
-    const response = await this.apiRequest(`/sites/${siteId}/opportunities/${opportunityId}/suggestions`);
-    const suggestions = response.data || [];
+    const suggestions = await this.apiRequest(`/sites/${siteId}/opportunities/${opportunityId}/suggestions`);
     return {
       exists: suggestions.length > 0,
       count: suggestions.length,
@@ -242,5 +241,17 @@ export class SpaceCatClient {
       this.authWrapper.cleanup();
       console.log('SpaceCatClient: Auth wrapper cleaned up.');
     }
+  }
+
+  /**
+   * Gets an opportunity of a specific type for the site.
+   * @param {string} siteId - The ID of the site.
+   * @param {string} opportunityType - The type of opportunity (e.g., 'cwv', 'a11y').
+   * @returns {Promise<object>} The opportunity object.
+   */
+  async getOpportunity(siteId, opportunityType) {
+    const opportunities = await this.getSiteOpportunities(siteId);
+    let opportunity = opportunities.find(opp => opp.type === opportunityType);
+    return opportunity;
   }
 } 

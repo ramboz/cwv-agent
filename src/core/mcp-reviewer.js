@@ -31,7 +31,7 @@ export async function startMCPReviewer() {
       tools: [
         {
           name: 'load_cwv_suggestions',
-          description: 'Load CWV suggestions from a JSON file',
+          description: 'Load CWV suggestions from a single local JSON file (from disk cache, not SpaceCat)',
           inputSchema: {
             type: 'object',
             properties: { filePath: { type: 'string', description: 'Path to the suggestions JSON file' } },
@@ -40,7 +40,7 @@ export async function startMCPReviewer() {
         },
         {
           name: 'load_multi_device_suggestions',
-          description: 'Load and merge CWV suggestions from both mobile and desktop JSON files',
+          description: 'Load and merge CWV suggestions from both mobile and desktop local JSON files (from disk cache, not SpaceCat)',
           inputSchema: {
             type: 'object',
             properties: {
@@ -52,7 +52,7 @@ export async function startMCPReviewer() {
         },
         {
           name: 'load_suggestions_by_url',
-          description: 'Auto-discover and load CWV suggestions by URL',
+          description: 'Auto-discover and load CWV suggestions from local cache files by URL (searches .cache directory, not SpaceCat)',
           inputSchema: {
             type: 'object',
             properties: {
@@ -63,8 +63,20 @@ export async function startMCPReviewer() {
           }
         },
         {
+          name: 'get_suggestions_by_url_and_type',
+          description: 'Fetch existing suggestions from SpaceCat/AEM Sites Optimizer (ASO) database by URL and opportunity type (e.g., cwv, a11y). This queries the live SpaceCat API.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              url: { type: 'string', description: 'The URL to check for.' },
+              opportunityType: { type: 'string', description: 'The type of opportunity (e.g., cwv, a11y). Defaults to cwv.', default: 'cwv' }
+            },
+            required: ['url']
+          }
+        },
+        {
           name: 'create_category_editor',
-          description: 'Create a temporary markdown file for editing an entire category of suggestions',
+          description: 'Create a temporary markdown file for editing an entire category of suggestions (requires suggestions to be loaded first)',
           inputSchema: {
             type: 'object',
             properties: {
@@ -75,7 +87,7 @@ export async function startMCPReviewer() {
         },
         {
           name: 'read_category_edits',
-          description: 'Read back the edited category from markdown file',
+          description: 'Read back the edited category from markdown file and update approval status',
           inputSchema: {
             type: 'object',
             properties: { filePath: { type: 'string', description: 'Path to the edited category markdown file' } },
@@ -84,7 +96,7 @@ export async function startMCPReviewer() {
         },
         {
           name: 'check_existing_suggestions',
-          description: 'Check if suggestions already exist for the current URL in SpaceCat',
+          description: 'Check if suggestions already exist in SpaceCat/AEM Sites Optimizer (ASO) for the currently loaded URL (requires URL to be loaded first via load_suggestions_by_url)',
           inputSchema: {
             type: 'object',
             properties: {}
@@ -92,7 +104,7 @@ export async function startMCPReviewer() {
         },
         {
           name: 'get_category_status',
-          description: 'Get status information for a specific category or all categories',
+          description: 'Get approval status and count for a specific category or all categories (requires suggestions to be loaded first)',
           inputSchema: {
             type: 'object',
             properties: {
@@ -101,42 +113,42 @@ export async function startMCPReviewer() {
           }
         },
         {
-          name: 'cleanup_temp_files',
-          description: 'Remove temporary markdown editing files',
-          inputSchema: {
-            type: 'object',
-            properties: {
-              fileType: { type: 'string', description: 'Type of files to clean up', enum: ['all', 'category', 'suggestion', 'markdown'], default: 'all' }
-            }
-          }
-        },
-        {
-          name: 'batch_upload_to_spacecat',
-          description: 'Batch upload all approved category suggestions to SpaceCat',
-          inputSchema: {
-            type: 'object',
-            properties: {
-              dryRun: { type: 'boolean', description: 'If true, simulate the upload', default: false }
-            }
-          }
-        },
-        {
-          name: 'get_status',
-          description: 'Get current status of suggestions and workflow',
-          inputSchema: {
-            type: 'object',
-            properties: {}
-          }
-        },
-        {
           name: 'approve_category',
-          description: 'Approve all suggestions in a category.',
+          description: 'Approve all suggestions in a category for upload to SpaceCat/AEM Sites Optimizer (ASO) (requires suggestions to be loaded first)',
           inputSchema: {
             type: 'object',
             properties: {
               category: { type: 'string', description: 'Category to approve', enum: ['LCP', 'CLS', 'INP', 'TTFB'] }
             },
             required: ['category']
+          }
+        },
+        {
+          name: 'batch_upload_to_spacecat',
+          description: 'Upload all approved category suggestions to SpaceCat/AEM Sites Optimizer (ASO) (creates new or updates existing suggestions for the URL)',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              dryRun: { type: 'boolean', description: 'If true, simulate the upload without making changes', default: false }
+            }
+          }
+        },
+        {
+          name: 'get_status',
+          description: 'Get current status of loaded suggestions, approval state, and workflow progress',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'cleanup_temp_files',
+          description: 'Remove temporary markdown editing files from the .cache/temp-edits directory',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              fileType: { type: 'string', description: 'Type of files to clean up', enum: ['all', 'category', 'suggestion', 'markdown'], default: 'all' }
+            }
           }
         }
       ]
@@ -180,6 +192,9 @@ export async function startMCPReviewer() {
           break;
         case 'approve_category':
           result = manager.approveCategory(args.category);
+          break;
+        case 'get_suggestions_by_url_and_type':
+          result = await manager.getSuggestionsByUrlAndType(args.url, args.opportunityType);
           break;
         default:
           throw new Error(`Unknown tool: ${name}`);
