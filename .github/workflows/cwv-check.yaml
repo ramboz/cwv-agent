@@ -1,0 +1,107 @@
+# Works for bbird repo :  
+#i made sure that artifacts are generated; ( the artifacts are basically the cwv-agent suggestions, the summary report basically! )
+#by installing that github workfow into the blackbird repo , the below code generates public url artifact !
+
+# Workflow Link : https://github.com/aemsites/bbird/actions/runs/16258921134/job/45900137143
+# PR  :  
+# Added a 1 day timer to ensure artifacts auto-expire after 24 hours.
+# Uploaded each CWV output (desktop summary, mobile summary, suggestions) as separate artifacts for better granularity.
+# iterate over all the https://<branch>--<repo>--<org>.aem.page/* URLs in the initial comment and runs cwv agent on each of them ! 
+
+name: CWV PR Check
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  run-cwv-check:
+    runs-on: ubuntu-latest
+    environment: cwv-check-env-junaid
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install CWV Agent
+        run: npm install --no-save git+https://github.com/ramboz/cwv-agent.git
+
+      - name: Extract URLs from PR Description
+        id: extract_urls
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          result-encoding: string
+          script: |
+            const pr = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+            });
+            const body = pr.data.body || '';
+            const urls = [...new Set((body.match(/https:\/\/[\w.-]+--[\w.-]+--[\w.-]+\.aem\.(page|live)\/[\S]*/g) || []))];
+            if (!urls.length) {
+              throw new Error('No valid AEM URLs found in PR description');
+            }
+            core.setOutput('urls', JSON.stringify(urls));
+
+      - name: Run CWV Agent for Each AEM URL
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
+          AZURE_OPENAI_API_DEPLOYMENT_NAME: ${{ secrets.AZURE_OPENAI_API_DEPLOYMENT_NAME }}
+          AZURE_OPENAI_API_INSTANCE_NAME: ${{ secrets.AZURE_OPENAI_API_INSTANCE_NAME }}
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+          AZURE_OPENAI_API_VERSION: ${{ secrets.AZURE_OPENAI_API_VERSION }}
+          GOOGLE_PAGESPEED_INSIGHTS_API_KEY: ${{ secrets.GOOGLE_PAGESPEED_INSIGHTS_API_KEY }}
+          GOOGLE_CRUX_API_KEY: ${{ secrets.GOOGLE_CRUX_API_KEY }}
+          PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: "true"
+          PUPPETEER_EXECUTABLE_PATH: "/usr/bin/google-chrome"
+        run: |
+          mkdir -p cwv-output
+          echo "Running CWV audits for listed AEM URLs..."
+          echo '${{ steps.extract_urls.outputs.urls }}' | jq -r '.[]' | while read URL; do
+            echo "Auditing $URL"
+            node node_modules/cwv-agent/index.js --action prompt --url "$URL" --device mobile --model gpt-4o
+            node node_modules/cwv-agent/index.js --action prompt --url "$URL" --device desktop --model gpt-4o
+          done
+          cp node_modules/cwv-agent/.cache/*.report.gpt4o.summary.md cwv-output/ || echo "No summary reports found."
+          cp node_modules/cwv-agent/.cache/*.suggestions.gpt4o.json cwv-output/ || echo "No suggestions found."
+
+      - name: Upload Desktop Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-report
+          path: cwv-output/*.desktop.report.gpt4o.summary.md
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Upload Mobile Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-report
+          path: cwv-output/*.mobile.report.gpt4o.summary.md
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Upload Suggestions JSON
+        uses: actions/upload-artifact@v4
+        with:
+          name: suggestions-json
+          path: cwv-output/*.suggestions.gpt4o.json
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Print project file tree (excluding node_modules)
+        run: |
+          sudo apt-get update && sudo apt-get install -y tree
+          echo "📁 Project structure (excluding node_modules):"
+          tree -L 3 -a -I 'node_modules'
