@@ -35,12 +35,12 @@ function extractStructuredSuggestions(content, pageUrl, deviceType) {
   try {
     // Look for the "STRUCTURED DATA FOR AUTOMATION" section first
     const automationSectionMatch = content.match(/## STRUCTURED DATA FOR AUTOMATION[\s\S]*?```json\s*(\{[\s\S]*?\})\s*```/);
-    
+
     // Fallback to general JSON code blocks or direct JSON
-    const jsonMatch = automationSectionMatch || 
-                     content.match(/```json\s*(\{[\s\S]*?\})\s*```/) || 
+    const jsonMatch = automationSectionMatch ||
+                     content.match(/```json\s*(\{[\s\S]*?\})\s*```/) ||
                      content.match(/(\{[\s\S]*"suggestions"[\s\S]*?\})/);
-    
+
     if (!jsonMatch) {
       console.log('⚠️  No structured JSON found in AI response');
       console.log('⚠️  Looking for: ## STRUCTURED DATA FOR AUTOMATION section or ```json blocks');
@@ -49,7 +49,7 @@ function extractStructuredSuggestions(content, pageUrl, deviceType) {
 
     const jsonStr = jsonMatch[1];
     let parsedData;
-    
+
     try {
       parsedData = JSON.parse(jsonStr);
     } catch (parseError) {
@@ -164,14 +164,14 @@ async function invokeLLM(llm, pageData, model, useSummarized = false) {
     cacheResults(pageUrl, deviceType, 'report', result, '', model);
     const path = cacheResults(pageUrl, deviceType, 'report', result.content, '', model);
     console.log('✅ CWV report generated at:', path);
-    
+
     // Extract and save structured JSON if present
     const structuredData = extractStructuredSuggestions(result.content, pageUrl, deviceType);
     if (structuredData) {
       const suggestionPath = cacheResults(pageUrl, deviceType, 'suggestions', structuredData, '', model);
       console.log('✅ Structured suggestions saved at:', suggestionPath);
     }
-    
+
     return result;
   } catch (error) {
     console.error('❌ Failed to generate report for', pageData.pageUrl);

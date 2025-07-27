@@ -1,8 +1,9 @@
 import { collect as collectCrux } from '../tools/crux.js';
 import { collect as collectLabData } from '../tools/lab/index.js';
 import { collect as collectPsi } from '../tools/psi.js';
-import { collect as collectCode } from '../tools/code.js';
-import { estimateTokenSize } from '../utils.js';
+import {collect as collectCode, extractS3Urls, getMcpCode} from '../tools/code.js';
+import {estimateTokenSize} from '../utils.js';
+import {MCPClientDemo} from "../mcpClient.js";
 
 export async function getCrux(pageUrl, deviceType, options) {
   const { full, summary, fromCache } = await collectCrux(pageUrl, deviceType, options);
@@ -64,8 +65,10 @@ export default async function collectArtifacts(pageUrl, deviceType, options) {
   const { full: crux, summary: cruxSummary } = await getCrux(pageUrl, deviceType, options);
   const { full: psi, summary: psiSummary } = await getPsi(pageUrl, deviceType, options);
   const { har, harSummary, perfEntries, perfEntriesSummary, fullHtml, jsApi, coverageData, coverageDataSummary } = await getLabData(pageUrl, deviceType, options);
-  const requests = har.log.entries.map((e) => e.request.url);
-  const { codeFiles: resources } = await getCode(pageUrl, deviceType, requests, options);
+  // const requests = har.log.entries.map((e) => e.request.url);
+  // const { codeFiles: resources } = await getCode(pageUrl, deviceType, requests, options);
+
+  const { codeFiles: resources } = await getMcpCode(pageUrl, deviceType, options);
 
   return {
     har,

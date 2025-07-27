@@ -1,5 +1,6 @@
 import { cacheResults, getCachedResults, getRequestHeaders } from '../utils.js';
 import { Agent } from 'undici';
+import {MCPClientDemo} from "../mcpClient.js";
 
 /**
  * Determines if a URL should be processed based on filtering rules
@@ -14,27 +15,27 @@ function shouldProcessUrl(requestUrl, baseUrl) {
   }
 
   const { pathname } = requestUrl;
-  
+
   // Process if it's the same path as the base URL
   if (pathname === baseUrl.pathname) {
     return true;
   }
-  
+
   // Process HTML files
   if (pathname.endsWith('.html')) {
     return true;
   }
-  
+
   // Process JS files that are either from clientlibs or not minified
   if (pathname.endsWith('.js') && !pathname.includes('.rum/@adobe/helix-rum-js')) {
     return pathname.startsWith('/etc.clientlibs/') || !pathname.endsWith('.min.js');
   }
-  
+
   // Process CSS files that are either from clientlibs or not minified
   if (pathname.endsWith('.css')) {
     return pathname.includes('/etc.clientlibs/') || !pathname.endsWith('.min.css');
   }
-  
+
   return false;
 }
 
@@ -66,8 +67,8 @@ async function fetchResource(url, deviceType, fetchOptions, skipCache) {
   // Check cache first
   const cachedContent = getCachedResults(url, deviceType, 'code');
   if (cachedContent && !skipCache) {
-    return { 
-      content: cachedContent, 
+    return {
+      content: cachedContent,
       fromCache: true,
       failed: false
     };
@@ -88,8 +89,8 @@ async function fetchResource(url, deviceType, fetchOptions, skipCache) {
 
     if (!response.ok) {
       console.warn(`Failed to fetch resource: ${url}. Status: ${response.status} - ${response.statusText}`);
-      return { 
-        content: null, 
+      return {
+        content: null,
         fromCache: false,
         failed: true
       };
@@ -98,23 +99,99 @@ async function fetchResource(url, deviceType, fetchOptions, skipCache) {
     // Get the response body
     const body = await response.text();
     cacheResults(url, deviceType, 'code', body);
-    
-    return { 
-      content: body, 
+
+    return {
+      content: body,
       fromCache: false,
       failed: false
     };
   } catch (error) {
     console.error(`Failed to fetch ${url}:`, error.message);
     console.error(error.stack);
-    return { 
-      content: null, 
+    return {
+      content: null,
       fromCache: false,
       failed: true,
       error
     };
   }
 }
+
+export async function getMcpCode(pageUrl, deviceType, { skipCache, skipTlsCheck }) {
+
+  // MCP client is used to scrape the page and collect resources
+  const client = new MCPClientDemo();
+  await client.connect();
+  const scrapeResult = await client.callTool('scrape', { url: pageUrl });
+  const urlsToProcess = extractS3Urls(JSON.parse(scrapeResult?.content[0].text));
+
+  const codeFiles = {};
+  let cachedResources = 0;
+  let failedResources = 0;
+
+  const fetchOptions = createFetchOptions(deviceType, skipTlsCheck);
+
+  for (let url of urlsToProcess) {
+
+    const result = await fetchResource(url, deviceType, fetchOptions, skipCache);
+
+    if (result.fromCache) {
+      cachedResources++;
+    }
+
+    if (result.failed) {
+      failedResources++;
+    } else if (result.content) {
+      // replace the URL with the original one
+      url = url.replace(/https?:\/\/[^/]+/, pageUrl);
+      codeFiles[url] = result.content;
+    }
+  }
+
+    return {
+      codeFiles: codeFiles,
+    }
+}
+
+export function extractS3Urls(scrapeJson) {
+  const s3Urls = [];
+
+  // HTML
+  if (scrapeJson?.files?.html?.s3Url) {
+    s3Urls.push(scrapeJson.files.html.s3Url);
+  }
+
+  // CSS (external and inline)
+  const cssFiles = scrapeJson?.files?.css;
+  if (cssFiles) {
+    ['external', 'inline'].forEach(type => {
+      if (Array.isArray(cssFiles[type])) {
+        cssFiles[type].forEach(file => {
+          if (file.s3Url) {
+            s3Urls.push(file.s3Url);
+          }
+        });
+      }
+    });
+  }
+
+  // JS (external and inline)
+  const jsFiles = scrapeJson?.files?.js;
+  if (jsFiles) {
+    ['external', 'inline'].forEach(type => {
+      if (Array.isArray(jsFiles[type])) {
+        jsFiles[type].forEach(file => {
+          if (file.s3Url) {
+            s3Urls.push(file.s3Url);
+          }
+        });
+      }
+    });
+  }
+
+  return s3Urls;
+}
+
 
 /**
  * Fetches and processes multiple resources from a list of URLs
@@ -149,11 +226,11 @@ export async function collect(pageUrl, deviceType, resources, { skipCache, skipT
   // Process each resource sequentially to avoid overwhelming the server
   for (const url of urlsToProcess) {
     const result = await fetchResource(url, deviceType, fetchOptions, skipCache);
-    
+
     if (result.fromCache) {
       cachedResources++;
     }
-    
+
     if (result.failed) {
       failedResources++;
     } else if (result.content) {
