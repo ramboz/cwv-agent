@@ -2,7 +2,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
 export class MCPClientDemo {
-  constructor(serverUrl = 'http://localhost:3000/mcp') {
+  constructor(serverUrl = process.env.MCP_SERVER_URL) {
     this.serverUrl = serverUrl;
     this.client = null;
     this.transport = null;
@@ -121,15 +121,6 @@ export class MCPClientDemo {
         arguments: arguments_
       });
 
-      // console.log('✅ Tool result:');
-      // result.content.forEach(content => {
-      //   if (content.type === 'text') {
-      //     console.log(`   ${content.text}`);
-      //   } else {
-      //     console.log(`   [${content.type}]:`, content);
-      //   }
-      // });
-
       return result;
     } catch (error) {
       console.error(`❌ Error calling tool "${name}":`, error.message);
@@ -183,46 +174,6 @@ export class MCPClientDemo {
     }
   }
 
-  // async runDemo() {
-  //   console.log('🎬 Starting MCP Client Demo...\n');
-  //
-  //   if (!await this.connect()) {
-  //     return;
-  //   }
-  //
-  //   try {
-  //     // List all available capabilities
-  //     await this.listTools();
-  //     await this.listResources();
-  //     await this.listPrompts();
-  //
-  //     // Demo tool calls
-  //     console.log('\n🔧 === TOOL DEMONSTRATIONS ===');
-  //     await this.callTool('add', { a: 15, b: 27 });
-  //     await this.callTool('multiply', { x: 8, y: 9 });
-  //     // Scrape tool requires external services, commented out for basic demo
-  //     await this.callTool('scrape', { url: "https://example.com" });
-  //
-  //     // Demo resource reads
-  //     console.log('\n📚 === RESOURCE DEMONSTRATIONS ===');
-  //     await this.readResource('info://server');
-  //     await this.readResource('greeting://Alice');
-  //     await this.readResource('greeting://Bob');
-  //
-  //     // Demo prompt
-  //     console.log('\n💭 === PROMPT DEMONSTRATIONS ===');
-  //     await this.getPrompt('review-code', {
-  //       code: 'function add(a, b) { return a + b; }',
-  //       language: 'javascript'
-  //     });
-  //
-  //   } catch (error) {
-  //     console.error('❌ Demo error:', error.message);
-  //   } finally {
-  //     await this.disconnect();
-  //   }
-  // }
-
   createMcpContentResult(results) {
     return {
       content: results.map((result) => ({
@@ -232,52 +183,3 @@ export class MCPClientDemo {
     };
   }
 }
-
-// Interactive CLI mode
-async function interactiveMode() {
-  const client = new MCPClientDemo();
-
-  if (!await client.connect()) {
-    process.exit(1);
-  }
-
-  console.log('\n🎮 Interactive MCP Client');
-  console.log('Commands:');
-  console.log('  list tools    - Show available tools');
-  console.log('  list resources - Show available resources');
-  console.log('  list prompts  - Show available prompts');
-  console.log('  call <tool> <json-args> - Call a tool');
-  console.log('  read <uri>    - Read a resource');
-  console.log('  prompt <name> <json-args> - Get a prompt');
-  console.log('  demo          - Run full demo');
-  console.log('  exit          - Quit');
-
-  // Note: In a real implementation, you'd use readline or another input library
-  // For this demo, we'll just run the automated demo
-  console.log('\n📝 Running automated demo (interactive mode would require readline)...');
-  // await client.runDemo();
-}
-
-// Main execution
-// async function startMcp() {
-//   const args = process.argv.slice(2);
-//
-//   if (args.includes('--interactive') || args.includes('-i')) {
-//     await interactiveMode();
-//   } else {
-//     const client = new MCPClientDemo();
-//     // await client.runDemo();
-//   }
-// }
-
-// Handle graceful shutdown
-process.on('SIGINT', () => {
-  console.log('\n👋 Goodbye!');
-  process.exit(0);
-});
-
-// Run the client
-// startMcp().catch(error => {
-//   console.error('❌ Client error:', error);
-//   process.exit(1);
-// });
