@@ -421,7 +421,7 @@ export class CWVSuggestionManager {
       let result;
       if (existingSuggestionForUrl) {
         // Update existing suggestion
-        result = await this.spaceCatClient.updateSuggestion(payload);
+        result = await this.spaceCatClient.updateSuggestion(site.id, opportunityId, payload);
       } else {
         // Create new suggestion
         result = await this.spaceCatClient.createSuggestion(site.id, opportunityId, payload);
@@ -441,7 +441,7 @@ export class CWVSuggestionManager {
     if (!opportunity) return { success: false, error: `Could not find or create opportunity of type '${opportunityType}'.` };
 
     const existing = await this.spaceCatClient.checkExistingSuggestions(site.id, opportunity.id);
-    return { success: true, site, opportunity, ...existing.filter(s => s.data.url === url) };
+    return { success: true, site, opportunity, ...existing.suggestions.filter(s => s.data.url === url) };
   }
 
   /**

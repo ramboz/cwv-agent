@@ -234,6 +234,40 @@ export class SpaceCatClient {
   }
 
   /**
+   * Creates a new suggestion for an opportunity.
+   * @param {string} siteId - The site ID.
+   * @param {string} opportunityId - The opportunity ID.
+   * @param {object} suggestion - The suggestion to create.
+   * @returns {Promise<object>} The result from the API.
+   */
+  async createSuggestion(siteId, opportunityId, suggestion) {
+    // Get existing suggestions
+    const existingCheck = await this.checkExistingSuggestions(siteId, opportunityId);
+    const allSuggestions = [...existingCheck.suggestions, suggestion];
+    
+    // Update all suggestions including the new one
+    return this.updateSuggestions(siteId, opportunityId, allSuggestions);
+  }
+
+  /**
+   * Updates an existing suggestion for an opportunity.
+   * @param {string} siteId - The site ID.
+   * @param {string} opportunityId - The opportunity ID.
+   * @param {object} updatedSuggestion - The updated suggestion data.
+   * @returns {Promise<object>} The result from the API.
+   */
+  async updateSuggestion(siteId, opportunityId, updatedSuggestion) {
+    // Get existing suggestions
+    const existingCheck = await this.checkExistingSuggestions(siteId, opportunityId);
+    const allSuggestions = existingCheck.suggestions.map(suggestion => 
+      suggestion.id === updatedSuggestion.id ? updatedSuggestion : suggestion
+    );
+    
+    // Update all suggestions with the modified one
+    return this.updateSuggestions(siteId, opportunityId, allSuggestions);
+  }
+
+  /**
    * Cleans up any resources used by the client, like authentication timers.
    */
   cleanup() {
