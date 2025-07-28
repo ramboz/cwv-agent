@@ -48,6 +48,8 @@ async function main() {
       await new Promise(resolve => setTimeout(resolve, 60_000)); // 1min
     }
   }
+
+  process.exit(0);
 }
 
 // Run the main function

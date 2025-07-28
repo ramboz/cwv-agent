@@ -281,8 +281,8 @@ export default async function runPrompt(pageUrl, deviceType, options = {}) {
 
   // Invoke LLM and handle retries automatically
   if(options.agentMode === 'single') {
-    return invokeLLM(llm, pageData, model, false);
+    return await invokeLLM(llm, pageData, model, false);
   } else {
-    return invokeMultiAgentLLM(pageData, model, llm);
+    return await invokeMultiAgentLLM(pageData, model, llm);
   }
 }
