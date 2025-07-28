@@ -115,7 +115,7 @@ export class MCPClientDemo {
 
   async callTool(name, arguments_) {
     try {
-      console.log(`\n🔧 Calling tool "${name}" with arguments:`, arguments_);
+      console.log(`\n🔧 Calling MCP tool "${name}" with arguments:`, arguments_);
       const result = await this.client.callTool({
         name: name,
         arguments: arguments_
