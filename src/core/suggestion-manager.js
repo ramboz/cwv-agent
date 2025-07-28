@@ -413,7 +413,7 @@ export class CWVSuggestionManager {
     return Object.values(this.categoryApprovalStatus).some(status => status === 'approved');
   }
   
-  async getUploadPayload(existingSuggestion = null) {
+  async getUploadPayload(existingSuggestion = null, existingMetrics = null) {
     // Group approved suggestions by metric type
     const groupedByMetric = {};
     
@@ -434,18 +434,26 @@ export class CWVSuggestionManager {
       type: metricType,
       value: markdownArray.join('\n\n---\n\n'), // Clean separator between suggestions
     }));
-  
+
     if (issues.length === 0) {
       return null;
     }
-  
+
     // If updating an existing suggestion, completely replace the data with new issues
     if (existingSuggestion) {
       existingSuggestion.data.issues = issues; // Replace issues
       existingSuggestion.updatedAt = new Date().toISOString();
       return existingSuggestion;
     }
-  
+
+    // Determine metrics to use - prefer existing metrics, fallback to zeros
+    const defaultMetrics = [
+      { deviceType: 'mobile', pageviews: 0, clsCount: 0, ttfbCount: 0, lcp: 0, inpCount: 0, inp: 0, ttfb: 0, cls: 0, lcpCount: 0 },
+      { deviceType: 'desktop', pageviews: 0, clsCount: 0, ttfbCount: 0, lcp: 0, inpCount: 0, inp: 0, ttfb: 0, cls: 0, lcpCount: 0 }
+    ];
+    
+    const metricsToUse = existingMetrics || defaultMetrics;
+
     // If creating a new suggestion
     return {
       id: randomUUID(),
@@ -454,10 +462,7 @@ export class CWVSuggestionManager {
       rank: 0,
       data: {
         url: this.currentUrl,
-        metrics: [
-            { deviceType: 'mobile', pageviews: 0, clsCount: 0, ttfbCount: 0, lcp: 0, inpCount: 0, inp: 0, ttfb: 0, cls: 0, lcpCount: 0 },
-            { deviceType: 'desktop', pageviews: 0, clsCount: 0, ttfbCount: 0, lcp: 0, inpCount: 0, inp: 0, ttfb: 0, cls: 0, lcpCount: 0 }
-        ],
+        metrics: metricsToUse,
         type: 'url',
         issues,
       },
@@ -477,8 +482,20 @@ export class CWVSuggestionManager {
   
       const { site, opportunityId, suggestions = [] } = existing;
       
+      // Extract existing metrics from suggestions for the current URL
+      const existingSuggestionsForUrl = suggestions.filter(s => s.data.url === this.currentUrl);
+      const existingMetrics = existingSuggestionsForUrl.length > 0 
+        ? existingSuggestionsForUrl[0].data.metrics  // Use metrics from the first matching suggestion
+        : null;
+
+      if (existingMetrics) {
+        console.log(`  📊 Preserving existing metrics from ${existingSuggestionsForUrl.length} suggestion(s)`);
+      } else {
+        console.log(`  📊 No existing metrics found, using default zeros`);
+      }
+
       // Create the new suggestion payload (always treat as new for bulk replacement)
-      const newSuggestionPayload = await this.getUploadPayload(null);
+      const newSuggestionPayload = await this.getUploadPayload(null, existingMetrics);
       
       if (!newSuggestionPayload) {
         return { success: false, error: 'No approved suggestions to build payload.' };
