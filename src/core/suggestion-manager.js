@@ -302,19 +302,75 @@ export class CWVSuggestionManager {
 
   parseCategoryMarkdown(content) {
     const lines = content.split('\n');
-    const headerLine = lines[0] || '';
-
-    // Extract category and status from a line like: <!-- CATEGORY: LCP (Status: pending) -->
-    const headerMatch = headerLine.match(/<!-- CATEGORY: (\w+) \(Status: (\w+)\)/);
-    const category = headerMatch ? headerMatch[1] : null;
-    const status = headerMatch ? headerMatch[2] : null;
-
-    // Basic parsing logic - for now, we just care about status.
-    // A more robust implementation would parse the full suggestion details.
+    
+    // Extract category from comment header like: <!-- CATEGORY: LCP -->
+    const categoryMatch = content.match(/<!-- CATEGORY: (\w+)/);
+    const category = categoryMatch ? categoryMatch[1] : null;
+    
+    // Extract status from the approval section like: **STATUS: APPROVED**
+    const statusMatch = content.match(/\*\*STATUS:\s*(\w+)\*\*/);
+    const status = statusMatch ? statusMatch[1].toLowerCase() : null;
+    
+    // Parse individual suggestions
+    const suggestions = [];
+    
+    // Split content by suggestion headers (## Suggestion N:)
+    const suggestionSections = content.split(/^## Suggestion \d+:/gm);
+    
+    for (let i = 1; i < suggestionSections.length; i++) {
+      const section = suggestionSections[i];
+      
+      // Extract title (everything up to the first newline)
+      const titleMatch = section.match(/^([^\n]+)/);
+      const title = titleMatch ? titleMatch[1].trim() : `Suggestion ${i}`;
+      
+      // Extract fields using regex patterns
+      const priorityMatch = section.match(/\*\*Priority\*\*:\s*([^\n]+)/);
+      const effortMatch = section.match(/\*\*Effort\*\*:\s*([^\n]+)/);
+      const devicesMatch = section.match(/\*\*Devices\*\*:\s*([^\n]+)/);
+      
+      // Extract description (content between ### Description and ### Implementation Details)
+      const descriptionMatch = section.match(/### Description\s*\n([\s\S]*?)(?=### Implementation Details|### Code Example|$)/);
+      const description = descriptionMatch ? descriptionMatch[1].trim() : '';
+      
+      // Extract implementation details
+      const implementationMatch = section.match(/### Implementation Details\s*\n([\s\S]*?)(?=### Code Example|$)/);
+      const implementation = implementationMatch ? implementationMatch[1].trim() : '';
+      
+      // Extract code example (content between ```javascript and ```)
+      const codeMatch = section.match(/### Code Example\s*\n```(?:javascript)?\s*\n([\s\S]*?)\n```/);
+      const codeExample = codeMatch ? codeMatch[1].trim() : null;
+      
+      // Parse devices
+      const devices = devicesMatch ? devicesMatch[1].split(',').map(d => d.trim()) : [];
+      
+      // Determine metric from category
+      const metric = category || 'LCP';
+      
+      // Create suggestion object
+      const suggestion = {
+        id: i,
+        title,
+        description,
+        metric,
+        priority: priorityMatch ? priorityMatch[1].trim() : 'Not specified',
+        effort: effortMatch ? effortMatch[1].trim() : 'Not specified',
+        implementation,
+        codeExample,
+        devices,
+        category: metric.toLowerCase(),
+        mobile_only: devices.length === 1 && devices[0] === 'mobile',
+        desktop_only: devices.length === 1 && devices[0] === 'desktop',
+        both_devices: devices.includes('mobile') && devices.includes('desktop')
+      };
+      
+      suggestions.push(suggestion);
+    }
     
     const result = {};
     if (category) result.category = category;
     if (status) result.status = status;
+    if (suggestions.length > 0) result.suggestions = suggestions;
     
     return result;
   }
@@ -350,7 +406,7 @@ export class CWVSuggestionManager {
     if (!site) return { success: true, exists: false, message: 'Site not found.' };
     const opportunity = await this.spaceCatClient.ensureCWVOpportunity(site.id);
     const existing = await this.spaceCatClient.checkExistingSuggestions(site.id, opportunity.id);
-    return { success: true, ...existing, site, opportunityId: opportunity.id };
+    return { success: true, site, opportunityId: opportunity.id, ...existing };
   }
 
   isReadyForBatchUpload() {
@@ -358,20 +414,35 @@ export class CWVSuggestionManager {
   }
   
   async getUploadPayload(existingSuggestion = null) {
-    const issues = Object.entries(this.mergedSuggestions)
+    // Group approved suggestions by metric type
+    const groupedByMetric = {};
+    
+    Object.entries(this.mergedSuggestions)
       .filter(([category]) => this.categoryApprovalStatus[category] === 'approved')
-      .flatMap(([, suggestions]) => suggestions.map((s, i) => ({
-        type: s.metric.toLowerCase(),
-        value: this.formatSuggestionAsMarkdown(s, i),
-      })));
+      .forEach(([, suggestions]) => {
+        suggestions.forEach((s, i) => {
+          const metricType = s.metric.toLowerCase();
+          if (!groupedByMetric[metricType]) {
+            groupedByMetric[metricType] = [];
+          }
+          groupedByMetric[metricType].push(this.formatSuggestionAsMarkdown(s, i));
+        });
+      });
+    
+    // Create one issue per metric type with concatenated content
+    const issues = Object.entries(groupedByMetric).map(([metricType, markdownArray]) => ({
+      type: metricType,
+      value: markdownArray.join('\n\n---\n\n'), // Clean separator between suggestions
+    }));
   
     if (issues.length === 0) {
       return null;
     }
   
-    // If updating an existing suggestion, use its ID and merge issues
+    // If updating an existing suggestion, completely replace the data with new issues
     if (existingSuggestion) {
       existingSuggestion.data.issues = issues; // Replace issues
+      existingSuggestion.updatedAt = new Date().toISOString();
       return existingSuggestion;
     }
   
@@ -405,29 +476,58 @@ export class CWVSuggestionManager {
       }
   
       const { site, opportunityId, suggestions = [] } = existing;
-      const existingSuggestionForUrl = suggestions.find(s => s.data.url === this.currentUrl);
-  
-      const payload = await this.getUploadPayload(existingSuggestionForUrl);
-  
-      if (!payload) {
+      
+      // Create the new suggestion payload (always treat as new for bulk replacement)
+      const newSuggestionPayload = await this.getUploadPayload(null);
+      
+      if (!newSuggestionPayload) {
         return { success: false, error: 'No approved suggestions to build payload.' };
       }
   
       if (dryRun) {
-        const action = existingSuggestionForUrl ? 'UPDATE' : 'CREATE';
-        return { success: true, dryRun: true, action, message: `Dry run: Payload for ${action} is valid.`, payload };
+        const existingForUrl = suggestions.filter(s => s.data.url === this.currentUrl);
+        const action = existingForUrl.length > 0 ? 'DELETE_AND_CREATE' : 'CREATE';
+        return { 
+          success: true, 
+          dryRun: true, 
+          action, 
+          message: `Dry run: Will ${action} suggestions for URL ${this.currentUrl}`,
+          existingCount: existingForUrl.length,
+          willDelete: existingForUrl.length,
+          willCreate: 1,
+          payload: newSuggestionPayload 
+        };
       }
   
-      let result;
-      if (existingSuggestionForUrl) {
-        // Update existing suggestion
-        result = await this.spaceCatClient.updateSuggestion(site.id, opportunityId, payload);
-      } else {
-        // Create new suggestion
-        result = await this.spaceCatClient.createSuggestion(site.id, opportunityId, payload);
+      // TRUE REPLACEMENT APPROACH:
+      // 1. Delete existing suggestions for this URL first
+      const suggestionsForCurrentUrl = suggestions.filter(s => s.data.url === this.currentUrl);
+      
+      console.log(`True replacement for ${this.currentUrl}:`);
+      console.log(`  Deleting ${suggestionsForCurrentUrl.length} existing suggestions for this URL`);
+      
+      // Delete each existing suggestion for this URL
+      const deletePromises = suggestionsForCurrentUrl.map(s => 
+        this.spaceCatClient.deleteSuggestion(site.id, opportunityId, s.id)
+      );
+      
+      if (deletePromises.length > 0) {
+        await Promise.all(deletePromises);
+        console.log(`  ✅ Deleted ${deletePromises.length} existing suggestions`);
       }
-  
-      return { success: true, ...result };
+      
+      // 2. Add our new suggestion
+      console.log(`  Adding 1 new suggestion for this URL`);
+      const result = await this.spaceCatClient.updateSuggestions(site.id, opportunityId, [newSuggestionPayload]);
+      
+      return { 
+        success: true, 
+        action: 'DELETE_AND_CREATE',
+        deletedSuggestions: suggestionsForCurrentUrl.length,
+        createdSuggestions: 1,
+        ...result 
+      };
+      
     } catch (error) {
       return { success: false, error: error.message };
     }
@@ -441,7 +541,7 @@ export class CWVSuggestionManager {
     if (!opportunity) return { success: false, error: `Could not find or create opportunity of type '${opportunityType}'.` };
 
     const existing = await this.spaceCatClient.checkExistingSuggestions(site.id, opportunity.id);
-    return { success: true, site, opportunity, ...existing.suggestions.filter(s => s.data.url === url) };
+    return { success: true, site, opportunity, ...existing.filter(s => s.data.url === url) };
   }
 
   /**

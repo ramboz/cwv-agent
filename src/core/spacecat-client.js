@@ -220,7 +220,20 @@ export class SpaceCatClient {
   }
 
   /**
-   * Uploads suggestions for an opportunity. This will replace all existing suggestions.
+   * Delete a specific suggestion.
+   * @param {string} siteId - The site ID.
+   * @param {string} opportunityId - The opportunity ID.
+   * @param {string} suggestionId - The suggestion ID to delete.
+   * @returns {Promise<object>} The result from the API.
+   */
+  async deleteSuggestion(siteId, opportunityId, suggestionId) {
+    return this.apiRequest(`/sites/${siteId}/opportunities/${opportunityId}/suggestions/${suggestionId}`, {
+      method: 'DELETE'
+    });
+  }
+
+  /**
+   * Uploads suggestions for an opportunity. This will ADD to existing suggestions.
    * @param {string} siteId - The site ID.
    * @param {string} opportunityId - The opportunity ID.
    * @param {Array<object>} suggestions - The suggestions to upload.
@@ -228,7 +241,7 @@ export class SpaceCatClient {
    */
   async updateSuggestions(siteId, opportunityId, suggestions) {
     return this.apiRequest(`/sites/${siteId}/opportunities/${opportunityId}/suggestions`, {
-      method: 'POST', // The endpoint seems to handle create/update via POST
+      method: 'POST', // POST adds suggestions, does NOT replace
       body: JSON.stringify(suggestions)
     });
   }
