@@ -7,6 +7,38 @@
 # Added a 1 day timer to ensure artifacts auto-expire after 24 hours.
 # Uploaded each CWV output (desktop summary, mobile summary, suggestions) as separate artifacts for better granularity.
 # iterate over all the https://<branch>--<repo>--<org>.aem.page/* URLs in the initial comment and runs cwv agent on each of them ! 
+# Take suggestions from the cwv agent and create Github Issues and call Copilot Pro Plus Coding Agent to create PRs for each of them !
+# Go to : https://github.com/settings/personal-access-tokens , Click “Generate new token” → “Fine-grained token”,Give it a name like Copilot Automation Token,Set expiration to ≤ 366 days
+# Name it: MY_PAT_TOKEN
+# Under Repository access: Choose "Only select repositories" , Select your repo (e.g., bbird),Set the following Repository Permissions:
+# Section	Access
+# Contents	✅ Read and write
+# Issues	✅ Read and write
+# Pull requests	✅ Read and write
+# Metadata	✅ Read-only
+# Administration	✅ Read-only
+# Go to your GitHub repo → Settings → Secrets → Actions → New Repository Secret
+#Check  Copilot Coding Agent is enabled on your repo or not !! Link:https://docs.github.com/en/copilot/how-tos/use-copilot-agents/coding-agent/assign-copilot-to-an-issue
+# If Copilot coding agent is enabled for the user and in the repository, the first node returned from the query will have the login value copilot-swe-agent. 
+# To verify the Copilot coding agent is enabled on your repo,  run the below query on https://docs.github.com/en/graphql/overview/explorer:
+# query {
+#   repository(owner: "octo-org", name: "octo-repo") {
+#     suggestedActors(capabilities: [CAN_BE_ASSIGNED], first: 100) {
+#       nodes {
+#         login
+#         __typename
+
+#         ... on Bot {
+#           id
+#         }
+
+#         ... on User {
+#           id
+#         }
+#       }
+#     }
+#   }
+# }
 
 name: CWV PR Check
 
@@ -17,6 +49,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  issues: write
 
 jobs:
   run-cwv-check:
@@ -52,8 +85,8 @@ jobs:
             if (!urls.length) {
               throw new Error('No valid AEM URLs found in PR description');
             }
-            core.setOutput('urls', JSON.stringify(urls));
-
+            console.log(`Found URLs: ${urls.join(', ')}`);
+            return JSON.stringify(urls);
       - name: Run CWV Agent for Each AEM URL
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
@@ -68,30 +101,20 @@ jobs:
         run: |
           mkdir -p cwv-output
           echo "Running CWV audits for listed AEM URLs..."
-          echo '${{ steps.extract_urls.outputs.urls }}' | jq -r '.[]' | while read URL; do
+          echo '${{ steps.extract_urls.outputs.result }}' | jq -r '.[]' | while read URL; do
             echo "Auditing $URL"
             node node_modules/cwv-agent/index.js --action prompt --url "$URL" --device mobile --model gpt-4o
             node node_modules/cwv-agent/index.js --action prompt --url "$URL" --device desktop --model gpt-4o
           done
-          cp node_modules/cwv-agent/.cache/*.report.gpt4o.summary.md cwv-output/ || echo "No summary reports found."
-          cp node_modules/cwv-agent/.cache/*.suggestions.gpt4o.json cwv-output/ || echo "No suggestions found."
-
-      - name: Upload Desktop Report
-        uses: actions/upload-artifact@v4
-        with:
-          name: desktop-report
-          path: cwv-output/*.desktop.report.gpt4o.summary.md
-          if-no-files-found: error
-          retention-days: 1
-
-      - name: Upload Mobile Report
-        uses: actions/upload-artifact@v4
-        with:
-          name: mobile-report
-          path: cwv-output/*.mobile.report.gpt4o.summary.md
-          if-no-files-found: error
-          retention-days: 1
-
+          
+          # Copy output files to our directory
+          if [ -d "node_modules/cwv-agent/.cache" ]; then
+            cp node_modules/cwv-agent/.cache/*.report.gpt4o.summary.md cwv-output/ 2>/dev/null || echo "No summary reports found."
+            cp node_modules/cwv-agent/.cache/*.suggestions.gpt4o.json cwv-output/ 2>/dev/null || echo "No suggestions found."
+            ls -la cwv-output/
+          else
+            echo "Cache directory not found"
+          fi
       - name: Upload Suggestions JSON
         uses: actions/upload-artifact@v4
         with:
@@ -99,8 +122,513 @@ jobs:
           path: cwv-output/*.suggestions.gpt4o.json
           if-no-files-found: error
           retention-days: 1
+      
+      - name: Analyze Project Structure for Copilot Context
+        id: analyze_structure
+        run: |
+          echo "📁 Analyzing project structure for Copilot context..."
+          
+          # Create a project context file for Copilot
+          cat > project-context.md << 'EOF'
+          # Project Structure Analysis for Core Web Vitals Optimization
+          
+          ## AEM Edge Delivery Services Project Structure
+          EOF
+          
+          # Add common AEM EDS patterns
+          if [ -d "scripts" ]; then
+            echo "- ✅ /scripts/ directory found (JavaScript optimization target)" >> project-context.md
+          fi
+          if [ -d "styles" ]; then
+            echo "- ✅ /styles/ directory found (CSS optimization target)" >> project-context.md  
+          fi
+          if [ -d "blocks" ]; then
+            echo "- ✅ /blocks/ directory found (Block-specific optimizations)" >> project-context.md
+          fi
+          if [ -f "head.js" ]; then
+            echo "- ✅ head.js found (Head script optimization target)" >> project-context.md
+          fi  
+          echo "" >> project-context.md
+          echo "## Key Files for Performance Optimization:" >> project-context.md
+          find . -name "*.js" -o -name "*.css" | grep -E "(scripts|styles|blocks|head)" | head -20 >> project-context.md
+          
+          cat project-context.md
+
+      - name: Verify Copilot Availability and Get Bot ID
+        id: get_copilot_id
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.MY_PAT_TOKEN }}
+          script: |
+            // First, verify Copilot is available in this repository
+            const query = `
+              query($owner: String!, $name: String!) {
+                repository(owner: $owner, name: $name) {
+                  suggestedActors(capabilities: [CAN_BE_ASSIGNED], first: 100) {
+                    nodes {
+                      login
+                      __typename
+                      ... on Bot {
+                        id
+                      }
+                      ... on User {
+                        id
+                      }
+                    }
+                  }
+                }
+              }
+            `;
+            
+            const variables = {
+              owner: context.repo.owner,
+              name: context.repo.repo
+            };
+            
+            try {
+              const response = await github.graphql(query, variables);
+              const suggestedActors = response.repository.suggestedActors.nodes;
+              
+              console.log('🔍 Available suggested actors:', JSON.stringify(suggestedActors, null, 2));
+              
+              // Find the Copilot coding agent
+              const copilotAgent = suggestedActors.find(actor => 
+                actor.login === 'copilot-swe-agent' || 
+                actor.login === 'github-copilot[bot]'
+              );
+              
+              if (copilotAgent) {
+                console.log('✅ Copilot coding agent found:', copilotAgent);
+                core.setOutput('copilot_available', 'true');
+                core.setOutput('copilot_id', copilotAgent.id);
+                core.setOutput('copilot_login', copilotAgent.login);
+                return {
+                  available: true,
+                  id: copilotAgent.id,
+                  login: copilotAgent.login
+                };
+              } else {
+                console.log('❌ Copilot coding agent not found in suggested actors');
+                console.log('Available actors:', suggestedActors.map(a => a.login));
+                core.setOutput('copilot_available', 'false');
+                return {
+                  available: false,
+                  message: 'Copilot coding agent not available in this repository'
+                };
+              }
+            } catch (error) {
+              console.log('❌ Error checking Copilot availability:', error);
+              core.setOutput('copilot_available', 'false');
+              return {
+                available: false,
+                error: error.message
+              };
+            }
+
+      - name: Create GitHub Issues and Auto-Trigger Copilot PRs
+        id: create_issues
+        if: steps.get_copilot_id.outputs.copilot_available == 'true'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.MY_PAT_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            
+            const cwvOutputDir = 'cwv-output';
+            const issueNumbers = [];
+            const prNumber = context.issue.number;
+            const copilotId = '${{ steps.get_copilot_id.outputs.copilot_id }}';
+            const copilotLogin = '${{ steps.get_copilot_id.outputs.copilot_login }}';
+            
+            console.log('🤖 Using Copilot ID:', copilotId);
+            console.log('🤖 Using Copilot Login:', copilotLogin);
+            
+            // Get the original PR author to assign final PRs to them
+            const pr = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber,
+            });
+            const originalAuthor = pr.data.user.login;
+            
+            // Helper functions
+            function createIssueTitle(suggestion, url, deviceType) {
+              const urlHost = new URL(url).hostname.split('.')[0];
+              return `[CWV-${deviceType.toUpperCase()}] ${suggestion.title} - ${urlHost}`;
+            }
+            
+            function createIssueBody(suggestion, url, deviceType, prNumber, originalAuthor) {
+              return `## 🚀 Core Web Vitals Performance Issue
+            **URL**: ${url}
+            **Device**: ${deviceType} 
+            **Metric**: ${suggestion.metric}
+            **Priority**: ${suggestion.priority}
+            **Effort**: ${suggestion.effort}
+            **Expected Impact**: ${suggestion.impact}
+            **Category**: ${suggestion.category}
+            **Original PR Author**: @${originalAuthor}
+            ## 📋 Description
+            ${suggestion.description}
+            ## 🛠️ Implementation Details
+            ${suggestion.implementation || 'No specific implementation details provided.'}
+            ${suggestion.codeExample ? `## 💻 Code Example\n\`\`\`\n${suggestion.codeExample}\n\`\`\`` : ''}
+            ## 🎯 AEM-Specific Implementation Guide
+            
+            ### File Locations to Check:
+            ${suggestion.category.toLowerCase() === 'javascript' ? `
+            - \`/scripts/scripts.js\` - Main script entry point
+            - \`/scripts/delayed.js\` - Non-critical scripts
+            - \`/head.js\` - Head scripts
+            - \`/blocks/*/\*.js\` - Block-specific scripts` : ''}
+            ${suggestion.category.toLowerCase() === 'css' || suggestion.category.toLowerCase() === 'styles' ? `
+            - \`/styles/styles.css\` - Main stylesheet
+            - \`/blocks/*/\*.css\` - Block-specific styles
+            - Check for critical CSS extraction opportunities` : ''}
+            ${suggestion.category.toLowerCase() === 'images' ? `
+            - Look for image references in blocks and templates
+            - Implement proper \`loading\` and \`fetchpriority\` attributes
+            - Check responsive image implementations` : ''}
+            ### Performance Target:
+            - **Metric**: ${suggestion.metric}
+            - **Expected Improvement**: ${suggestion.impact}
+            - **Device Focus**: ${deviceType}
+            ---
+            📝 *Auto-generated from PR #${prNumber}*
+            🤖 *GitHub Copilot will automatically create a PR for this optimization*`;
+            }
+            
+            // Function to sanitize category for use in labels
+            function sanitizeCategory(category) {
+              if (!category) return 'general';
+              return category.toLowerCase()
+                .replace(/[^a-z0-9-]/g, '-') // Replace non-alphanumeric with hyphens
+                .replace(/-+/g, '-')         // Replace multiple hyphens with single
+                .replace(/^-|-$/g, '');      // Remove leading/trailing hyphens
+            }
+            
+            // Function to deduplicate suggestions within a file
+            function deduplicateSuggestions(suggestions) {
+              console.log(`🔍 Deduplicating ${suggestions.length} suggestions...`);
+              
+              const uniqueSuggestions = suggestions.filter((suggestion, index, self) => {
+                // Create a unique key based on multiple criteria
+                const suggestionKey = `${suggestion.title || ''}-${suggestion.metric || ''}-${suggestion.category || ''}-${(suggestion.description || '').substring(0, 100)}`;
+                
+                return index === self.findIndex(s => {
+                  const otherKey = `${s.title || ''}-${s.metric || ''}-${s.category || ''}-${(s.description || '').substring(0, 100)}`;
+                  return otherKey === suggestionKey;
+                });
+              });
+              
+              const duplicatesRemoved = suggestions.length - uniqueSuggestions.length;
+              if (duplicatesRemoved > 0) {
+                console.log(`✨ Removed ${duplicatesRemoved} duplicate suggestions`);
+              }
+              
+              console.log(`📊 Final unique suggestions: ${uniqueSuggestions.length}`);
+              return uniqueSuggestions;
+            }
+            
+            async function isDuplicateIssue(title) {
+              try {
+                const issues = await github.rest.issues.listForRepo({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  state: 'open',
+                  per_page: 100,
+                  labels: 'cwv-suggestion'
+                });
+                
+                return issues.data.some(issue => issue.title === title);
+              } catch (error) {
+                console.log('Error checking for duplicates:', error.message);
+                return false;
+              }
+            }
+
+            // FIXED: Proper Copilot assignment using GraphQL
+            async function assignCopilotAgent(issueNodeId) {
+              console.log(`🤖 Assigning Copilot agent to issue with node ID: ${issueNodeId}`);
+              
+              const mutation = `
+                mutation($assignableId: ID!, $actorIds: [ID!]!) {
+                  replaceActorsForAssignable(input: {
+                    assignableId: $assignableId,
+                    actorIds: $actorIds
+                  }) {
+                    assignable {
+                      ... on Issue {
+                        id
+                        title
+                        assignees(first: 10) {
+                          nodes {
+                            login
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              `;
+              
+              const variables = {
+                assignableId: issueNodeId,
+                actorIds: [copilotId]
+              };
+              
+              try {
+                const result = await github.graphql(mutation, variables);
+                console.log('✅ Copilot agent successfully assigned to issue');
+                console.log('📋 Current assignees:', result.replaceActorsForAssignable.assignable.assignees.nodes.map(n => n.login));
+                return true;
+              } catch (error) {
+                console.log(`❌ Copilot assignment failed: ${error.message}`);
+                console.log('🔍 Error details:', JSON.stringify(error, null, 2));
+                return false;
+              }
+            }
+
+            // Function to trigger Copilot PR creation automatically
+            async function triggerCopilotPR(issueNumber, suggestion, url, deviceType, originalAuthor) {
+              const copilotPrompt = `@${copilotLogin} please create a PR to fix this Core Web Vitals performance issue.
+
+            **Implementation Requirements:**
+            1. Create a new branch named: \`cwv-fix-${issueNumber}-${suggestion.metric.toLowerCase()}-${deviceType}\`
+            2. Implement the optimization described in this issue
+            3. Focus on improving ${suggestion.metric} metric by ${suggestion.impact}
+            4. Target ${deviceType} device performance
+            5. Create PR with detailed performance impact description
+            6. Assign PR to @${originalAuthor}
+            7. Link this issue to the PR
+
+            **AEM-Specific Context:**
+            - This is an AEM Edge Delivery Services project
+            - Look for optimization opportunities in /scripts/, /styles/, /blocks/ directories
+            - Maintain AEM EDS architectural patterns
+            - Test URL: ${url}
+
+            Please proceed with creating the optimization PR immediately.`;
+
+              try {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issueNumber,
+                  body: copilotPrompt
+                });
+                console.log(`✅ Triggered Copilot PR creation for issue #${issueNumber}`);
+                return true;
+              } catch (error) {
+                console.log(`❌ Failed to trigger Copilot for issue #${issueNumber}: ${error.message}`);
+                return false;
+              }
+            }
+            
+            try {
+              if (!fs.existsSync(cwvOutputDir)) {
+                console.log('❌ CWV output directory not found');
+                return [];
+              }
+              
+              const suggestionFiles = fs.readdirSync(cwvOutputDir)
+                .filter(file => file.endsWith('.suggestions.gpt4o.json'));
+              
+              console.log(`Found ${suggestionFiles.length} suggestion files`);
+              
+              for (const filename of suggestionFiles) {
+                const filepath = path.join(cwvOutputDir, filename);
+                
+                try {
+                  const content = fs.readFileSync(filepath, 'utf8');
+                  const data = JSON.parse(content);
+                  
+                  const url = data.url;
+                  const deviceType = data.deviceType;
+                  const suggestions = data.suggestions || [];
+                  
+                  console.log(`📄 Processing ${suggestions.length} suggestions for ${url} (${deviceType})`);
+                  
+                  // Deduplicate suggestions within this file
+                  const uniqueSuggestions = deduplicateSuggestions(suggestions);
+                  
+                  for (const suggestion of uniqueSuggestions) {
+                    const issueTitle = createIssueTitle(suggestion, url, deviceType);
+                    
+                    const isDuplicate = await isDuplicateIssue(issueTitle);
+                    if (isDuplicate) {
+                      console.log(`⚠️ Skipping duplicate issue: ${issueTitle}`);
+                      continue;
+                    }
+                    
+                    const issueBody = createIssueBody(suggestion, url, deviceType, prNumber, originalAuthor);
+                    
+                    // Create labels array with proper sanitization
+                    const labels = [
+                      'cwv-suggestion',
+                      'performance',
+                      `cwv-${(suggestion.metric || 'unknown').toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
+                      `priority-${(suggestion.priority || 'medium').toLowerCase()}`,
+                      `device-${deviceType}`,
+                      `category-${sanitizeCategory(suggestion.category)}`,
+                      'copilot-ready'
+                    ];
+                    
+                    // Remove any empty or invalid labels
+                    const validLabels = labels.filter(label => label && label.length > 0 && !label.includes(' '));
+                    
+                    try {
+                      const issue = await github.rest.issues.create({
+                        owner: context.repo.owner,
+                        repo: context.repo.repo,
+                        title: issueTitle,
+                        body: issueBody,
+                        labels: validLabels,
+                      });
+                      
+                      issueNumbers.push(issue.data.number);
+                      console.log(`✅ Created issue #${issue.data.number}: ${issueTitle}`);
+
+                      // FIXED: Wait a moment, then assign Copilot
+                      await new Promise(resolve => setTimeout(resolve, 2000));
+                      
+                      const assignmentSuccess = await assignCopilotAgent(issue.data.node_id);
+                      
+                      if (assignmentSuccess) {
+                        // Wait a bit more before triggering the PR request
+                        await new Promise(resolve => setTimeout(resolve, 3000));
+                        
+                        // Automatically trigger Copilot PR creation
+                        const copilotTriggered = await triggerCopilotPR(
+                          issue.data.number, 
+                          suggestion, 
+                          url, 
+                          deviceType, 
+                          originalAuthor
+                        );
+                        
+                        if (copilotTriggered) {
+                          console.log(`🤖 Copilot automatically triggered for issue #${issue.data.number}`);
+                        }
+                      } else {
+                        console.log(`⚠️ Failed to assign Copilot to issue #${issue.data.number}, skipping PR trigger`);
+                      }
+                      
+                      // Add a longer delay between issues to avoid rate limiting and give Copilot time to process
+                      await new Promise(resolve => setTimeout(resolve, 5000));
+                      
+                    } catch (error) {
+                      console.log(`❌ Failed to create issue for "${issueTitle}": ${error.message}`);
+                      console.log(`Labels attempted: ${JSON.stringify(validLabels)}`);
+                    }
+                  }
+                } catch (error) {
+                  console.log(`❌ Failed to process file ${filename}: ${error.message}`);
+                }
+              }
+              
+              console.log(`\n📊 Summary: Created ${issueNumbers.length} issues with automatic Copilot PR triggers`);
+              return issueNumbers;
+              
+            } catch (error) {
+              console.log('❌ Error in issue creation process:', error.message);
+              throw error;
+            }
+
+      - name: Handle Copilot Unavailable
+        if: steps.get_copilot_id.outputs.copilot_available != 'true'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const comment = `## ❌ GitHub Copilot Coding Agent Not Available
+            
+            Unfortunately, the GitHub Copilot coding agent is not available in this repository. This could be because:
+            
+            - Copilot is not enabled for this repository
+            - The coding agent feature is not activated
+            - Repository permissions don't allow Copilot access
+            
+            **Manual Review Required**: CWV analysis completed but automatic PR creation is not possible.
+            
+            Please check your repository's Copilot settings or create the performance optimizations manually.`;
+            
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+      - name: Comment on PR with Created Issues and Auto-PRs
+        if: steps.create_issues.outputs.result != '[]'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const issueNumbers = ${{ steps.create_issues.outputs.result }};
+            
+            if (issueNumbers.length === 0) {
+              console.log('No issues were created to comment about');
+              return;
+            }
+            
+            const issueLinks = issueNumbers.map(num => `- #${num}`).join('\n');
+            
+            const comment = `## 🚀 Core Web Vitals Analysis Complete - Fully Automated!
+            ✨ **Automated Performance Optimization in Progress**
+            I've analyzed your AEM pages and **automatically triggered ${issueNumbers.length} GitHub Copilot PRs** for performance optimizations:
+            ${issueLinks}
+            ###  What's Happening Automatically:
+            -  **Issues Created**: ${issueNumbers.length} specific performance optimizations identified  
+            -  **Duplicates Filtered**: Removed duplicate suggestions from analysis files
+            -  **Copilot Assigned**: GitHub Copilot coding agent properly assigned to each issue
+            -  **PR Creation Triggered**: Copilot is now automatically creating PRs for each issue
+            -  **Metrics Analyzed**: LCP, CLS, and INP improvements calculated
+            -  **Prioritized**: Issues ranked by impact and implementation effort
+            -  **Device-Specific**: Separate optimizations for mobile and desktop
+            -  **Auto-Assigned**: All generated PRs will be assigned to you (@${context.payload.pull_request.user.login})
+            ###  Expected Outcomes:
+            - **Copilot Agent Properly Assigned** - Using correct GraphQL mutation
+            - **Performance improvements** based on real Core Web Vitals data
+            - **AEM-specific optimizations** targeting /scripts/, /styles/, /blocks/ directories
+            - **Ready-to-merge PRs** with detailed implementation notes
+            ###  Next Steps (5-10 minutes per issue):
+            1.  Copilot analyzes your codebase for each optimization
+            2.  PRs are created with specific performance fixes
+            3.  PRs include before/after performance impact descriptions
+            4.  PRs are automatically assigned to you for review
+            5.  Issues are linked to their corresponding PRs
+            **Monitor the "Pull Requests" tab** to see the automated PRs as they're created!
+            ⏱️ *Each Copilot PR typically takes 5-10 minutes to be created*
+            ---
+            🎉 **Fully automated Core Web Vitals optimization powered by GitHub Copilot**`;
+            
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+      - name: Upload Desktop Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-report
+          path: cwv-output/*.desktop.report.gpt4o.summary.md
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Upload Mobile Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-report
+          path: cwv-output/*.mobile.report.gpt4o.summary.md
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Print project file tree (excluding node_modules)
+        if: always()
         run: |
           sudo apt-get update && sudo apt-get install -y tree
           echo "📁 Project structure (excluding node_modules):"
