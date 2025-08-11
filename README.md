@@ -85,7 +85,8 @@ Options:
 - `gemini-2.5-flash-preview-05-20` (faster, less detailed)
 
 ### OpenAI Models (via Azure)
-- `gpt-4o` (latest GPT-4 model)
+- `gpt-5` (latest GPT-5 model)
+- `gpt-4o` (GPT-4 model)
 - `gpt-4.1` (previous version)
 
 ### Claude Models (via AWS Bedrock)

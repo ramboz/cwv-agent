@@ -9,6 +9,7 @@ export const MAX_TOKENS = {
   'gemini-2.5-flash-preview-05-20	': { input: 1_048_576, output: 65_535 },
   
   // OpenAI models
+  'gpt-5': { input: 227_000, output: 128_000 },
   'gpt-4.1': { input: 1_048_576, output: 32_768 },
   'gpt-4o': { input: 128_000, output: 4_096 },
   'gpt-o3': { input: 1_048_576, output: 32_768 },

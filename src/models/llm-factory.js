@@ -41,10 +41,12 @@ export class LLMFactory {
           throw new Error(`Missing required environment variables for Azure OpenAI: ${missingAzureVars.join(', ')}`);
         }
         
-        const basePath = `https://${process.env.AZURE_OPENAI_API_INSTANCE_NAME}.openai.azure.com`;
+        const basePath = `https://${process.env.AZURE_OPENAI_API_INSTANCE_NAME}.${model === 'gpt-5' ? 'cognitiveservices' : 'openai'}.azure.com`;
         return new AzureChatOpenAI({
           model,
-          maxTokens: tokenLimits.output,
+          ...(model === 'gpt-5'
+            ? { max_completion_tokens: tokenLimits.output }
+            : {maxTokens: tokenLimits.output}),
           openAIApiKey: process.env.AZURE_OPENAI_API_KEY,
           openAIBasePath: basePath,
           configuration: { basePath }
