@@ -1,4 +1,4 @@
-import { initializeSystem } from './initialize.js';
+import { initializeSystem, initializeSystemAgents } from './initialize.js';
 import {
   cruxStep,
   cruxSummaryStep,
@@ -14,11 +14,21 @@ import {
   resetStepCounter,
   coverageStep,
   coverageSummaryStep,
+  // Agent prompts
+  cruxAgentPrompt,
+  psiAgentPrompt,
+  perfObserverAgentPrompt,
+  harAgentPrompt,
+  htmlAgentPrompt,
+  rulesAgentPrompt,
+  coverageAgentPrompt,
+  codeReviewAgentPrompt,
 } from './analysis.js';
 import { actionPrompt } from './action.js';
 
 export {
   initializeSystem,
+  initializeSystemAgents,
   cruxStep,
   cruxSummaryStep,
   psiStep,
@@ -34,4 +44,12 @@ export {
   resetStepCounter,
   coverageStep,
   coverageSummaryStep,
+  cruxAgentPrompt,
+  psiAgentPrompt,
+  perfObserverAgentPrompt,
+  harAgentPrompt,
+  htmlAgentPrompt,
+  rulesAgentPrompt,
+  coverageAgentPrompt,
+  codeReviewAgentPrompt,
 }

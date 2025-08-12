@@ -25,7 +25,19 @@ import merge from '../tools/merge.js';
 import { applyRules } from '../tools/rules.js';
 import { estimateTokenSize, cacheResults, getCachedResults, getCachePath } from '../utils.js';
 import { LLMFactory } from '../models/llm-factory.js';
-import { DEFAULT_MODEL, getTokenLimits } from '../models/config.js';
+import { getTokenLimits } from '../models/config.js';
+
+function extractMarkdownSuggestions(content) {
+  if (!content || typeof content !== 'string') return '';
+  const marker = /\n## STRUCTURED DATA FOR AUTOMATION[\s\S]*$/;
+  const idx = content.search(marker);
+  if (idx === -1) {
+      // No structured section found; return as-is
+      return content.trim();
+  }
+  const md = content.slice(0, idx - 4);
+  return md.trim();
+}
 
 /**
  * Extract structured JSON from the AI response and validate it
@@ -56,8 +68,18 @@ function extractStructuredSuggestions(content, pageUrl, deviceType) {
       return null;
     }
 
-    // Validate the structure
-    if (!parsedData.suggestions || !Array.isArray(parsedData.suggestions)) {
+    // Normalize suggestions from common alternative keys
+    let suggestions = parsedData.suggestions;
+    if (!Array.isArray(suggestions)) {
+      if (Array.isArray(parsedData.actions)) suggestions = parsedData.actions;
+      else if (Array.isArray(parsedData.recommendations)) suggestions = parsedData.recommendations;
+      else if (parsedData.suggestions && typeof parsedData.suggestions === 'object') suggestions = Object.values(parsedData.suggestions);
+      else if (parsedData.data && Array.isArray(parsedData.data.suggestions)) suggestions = parsedData.data.suggestions;
+      else if (parsedData.data && Array.isArray(parsedData.data.actions)) suggestions = parsedData.data.actions;
+    }
+
+    // Validate the structure after normalization
+    if (!Array.isArray(suggestions)) {
       console.log('⚠️  Invalid JSON structure: missing or invalid suggestions array');
       return null;
     }
@@ -68,16 +90,16 @@ function extractStructuredSuggestions(content, pageUrl, deviceType) {
       url: parsedData.url || pageUrl,
       deviceType: parsedData.deviceType || deviceType,
       extractedAt: new Date().toISOString(),
-      suggestions: parsedData.suggestions.map((suggestion, index) => ({
+      suggestions: suggestions.map((suggestion, index) => ({
         id: suggestion.id || (index + 1),
         title: suggestion.title || 'Untitled Suggestion',
         description: suggestion.description || '',
-        metric: suggestion.metric || 'CWV',
+        metric: suggestion.metric || suggestion.metrics || 'CWV',
         priority: suggestion.priority || 'Medium',
         effort: suggestion.effort || 'Medium',
         impact: suggestion.impact || '',
-        implementation: suggestion.implementation || '',
-        codeExample: suggestion.codeExample || '',
+        implementation: suggestion.implementation || suggestion.details || '',
+        codeExample: suggestion.codeExample || suggestion.example || '',
         category: suggestion.category || 'performance',
         ...suggestion // Include any additional fields
       }))
@@ -160,8 +182,9 @@ async function invokeLLM(llm, pageData, model, useSummarized = false) {
   try {
     // Direct invocation
     const result = await llm.invoke(messages);
+    const markdown = extractMarkdownSuggestions(result.content);
     cacheResults(pageUrl, deviceType, 'report', result, '', model);
-    const path = cacheResults(pageUrl, deviceType, 'report', result.content, '', model);
+    const path = cacheResults(pageUrl, deviceType, 'report', markdown, '', model);
     console.log('✅ CWV report generated at:', path);
     
     // Extract and save structured JSON if present
@@ -192,15 +215,12 @@ async function invokeLLM(llm, pageData, model, useSummarized = false) {
 }
 
 export default async function runPrompt(pageUrl, deviceType, options = {}) {
-  // Get model from options or use default
-  const model = options.model || DEFAULT_MODEL;
-  
   // Check cache first if not skipping
   let result;
   if (!options.skipCache) {
-    result = getCachedResults(pageUrl, deviceType, 'report', '', model);
+    result = getCachedResults(pageUrl, deviceType, 'report', '', options.model);
     if (result) {
-      const path = getCachePath(pageUrl, deviceType, 'report', '', true, model);
+      const path = getCachePath(pageUrl, deviceType, 'report', '', true, options.model);
       console.log('Report already exists at', path);
       return result;
     }
@@ -226,24 +246,24 @@ export default async function runPrompt(pageUrl, deviceType, options = {}) {
   const report = merge(pageUrl, deviceType);
   const { summary: rulesSummary, fromCache } = await applyRules(pageUrl, deviceType, options, { crux, psi, har, perfEntries, resources, fullHtml, jsApi, report });
   if (fromCache) {
-    console.log('✓ Loaded rules from cache. Estimated token size: ~', estimateTokenSize(rulesSummary));
+    console.log('✓ Loaded rules from cache. Estimated token size: ~', estimateTokenSize(rulesSummary, options.model));
   } else {
-    console.log('✅ Processed rules. Estimated token size: ~', estimateTokenSize(rulesSummary));
+    console.log('✅ Processed rules. Estimated token size: ~', estimateTokenSize(rulesSummary, options.model));
   }
 
-  const cms = detectAEMVersion(har.log.entries[0].headers, fullHtml);
+  const cms = detectAEMVersion(har.log.entries[0].headers, fullHtml || resources[pageUrl]);
   console.log('AEM Version:', cms);
 
   // Create LLM instance using the factory
-  const llm = LLMFactory.createLLM(model, options.llmOptions || {});
+  const llm = LLMFactory.createLLM(options.model, options.llmOptions || {});
 
   // Organize all data into one object for easier passing
   const pageData = {
     pageUrl, deviceType, cms, rulesSummary, resources,
-    crux, psi, perfEntries, har, coverageData, 
+    crux, psi, perfEntries, har, coverageData,
     cruxSummary, psiSummary, perfEntriesSummary, harSummary, coverageDataSummary,
   };
 
   // Invoke LLM and handle retries automatically
-  return invokeLLM(llm, pageData, model, false);
+  return invokeLLM(llm, pageData, options.model, false);
 }

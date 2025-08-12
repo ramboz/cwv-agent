@@ -1,4 +1,5 @@
 import { estimateTokenSize } from '../utils.js';
+import { getTechnicalContext, PHASE_FOCUS } from './shared.js';
 
 // Counter for tracking analysis steps
 let stepCounter = 0;
@@ -10,16 +11,21 @@ export function resetStepCounter() {
   stepCounter = 0;
 }
 
+function step() {
+  stepCounter += 1;
+  return stepCounter;
+}
+
 /**
  * Helper function to generate phase transition text
  * @returns {string} Phase transition text with incremented step number
  */
-function step() {
-   stepCounter++;
-   if (stepCounter === 1) {
+function stepVerbose() {
+   const n = step();
+   if (n === 1) {
       return 'Starting with phase 1,';
    }
-   return `Continuing with phase ${stepCounter},`;
+   return `Continuing with phase ${n},`;
 }
 
 /**
@@ -28,7 +34,7 @@ function step() {
  * @returns {string} CrUX analysis prompt
  */
 export const cruxStep = (crux) => `
-${step()} here is the detailed CrUX data for the page (in JSON format):
+${stepVerbose()} here is the detailed CrUX data for the page (in JSON format):
 
 ${JSON.stringify(crux, null, 2)}
 `;
@@ -39,7 +45,7 @@ ${JSON.stringify(crux, null, 2)}
  * @returns {string} CrUX summary analysis prompt
  */
 export const cruxSummaryStep = (cruxSummary) => `
-${step()} here is the summarized CrUX data for the page:
+${stepVerbose()} here is the summarized CrUX data for the page:
 
 ${cruxSummary}
 `;
@@ -50,7 +56,7 @@ ${cruxSummary}
  * @returns {string} PSI analysis prompt
  */
 export const psiStep = (psi) => `
-${step()} here is the full PSI audit in JSON for the page load.
+${stepVerbose()} here is the full PSI audit in JSON for the page load.
 
 ${JSON.stringify(psi, null, 2)}
 `;
@@ -61,7 +67,7 @@ ${JSON.stringify(psi, null, 2)}
  * @returns {string} PSI summary analysis prompt
  */
 export const psiSummaryStep = (psiSummary) => `
-${step()} here is the summarized PSI audit for the page load.
+${stepVerbose()} here is the summarized PSI audit for the page load.
 
 ${psiSummary}
 `;
@@ -72,7 +78,7 @@ ${psiSummary}
  * @returns {string} HAR analysis prompt
  */
 export const harStep = (har) => `
-${step()} here is the HAR JSON object for the page:
+${stepVerbose()} here is the HAR JSON object for the page:
 
 ${JSON.stringify(har, null, 2)}
 `;
@@ -83,7 +89,7 @@ ${JSON.stringify(har, null, 2)}
  * @returns {string} HAR summary analysis prompt
  */
 export const harSummaryStep = (harSummary) => `
-${step()} here is the summarized HAR data for the page:
+${stepVerbose()} here is the summarized HAR data for the page:
 
 ${harSummary}
 `;
@@ -94,7 +100,7 @@ ${harSummary}
  * @returns {string} Performance entries analysis prompt
  */
 export const perfStep = (perfEntries) => `
-${step()} here are the performance entries for the page:
+${stepVerbose()} here are the performance entries for the page:
 
 ${JSON.stringify(perfEntries, null, 2)}
 `;
@@ -105,7 +111,7 @@ ${JSON.stringify(perfEntries, null, 2)}
  * @returns {string} Performance entries summary analysis prompt
  */
 export const perfSummaryStep = (perfEntriesSummary) => `
-${step()} here are summarized performance entries for the page load:
+${stepVerbose()} here are summarized performance entries for the page load:
 
 ${perfEntriesSummary}
 `;
@@ -116,10 +122,10 @@ ${perfEntriesSummary}
  * @param {Object} resources - Resources object containing HTML content
  * @returns {string} HTML markup analysis prompt
  */
-export const htmlStep = (pageUrl, resources) => `
-${step()} here is the HTML markup for the page:
+export const htmlStep = (pageUrl, resourcesOrHtml) => `
+${stepVerbose()} here is the HTML markup for the page:
 
-${resources[pageUrl]}
+${typeof resourcesOrHtml === 'string' ? resourcesOrHtml : resourcesOrHtml?.[pageUrl]}
 `;
 
 /**
@@ -128,7 +134,7 @@ ${resources[pageUrl]}
  * @returns {string} Rule analysis prompt
  */
 export const rulesStep = (rules) => `
-${step()} here is the set of custom rules that failed for the page:
+${stepVerbose()} here is the set of custom rules that failed for the page:
 
 ${rules}
 `;
@@ -149,7 +155,7 @@ export const codeStep = (pageUrl, resources, threshold = 100_000) => {
        .filter(([,value]) => estimateTokenSize(value) < threshold) // do not bloat context with too large files
        .map(([key, value]) => `// File: ${key}\n${value}\n\n`).join('\n');
     return `
-${step()} here are the source codes for the important files on the page (the name for each file is given
+${stepVerbose()} here are the source codes for the important files on the page (the name for each file is given
 to you as a comment before its content):
 
 ${code}
@@ -165,7 +171,7 @@ ${code}
  * @returns {string} Code coverage analysis prompt
  */
 export const coverageStep = (codeCoverage) => `
-${step()} here is the detailed JSON with code coverage data for the CSS and JS files in the page:
+${stepVerbose()} here is the detailed JSON with code coverage data for the CSS and JS files in the page:
 
 ${JSON.stringify(codeCoverage, null, 2)}
 `;
@@ -176,7 +182,63 @@ ${JSON.stringify(codeCoverage, null, 2)}
  * @returns {string} Code coverage summary analysis prompt
  */
 export const coverageSummaryStep = (codeCoverageSummary) => `
-${step()} here is the summarized code coverage data for the page:
+${stepVerbose()} here is the summarized code coverage data for the page:
 
 ${codeCoverageSummary}
 `;
+
+
+function getBasePrompt(cms, role) {
+  return `You are ${role} for Core Web Vitals optimization.
+
+## Technical Context
+${getTechnicalContext(cms)}`;
+}
+
+export function cruxAgentPrompt(cms = 'eds') {
+  return `${getBasePrompt(cms, 'analyzing Chrome User Experience Report (CrUX) field data')}
+\n\n## Your Analysis Focus\n${PHASE_FOCUS.CRUX(step())}
+`;
+}
+
+export function psiAgentPrompt(cms = 'eds') {
+  return `${getBasePrompt(cms, 'analyzing PageSpeed Insights/Lighthouse results')}
+\n\n## Your Analysis Focus\n${PHASE_FOCUS.PSI(step())}
+`;
+}
+
+export function perfObserverAgentPrompt(cms = 'eds') {
+  return `${getBasePrompt(cms, 'analyzing Performance Observer data captured during page load simulation')}
+\n\n## Your Analysis Focus\n${PHASE_FOCUS.PERF_OBSERVER(step())}
+`;
+}
+
+export function harAgentPrompt(cms = 'eds') {
+  return `${getBasePrompt(cms, 'analyzing HAR (HTTP Archive) file data for Core Web Vitals optimization focused on network performance')}
+\n\n## Your Analysis Focus\n${PHASE_FOCUS.HAR(step())}
+`;
+}
+
+export function htmlAgentPrompt(cms = 'eds') {
+  return `${getBasePrompt(cms, 'analyzing HTML markup for Core Web Vitals optimization opportunities')}
+\n\n## Your Analysis Focus\n${PHASE_FOCUS.HTML(step())}
+`;
+}
+
+export function rulesAgentPrompt(cms = 'eds') {
+  return `${getBasePrompt(cms, 'analyzing failed performance rules to identify Core Web Vitals optimization opportunities')}
+\n\n## Your Analysis Focus\n${PHASE_FOCUS.RULES(step())}
+`;
+}
+
+export function coverageAgentPrompt(cms = 'eds') {
+  return `${getBasePrompt(cms, 'analyzing JavaScript and CSS code coverage data to identify optimization opportunities for Core Web Vitals')}
+\n\n## Your Analysis Focus\n${PHASE_FOCUS.COVERAGE(step())}
+`;
+}
+
+export function codeReviewAgentPrompt(cms = 'eds') {
+  return `${getBasePrompt(cms, 'analyzing JavaScript and CSS code for Core Web Vitals optimization opportunities, informed by code coverage analysis')}
+\n\n## Your Analysis Focus\n${PHASE_FOCUS.CODE_REVIEW(step())}
+`;
+}
