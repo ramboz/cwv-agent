@@ -1,15 +1,9 @@
 import collecetAction from './collect.js';
 import rulesAction from './rules.js';
-// import runAgent from './agent.js';
 import runPrompt from './multishot-prompt.js';
 import { startMCPReviewer } from './mcp-reviewer.js';
-import { getNormalizedUrl } from '../utils.js';
-
-export async function handleAgentAction(pageUrl, deviceType) {
-  // const result = await runAgent(pageUrl, deviceType);
-  // return result;
-  return { error: "Agent action not implemented yet" };
-}
+import { getNormalizedUrl, getCachePath } from '../utils.js';
+import { runAgentFlow } from './multi-agents.js';
 
 export async function processUrl(pageUrl, action, deviceType, skipCache, outputSuffix, blockRequests, model, agentMode) {
   // Handle MCP reviewer action separately (doesn't need URL processing)
@@ -39,7 +33,6 @@ export async function processUrl(pageUrl, action, deviceType, skipCache, outputS
           outputSuffix,
           blockRequests,
           model,
-          agentMode
         });
         break;
 
@@ -52,12 +45,15 @@ export async function processUrl(pageUrl, action, deviceType, skipCache, outputS
         result = await rulesAction(normalizedUrl.url, deviceType, { skipCache, skipTlsCheck: normalizedUrl.skipTlsCheck, outputSuffix, blockRequests });
         break;
 
-       case 'agent':
-        result = await handleAgentAction(normalizedUrl.url, deviceType);
-        console.log(result.messages?.at(-1)?.content || result.content || result);
-        if (result.usage_metadata) {
-          console.log(result.usage_metadata);
-        }
+        case 'agent':
+          result = await runAgentFlow(normalizedUrl.url, deviceType, {
+            skipCache,
+            skipTlsCheck: normalizedUrl.skipTlsCheck,
+            outputSuffix,
+            blockRequests,
+            model,
+            agentMode,
+          });
         break;
 
       default:
