@@ -52,7 +52,6 @@ export async function processUrl(pageUrl, action, deviceType, skipCache, outputS
             outputSuffix,
             blockRequests,
             model,
-            agentMode,
           });
         break;
 
