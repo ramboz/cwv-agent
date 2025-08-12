@@ -58,7 +58,7 @@ node index.js --action mcp-reviewer
 | `collect` | Collect raw performance data (CrUX, PSI, HAR) | `--action collect --url example.com` |
 | `prompt` | Generate AI-powered optimization suggestions | `--action prompt --url example.com` |
 | `rules` | Apply predefined performance rules | `--action rules --url example.com` |
-| `agent` | Run the full AI agent workflow | `--action agent --url example.com` |
+| `agent` | Run the full AI agent workflow (multi-agent) | `--action agent --url example.com` |
 | `mcp-reviewer` | Start interactive suggestion reviewer | `--action mcp-reviewer` |
 
 ## 🎛️ Command Line Options
@@ -73,7 +73,6 @@ Options:
   --device, -d     Device type [mobile|desktop] (default: mobile)
   --skip-cache, -s Skip cached data and force new collection
   --model, -m      LLM model to use (default: gemini-2.5-pro-preview-05-06)
-  --agent-mode, -g Agent mode [single|multi] (default: single)
   --output-suffix  Suffix for output files
   --block-requests Block specific requests (comma-separated)
   --help           Show help
@@ -107,6 +106,12 @@ The CWV Agent includes a powerful MCP (Model Context Protocol) reviewer for inte
 node index.js --action prompt --url "https://www.qualcomm.com" --device mobile
 ```
 
+### Agent Modes (multi-agent)
+```bash
+# Conditional multi-agent (PSI-gated; only runs heavy agents like HAR/Coverage/Code when needed)
+node index.js --action agent --url "https://example.com" --device mobile
+```
+
 ### Batch Processing
 Create `urls.json`:
 ```json
@@ -136,6 +141,7 @@ The tool generates files in the `.cache/` directory:
 |-----------|-------------|---------|
 | `*.performance.json` | Raw performance data | `example-com.mobile.performance.json` |
 | `*.suggestions.*.json` | AI-generated suggestions | `example-com.mobile.suggestions.gemini25pro.json` |
+| `*.report.*.summary.md` | AI-generated markdown report | `example-com.mobile.report.agent.gpt5.summary.md` |
 | `*.har` | HTTP Archive files | `example-com.mobile.har` |
 | `*.report.json` | Complete analysis reports | `example-com.mobile.report.json` |
 

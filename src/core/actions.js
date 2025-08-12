@@ -5,7 +5,7 @@ import { startMCPReviewer } from './mcp-reviewer.js';
 import { getNormalizedUrl, getCachePath } from '../utils.js';
 import { runAgentFlow } from './multi-agents.js';
 
-export async function processUrl(pageUrl, action, deviceType, skipCache, outputSuffix, blockRequests, model, agentMode) {
+export async function processUrl(pageUrl, action, deviceType, skipCache, outputSuffix, blockRequests, model) {
   // Handle MCP reviewer action separately (doesn't need URL processing)
   if (action === 'mcp-reviewer') {
     // Note: No console output for MCP mode - it interferes with JSON-RPC protocol

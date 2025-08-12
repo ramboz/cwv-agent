@@ -681,10 +681,8 @@ export async function runAgentFlow(pageUrl, deviceType, options = {}) {
         fullHtml,
     };
 
-    // Execute flow
-    const result = options.agentMode === 'multi-conditional'
-        ? await runMultiAgentsConditional(pageData, tokenLimits, llm, options.model)
-        : await runMultiAgents(pageData, tokenLimits, llm, options.model);
+    // Execute flow (force conditional multi-agent mode)
+    const result = await runMultiAgentsConditional(pageData, tokenLimits, llm, options.model);
 
     // Persist a copy labeled under agent action
     cacheResults(pageUrl, deviceType, 'report', result, '', options.model);
