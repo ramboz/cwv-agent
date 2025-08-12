@@ -1,41 +1,39 @@
 import { cacheResults, getCachedResults, getRequestHeaders } from '../utils.js';
 import { Agent } from 'undici';
 
+// Filter resources that match our criteria
+const DENYLIST_REGEX = /(granite|foundation|cq|core\.|wcm|jquery|lodash|moment|minified|bootstrap|react\.|angular|vue\.|rxjs|three\.|videojs|chart|codemirror|ace|monaco|gtag|googletag|optimizely|segment|tealium|adobe-dtm|launch-)/i;
+
 /**
- * Determines if a URL should be processed based on filtering rules
- * @param {URL} requestUrl - URL object to check
- * @param {URL} baseUrl - Base URL object for comparison
- * @returns {boolean} - Whether the URL should be processed
+ * Centralized resource inclusion policy
+ * @param {URL} requestUrl
+ * @param {URL} baseUrl
+ * @return {boolean}
  */
-function shouldProcessUrl(requestUrl, baseUrl) {
-  // Check if different hostname - early return
+function shouldIncludeResource(requestUrl, baseUrl) {
+  // Reject any 3rd party resources
   if (requestUrl.hostname !== baseUrl.hostname) {
     return false;
   }
 
-  const { pathname } = requestUrl;
-  
-  // Process if it's the same path as the base URL
-  if (pathname === baseUrl.pathname) {
-    return true;
-  }
-  
-  // Process HTML files
-  if (pathname.endsWith('.html')) {
-    return true;
-  }
-  
-  // Process JS files that are either from clientlibs or not minified
-  if (pathname.endsWith('.js') && !pathname.includes('.rum/@adobe/helix-rum-js')) {
+  const pathname = requestUrl.pathname || '';
+  const isJs = pathname.endsWith('.js');
+  const isCss = pathname.endsWith('.css');
+
+  // Reject any resources that match our denylist
+  if (DENYLIST_REGEX.test(pathname)) return false;
+
+  // Reject the RUM library itself
+  if (isJs && pathname.includes('.rum/@adobe/helix-rum-js')) return false;
+
+  // Additional heuristics for JS/CSS
+  if (isJs) {
     return pathname.startsWith('/etc.clientlibs/') || !pathname.endsWith('.min.js');
   }
-  
-  // Process CSS files that are either from clientlibs or not minified
-  if (pathname.endsWith('.css')) {
+  if (isCss) {
     return pathname.includes('/etc.clientlibs/') || !pathname.endsWith('.min.css');
   }
-  
-  return false;
+  return true;
 }
 
 /**
@@ -136,7 +134,7 @@ export async function collect(pageUrl, deviceType, resources, { skipCache, skipT
   const urlsToProcess = resources.filter(url => {
     try {
       const requestUrl = new URL(url);
-      return shouldProcessUrl(requestUrl, baseUrl);
+      return shouldIncludeResource(requestUrl, baseUrl);
     } catch (error) {
       console.error(`Invalid URL: ${url}`, error);
       return false;

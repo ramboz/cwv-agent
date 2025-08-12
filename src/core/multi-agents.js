@@ -1,22 +1,21 @@
-import {ChatPromptTemplate} from "@langchain/core/prompts";
-import {DynamicTool} from "@langchain/core/tools";
-import {RunnableSequence} from "@langchain/core/runnables";
-import {StringOutputParser} from "@langchain/core/output_parsers";
+import {ChatPromptTemplate} from '@langchain/core/prompts';
+import {DynamicTool} from '@langchain/core/tools';
+import {RunnableSequence} from '@langchain/core/runnables';
+import {StringOutputParser} from '@langchain/core/output_parsers';
 import {cacheResults, estimateTokenSize} from '../utils.js';
 import {
-    actionPrompt, codeStep, coverageStep, coverageSummaryStep,
-    cruxStep, cruxSummaryStep, harStep, harSummaryStep,
-    htmlStep, perfStep, perfSummaryStep, psiStep,
+    actionPrompt, codeStep, coverageSummaryStep,
+    cruxSummaryStep, harSummaryStep,
+    htmlStep, perfSummaryStep,
     psiSummaryStep, rulesStep
-} from "../prompts/index.js";
-import rules from "../rules/index.js";
-import {HumanMessage, SystemMessage} from "@langchain/core/messages";
+} from '../prompts/index.js';
+import {HumanMessage, SystemMessage} from '@langchain/core/messages';
 import {
     codeReviewAgentPrompt, coverageAgentPrompt,
     cruxAgentPrompt, harAgentPrompt, htmlAgentPrompt,
     perfObserverAgentPrompt, psiAgentPrompt, rulesAgentPrompt,
     initializeSystemAgents,
-} from "../prompts/index.js";
+} from '../prompts/index.js';
 import { getCrux, getPsi, getLabData, getCode } from './collect.js';
 import { detectAEMVersion } from '../tools/aem.js';
 import merge from '../tools/merge.js';
@@ -138,24 +137,6 @@ export class MultiAgentSystem {
             this.agents.set(config.name, agent);
         }
     }
-
-    async executeSequentialTasks(tasks) {
-        const results = [];
-        let context = "";
-
-        for (let i = 0; i < tasks.length; i++) {
-            const {agent: agentName, description = ""} = tasks[i];
-            const agent = this.agents.get(agentName);
-            if (!agent) throw new Error(`Agent ${agentName} not found`);
-
-            const input = `${description}${context ? `\n\nPrevious Context:\n${context}` : ""}`;
-            const output = await agent.invoke(input);
-            results.push({phase: i + 1, agent: agentName, output});
-            context += `\n${agentName}: ${output}`;
-        }
-        return results;
-    }
-
     async executeParallelTasks(tasks) {
         const total = tasks.length;
         let completed = 0;
@@ -183,28 +164,8 @@ export class MultiAgentSystem {
 
 /** Utility Functions */
 
-const isPromptValid = (length, limits) =>
-    length <= (limits.input - limits.output) * 0.9;
+const isPromptValid = (length, limits) => length <= (limits.input - limits.output) * 0.9;
 
-const generateAgentConfig = (isSummary, pageData, cms) => {
-    const steps = {
-        "Crux Agent": [cruxAgentPrompt(cms), isSummary ? cruxSummaryStep(pageData.cruxSummary) : cruxStep(pageData.crux)],
-        "Psi Agent": [psiAgentPrompt(cms), isSummary ? psiSummaryStep(pageData.psiSummary) : psiStep(pageData.psi)],
-        "Perf Observer Agent": [perfObserverAgentPrompt(cms), isSummary ? perfSummaryStep(pageData.perfEntriesSummary) : perfStep(pageData.perfEntries)],
-        "Har Agent": [harAgentPrompt(cms), isSummary ? harSummaryStep(pageData.harSummary) : harStep(pageData.har)],
-        "Html Agent": [htmlAgentPrompt(cms), htmlStep(pageData.pageUrl, pageData.resources)],
-        "Rules Agent": [rulesAgentPrompt(cms), isSummary ? rulesStep(pageData.rulesSummary) : rulesStep(rules)],
-        "Coverage Agent": [coverageAgentPrompt(cms), isSummary ? coverageSummaryStep(pageData.coverageDataSummary) : coverageStep(pageData.coverageData)],
-        "Code Review Agent": [codeReviewAgentPrompt(cms), codeStep(pageData.pageUrl, pageData.resources, 10_000)]
-    };
-
-    return Object.entries(steps).map(([name, [sys, hum]]) => ({
-        name,
-        role: name.replace(/_/g, " ").replace("agent", "").trim(),
-        systemPrompt: sys,
-        humanPrompt: hum
-    }));
-};
 
 function extractMarkdownSuggestions(content) {
     if (!content || typeof content !== 'string') return '';
@@ -248,73 +209,6 @@ function extractStructuredSuggestions(content, pageUrl, deviceType) {
         return {};
     }
 }
-
-/** Main Runner */
-export async function runMultiAgents(pageData, tokenLimits, llm, model) {
-    let agentsConfig = generateAgentConfig(false, pageData, pageData.cms);
-    const summaryConfig = generateAgentConfig(true, pageData, pageData.cms);
-
-    // Check if the system prompt is valid (including global initialization)
-    const baseInit = initializeSystemAgents(pageData.cms);
-    const baseTokens = estimateTokenSize(baseInit, model);
-    agentsConfig = agentsConfig.map((agent, i) => {
-        const tokenLength = baseTokens + estimateTokenSize(agent.systemPrompt, model) + estimateTokenSize(agent.humanPrompt, model);
-        if (!isPromptValid(tokenLength, tokenLimits)) {
-            console.log(`- ${agent.name} prompt too long, using summary`);
-            return {...agent, humanPrompt: summaryConfig[i].humanPrompt};
-        }
-        return agent;
-    });
-
-    cacheResults(pageData.pageUrl, pageData.deviceType, 'prompt', agentsConfig.map(a => a.systemPrompt).join('\n') + '\n' + agentsConfig.map(a => a.humanPrompt).join('\n' + '-'.repeat(64) + '\n'));
-
-    const system = new MultiAgentSystem({
-        llm,
-        toolsConfig: [],
-        agentsConfig,
-        globalSystemPrompt: initializeSystemAgents(pageData.cms)
-    });
-
-    const tasks = agentsConfig.map(agent => ({agent: agent.name}));
-    const responses = await system.executeParallelTasks(tasks);
-
-    console.log("\nParallel Results:");
-
-    let result = "";
-    let context = "";
-    responses.forEach(({agent, output}, index) => {
-        const section = `## Phase ${index + 1} - ${agent}:\n${output}`;
-        result += `\n\n${section}`;
-        context += `\n${agent}: ${output}`;
-    });
-
-    /** Structured Reducer */
-    const aggregate = await reduceAgentOutputs(responses, pageData, llm);
-    if (aggregate) {
-        cacheResults(pageData.pageUrl, pageData.deviceType, 'suggestions', aggregate, 'agent_aggregate');
-        context += `\nAggregated Structured Insights: ${JSON.stringify(aggregate)}`;
-    }
-
-    /** Final Action Prompt */
-    const finalPrompt = actionPrompt(pageData.pageUrl, pageData.deviceType);
-
-    const finalChain = RunnableSequence.from([
-        ChatPromptTemplate.fromMessages([
-            new SystemMessage(initializeSystemAgents(pageData.cms)),
-            new SystemMessage(finalPrompt),
-            new HumanMessage(`Here is the context from previous agents:\n${context}`)
-        ]),
-        llm,
-        new StringOutputParser()
-    ]);
-
-    console.log('- running final analysis...');
-    const finalOutput = await finalChain.invoke({input: context});
-
-    // Return both the outputs and suggestions
-    return result + "\n\n## Final Suggestions:\n" + finalOutput;
-}
-
 /** Conditional Utilities */
 /**
  * Safely extract a Lighthouse audit by id
@@ -481,8 +375,7 @@ function generateConditionalAgentConfig(pageData, cms) {
     }
 
     if (shouldRunCode) {
-        const filteredResources = selectCodeResources(pageUrl, resources);
-        steps.push({ name: 'Code Review Agent', sys: codeReviewAgentPrompt(cms), hum: codeStep(pageUrl, filteredResources, 10_000) });
+        steps.push({ name: 'Code Review Agent', sys: codeReviewAgentPrompt(cms), hum: codeStep(pageUrl, resources, 10_000) });
     }
 
     // Debug/log the gating outcome so users can see why agent count == N
@@ -498,7 +391,6 @@ function generateConditionalAgentConfig(pageData, cms) {
     }));
 }
 
-/** Conditional Runner */
 /**
  * Conditional, signal-driven multi-agent runner
  * Starts cheap and conditionally adds heavy agents
@@ -507,10 +399,10 @@ function generateConditionalAgentConfig(pageData, cms) {
  * @param {Object} llm
  * @return {Promise<String|null>}
  */
-export async function runMultiAgentsConditional(pageData, tokenLimits, llm, model) {
+export async function runMultiAgents(pageData, tokenLimits, llm, model) {
     console.group('Starting multi-agent flow...');
     if (!pageData || !tokenLimits || !llm) {
-        console.warn('runMultiAgentsConditional: invalid arguments');
+        console.warn('runMultiAgents: invalid arguments');
         return null;
     }
 
@@ -682,7 +574,7 @@ export async function runAgentFlow(pageUrl, deviceType, options = {}) {
     };
 
     // Execute flow (force conditional multi-agent mode)
-    const result = await runMultiAgentsConditional(pageData, tokenLimits, llm, options.model);
+    const result = await runMultiAgents(pageData, tokenLimits, llm, options.model);
 
     // Persist a copy labeled under agent action
     cacheResults(pageUrl, deviceType, 'report', result, '', options.model);
