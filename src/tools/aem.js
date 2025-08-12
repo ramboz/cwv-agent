@@ -5,6 +5,7 @@
  */
 export function detectAEMVersion(headers, htmlSource) {
   if (!htmlSource || typeof htmlSource !== 'string') {
+    console.error('No HTML available. Cannot infer AEM version.');
     return null;
   }
 

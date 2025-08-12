@@ -256,7 +256,7 @@ function getReport(entry, matchingHar) {
 function getData(har, perf) {
   const data = [];
   perf.forEach((entry, index) => {
-    const matchingHar = har.log.entries.find((h) => h.request.url === entry.name);
+    const matchingHar = har.log?.entries?.find((h) => h.request?.url === entry.name);
     const merged = getReport(entry, matchingHar);
 
     // merged.performance = entry;
@@ -269,8 +269,8 @@ function getData(har, perf) {
 }
 
 export default function merge(siteURL, type) {
-  const har = readCache(siteURL, type, 'har');
-  const perf = readCache(siteURL, type, 'perf');
+  const har = readCache(siteURL, type, 'har') || {};
+  const perf = readCache(siteURL, type, 'perf') || [];
   const data = getData(har, perf);
 
   data.sort((a, b) => a.start - b.start);

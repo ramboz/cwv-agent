@@ -16,9 +16,9 @@ export default async function rulesAction(pageUrl, deviceType, options) {
 
   const result = await applyRules(pageUrl, deviceType, options, { har, perfEntries, fullHtml, jsApi, report });
   if (result.fromCache) {
-    console.log('✓ Loaded rules from cache. Estimated token size: ~', estimateTokenSize(result.summary));
+    console.log('✓ Loaded rules from cache. Estimated token size: ~', estimateTokenSize(result.summary, options.model));
   } else {
-    console.log('✅ Processed rules. Estimated token size: ~', estimateTokenSize(result.summary));
+    console.log('✅ Processed rules. Estimated token size: ~', estimateTokenSize(result.summary, options.model));
   }
   console.group('Failed rules:');
   console.log(result.summary);

@@ -4,11 +4,29 @@ import { fileURLToPath } from 'url';
 import { Agent } from 'undici';
 import { Tiktoken } from 'js-tiktoken/lite';
 import cl100k_base from 'js-tiktoken/ranks/cl100k_base';
+import { DEFAULT_MODEL } from './models/config.js';
 import { createHash } from 'crypto';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-let encoder;
+// Cache tokenizers by model key
+const modelToEncoder = new Map();
+
+/**
+ * Returns a cached Tiktoken encoder for the given model.
+ * Currently defaults to cl100k_base for all models.
+ * @param {String} model
+ * @return {Tiktoken}
+ */
+function getEncoder(model = DEFAULT_MODEL) {
+  let enc = modelToEncoder.get(model);
+  if (!enc) {
+    // Fallback to cl100k_base across providers
+    enc = new Tiktoken(cl100k_base);
+    modelToEncoder.set(model, enc);
+  }
+  return enc;
+}
 
 /**
  * Finds the project root by searching for a package.json file.
@@ -94,14 +112,11 @@ function modelSuffix(model) {
 }
 
 // A crude approximation of the number of tokens in a string
-export function estimateTokenSize(obj) {
-  if (!obj) {
-    return 0;
-  }
-  if (!encoder) {
-    encoder = new Tiktoken(cl100k_base);
-  }
-  return encoder.encode(JSON.stringify(obj)).length;
+export function estimateTokenSize(obj, model = DEFAULT_MODEL) {
+  if (!obj) return 0;
+  const enc = getEncoder(model);
+  const text = typeof obj === 'string' ? obj : JSON.stringify(obj);
+  return enc.encode(text).length;
 }
 
 export function getCachedResults(urlString, deviceType, type, suffix = '', model = '') {
@@ -236,8 +251,8 @@ function ensureHttps(url) {
 // Standard User Agents for different scenarios
 export const USER_AGENTS = {
   psi: {
-    desktop: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36 Spacecat/1.0',
-    mobile: 'Mozilla/5.0 (Linux; Android 11; moto g power (2022)) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36 Spacecat/1.0'    
+    desktop: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Spacecat/1.0',
+    mobile: 'Mozilla/5.0 (Linux; Android 11; moto g power (2022)) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36 Spacecat/1.0'
   }
 };
 

@@ -9,7 +9,8 @@ export function getSequence(report) {
 }
 
 export function getInitiator(har, url) {
-  const entry = har.log.entries.find(e => e.request.url === url);
+  const entries = har && har.log && Array.isArray(har.log.entries) ? har.log.entries : [];
+  const entry = entries.find(e => e.request && e.request.url === url);
   return entry?._initiator_line
     ? `${entry._initiator} (L${entry._initiator_line})`
     : entry?._initiator
