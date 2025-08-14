@@ -101,6 +101,7 @@ jobs:
         run: |
           mkdir -p cwv-output
           echo "Running CWV audits for listed AEM URLs..."
+          // FIXME: properly escape the URL to avoid leaking environment variables and secrets
           echo '${{ steps.extract_urls.outputs.result }}' | jq -r '.[]' | while read URL; do
             echo "Auditing $URL"
             node node_modules/cwv-agent/index.js --action prompt --url "$URL" --device mobile --model gpt-4o
