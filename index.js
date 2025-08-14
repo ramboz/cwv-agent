@@ -6,6 +6,7 @@ import { processUrl } from './src/core/actions.js';
 // Load environment variables
 dotenv.config();
 
+
 async function main() {
   // Parse command line arguments
   const argv = parseArguments();
