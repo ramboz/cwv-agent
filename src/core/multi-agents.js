@@ -146,11 +146,11 @@ export class MultiAgentSystem {
             const input = description || `Please perform your assigned role as ${agent.role}`;
             const t0 = Date.now();
             try {
-                const output = await agent.invoke(input);
+            const output = await agent.invoke(input);
                 const dt = ((Date.now() - t0) / 1000).toFixed(1);
                 completed++;
                 console.log(`✅ ${agentName} (${Math.round(completed/total*100)}%, ${Number(dt)}s)`);
-                return {agent: agentName, output};
+            return {agent: agentName, output};
             } catch (err) {
                 const dt = ((Date.now() - t0) / 1000).toFixed(1);
                 completed++;
@@ -419,8 +419,6 @@ export async function runMultiAgents(pageData, tokenLimits, llm, model) {
         return agent;
     });
 
-    cacheResults(pageData.pageUrl, pageData.deviceType, 'prompt_conditional', agentsConfig.map(a => a.systemPrompt).join('\n') + '\n' + agentsConfig.map(a => a.humanPrompt).join('\n' + '-'.repeat(64) + '\n'));
-
     const system = new MultiAgentSystem({ llm, toolsConfig: [], agentsConfig, globalSystemPrompt: initializeSystemAgents(pageData.cms) });
     const tasks = agentsConfig.map(agent => ({ agent: agent.name }));
     const responses = await system.executeParallelTasks(tasks);
@@ -446,7 +444,7 @@ export async function runMultiAgents(pageData, tokenLimits, llm, model) {
     console.log('- running final analysis...');
     const finalOutput = await finalChain.invoke({ input: context });
 
-    
+
     console.groupEnd();
 
     return result + "\n\n## Final Suggestions:\n" + finalOutput;

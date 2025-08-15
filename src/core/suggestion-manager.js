@@ -40,6 +40,23 @@ export class CWVSuggestionManager {
     this.deviceTypes = [];
   }
 
+  /**
+   * Normalizes URLs for comparison using URL.pathname
+   * Handles edge cases like: https://www.metrobyt-mobile.com/ vs https://www.metrobyt-mobile.com
+   * @param {String} url - URL to normalize
+   * @return {String} Normalized URL for comparison
+   */
+  normalizeUrlForComparison(url) {
+    try {
+      const urlObj = new URL(url);
+      // Use pathname which normalizes root to "/" in both cases
+      return `${urlObj.protocol}//${urlObj.host}${urlObj.pathname}${urlObj.search}${urlObj.hash}`;
+    } catch (error) {
+      console.warn('normalizeUrlForComparison: Invalid URL format, returning original', url);
+      return url;
+    }
+  }
+
   urlToFilePattern(url) {
     try {
       const urlObj = new URL(url);
@@ -482,8 +499,11 @@ export class CWVSuggestionManager {
   
       const { site, opportunityId, suggestions = [] } = existing;
       
-      // Extract existing metrics from suggestions for the current URL
-      const existingSuggestionsForUrl = suggestions.filter(s => s.data.url === this.currentUrl);
+      // Extract existing metrics from suggestions for the current URL (normalized comparison)
+      const normalizedCurrentUrl = this.normalizeUrlForComparison(this.currentUrl);
+      const existingSuggestionsForUrl = suggestions.filter(s => 
+        this.normalizeUrlForComparison(s.data.url) === normalizedCurrentUrl
+      );
       const existingMetrics = existingSuggestionsForUrl.length > 0 
         ? existingSuggestionsForUrl[0].data.metrics  // Use metrics from the first matching suggestion
         : null;
@@ -502,8 +522,7 @@ export class CWVSuggestionManager {
       }
   
       if (dryRun) {
-        const existingForUrl = suggestions.filter(s => s.data.url === this.currentUrl);
-        const action = existingForUrl.length > 0 ? 'DELETE_AND_CREATE' : 'CREATE';
+        const action = existingSuggestionsForUrl.length > 0 ? 'DELETE_AND_CREATE' : 'CREATE';
         return { 
           success: true, 
           dryRun: true, 
@@ -517,14 +536,12 @@ export class CWVSuggestionManager {
       }
   
       // TRUE REPLACEMENT APPROACH:
-      // 1. Delete existing suggestions for this URL first
-      const suggestionsForCurrentUrl = suggestions.filter(s => s.data.url === this.currentUrl);
       
       console.log(`True replacement for ${this.currentUrl}:`);
-      console.log(`  Deleting ${suggestionsForCurrentUrl.length} existing suggestions for this URL`);
+      console.log(`  Deleting ${existingSuggestionsForUrl.length} existing suggestions for this URL`);
       
       // Delete each existing suggestion for this URL
-      const deletePromises = suggestionsForCurrentUrl.map(s => 
+      const deletePromises = existingSuggestionsForUrl.map(s => 
         this.spaceCatClient.deleteSuggestion(site.id, opportunityId, s.id)
       );
       
@@ -540,7 +557,7 @@ export class CWVSuggestionManager {
       return { 
         success: true, 
         action: 'DELETE_AND_CREATE',
-        deletedSuggestions: suggestionsForCurrentUrl.length,
+        deletedSuggestions: existingSuggestionsForUrl.length,
         createdSuggestions: 1,
         ...result 
       };
@@ -558,7 +575,11 @@ export class CWVSuggestionManager {
     if (!opportunity) return { success: false, error: `Could not find or create opportunity of type '${opportunityType}'.` };
 
     const existing = await this.spaceCatClient.checkExistingSuggestions(site.id, opportunity.id);
-    return { success: true, site, opportunity, ...existing.filter(s => s.data.url === url) };
+    const normalizedUrl = this.normalizeUrlForComparison(url);
+    const filteredSuggestions = existing.filter(s => 
+      this.normalizeUrlForComparison(s.data.url) === normalizedUrl
+    );
+    return { success: true, site, opportunity, suggestions: filteredSuggestions };
   }
 
   /**
