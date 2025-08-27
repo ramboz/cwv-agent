@@ -60,13 +60,13 @@ export class CWVSuggestionManager {
   urlToFilePattern(url) {
     try {
       const urlObj = new URL(url);
-      let hostname = urlObj.hostname.replace(/^www\./, '');
+      const { hostname, pathname } = urlObj;
       const fileBase = hostname.replace(/\./g, '-');
-      let pathPart = urlObj.pathname.replace(/^\//, '').replace(/\//g, '-');
+      let pathPart = pathname.replace(/^\//, '').replace(/\//g, '-');
       if (pathPart) {
         pathPart = '-' + pathPart;
       }
-      return `www-${fileBase}${pathPart}`;
+      return `${fileBase}${pathPart}`;
     } catch (error) {
       throw new Error(`Invalid URL format: ${url}`);
     }
@@ -84,7 +84,7 @@ export class CWVSuggestionManager {
     const desktopExists = fs.existsSync(desktopFile);
 
     if (!mobileExists && !desktopExists) {
-      throw new Error(`No suggestion files found for URL: ${url}`);
+      throw new Error(`No suggestion files found for URL: ${url}, checked "${mobileFile}" and "${desktopFile}"`);
     }
     
     const result = this.loadMultiDeviceSuggestions(
