@@ -57,7 +57,7 @@ export async function collectPerformanceEntries(page) {
 }
 
 // Performance Entry Analysis Functions
-export function summarizePerformanceEntries(performanceEntries, deviceType) {
+export function summarizePerformanceEntries(performanceEntries, deviceType, maxTokens = null) {
   let markdownOutput = `# Performance Analysis (Focused)\n\n`;
 
   // Group entries by type

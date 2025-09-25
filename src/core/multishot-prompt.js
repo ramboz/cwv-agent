@@ -128,32 +128,68 @@ function createMessages(pageData, useSummarized = false) {
   // Reset step counter before creating a new sequence of messages
   resetStepCounter();
 
-  if (useSummarized) {
+  if (useSummarized === 'ultra-aggressive') {
+    // More aggressive mode: Slightly reduce data but keep most important parts
     return [
       new SystemMessage(initializeSystem(cms)),
       new HumanMessage(cruxSummaryStep(cruxSummary)),
       new HumanMessage(psiSummaryStep(psiSummary)),
-      new HumanMessage(perfSummaryStep(perfEntriesSummary)),
-      new HumanMessage(harSummaryStep(harSummary)),
+      new HumanMessage(perfSummaryStep(perfEntriesSummary ? 
+        (perfEntriesSummary.length > 150000 ? 
+          perfEntriesSummary.substring(0, 150000) + '\n\n[Performance data truncated for token limits]' : 
+          perfEntriesSummary) : 'No performance data available')),
+      new HumanMessage(harSummaryStep(harSummary || 'No HAR data available')),
+      new HumanMessage(htmlStep(pageUrl, resources)),
+      new HumanMessage(rulesStep(rulesSummary.length > 150000 ? 
+        rulesSummary.substring(0, 150000) + '\n\n[Rules data truncated for token limits]' : 
+        rulesSummary)),
+      new HumanMessage(codeStep(pageUrl, resources, 6_000)), // Reduced from 8,000 to 6,000
+      new HumanMessage(actionPrompt(pageUrl, deviceType))
+    ];
+  } else if (useSummarized) {
+    const messages = [
+      new SystemMessage(initializeSystem(cms)),
+      new HumanMessage(cruxSummaryStep(cruxSummary)),
+      new HumanMessage(psiSummaryStep(psiSummary)),
+    ];
+    
+    if (perfEntriesSummary) {
+      messages.push(new HumanMessage(perfSummaryStep(perfEntriesSummary)));
+    }
+    if (harSummary) messages.push(new HumanMessage(harSummaryStep(harSummary)));
+    if (coverageDataSummary) messages.push(new HumanMessage(coverageSummaryStep(coverageDataSummary)));
+    
+    messages.push(
       new HumanMessage(htmlStep(pageUrl, resources)),
       new HumanMessage(rulesStep(rulesSummary)),
-      new HumanMessage(coverageSummaryStep(coverageDataSummary)),
-      new HumanMessage(codeStep(pageUrl, resources, 10_000)),
-      new HumanMessage(actionPrompt(pageUrl, deviceType)),
-    ];
+      new HumanMessage(codeStep(pageUrl, resources, 8_000)), // Reduced from 10,000 to 8,000
+      new HumanMessage(actionPrompt(pageUrl, deviceType))
+    );
+    
+    return messages;
   } else {
-    return [
+    const messages = [
       new SystemMessage(initializeSystem(cms)),
       new HumanMessage(cruxStep(crux)),
       new HumanMessage(psiStep(psi)),
-      new HumanMessage(perfStep(perfEntries)),
-      new HumanMessage(harStep(har)),
-      new HumanMessage(htmlStep(pageUrl, resources)),
-      new HumanMessage(rulesStep(rulesSummary)),
-      new HumanMessage(coverageStep(coverageData)),
-      new HumanMessage(codeStep(pageUrl, resources)),
-      new HumanMessage(actionPrompt(pageUrl, deviceType)),
     ];
+    
+    if (perfEntries) messages.push(new HumanMessage(perfStep(perfEntries)));
+    if (har) messages.push(new HumanMessage(harStep(har)));
+    
+    messages.push(
+      new HumanMessage(htmlStep(pageUrl, resources)),
+      new HumanMessage(rulesStep(rulesSummary))
+    );
+    
+    if (coverageData) messages.push(new HumanMessage(coverageStep(coverageData)));
+    
+    messages.push(
+      new HumanMessage(codeStep(pageUrl, resources)),
+      new HumanMessage(actionPrompt(pageUrl, deviceType))
+    );
+    
+    return messages;
   }
 }
 
@@ -171,12 +207,28 @@ async function invokeLLM(llm, pageData, model, useSummarized = false) {
   // Calculate token usage
   const enc = new Tiktoken(cl100k_base);
   const tokensLength = messages.map((m) => enc.encode(m.content).length).reduce((a, b) => a + b, 0);
-  console.log(`Prompt Tokens${useSummarized ? ' (simplified)' : ''}:`, tokensLength);
+  const modeLabel = useSummarized === 'ultra-aggressive' ? ' (more aggressive)' : 
+                    useSummarized ? ' (simplified)' : '';
+  console.log(`Prompt Tokens${modeLabel}:`, tokensLength);
+  
+
+  // Check token limit threshold - Use 80% to be more conservative
+  const threshold = (tokenLimits.input - tokenLimits.output) * .80;
 
   // Check if we need to switch to summarized version
-  if (!useSummarized && tokensLength > (tokenLimits.input - tokenLimits.output) * .9) {
+  if (!useSummarized && tokensLength > threshold) {
     console.log('Context window limit hit. Trying with summarized prompt...');
     return invokeLLM(llm, pageData, model, true);
+  }
+
+  // Check if even the summarized version exceeds the hard limit
+  if (tokensLength > tokenLimits.input) {
+    if (useSummarized === 'ultra-aggressive') {
+      console.log('Token count exceeds hard limit even with more aggressive summarization. Cannot proceed.');
+      throw new Error(`Token count (${tokensLength}) exceeds maximum allowed (${tokenLimits.input}) even with more aggressive summarization`);
+    }
+    console.log('Token count exceeds hard limit even with summarized prompt. Trying more aggressive summarization...');
+    return invokeLLM(llm, pageData, model, 'ultra-aggressive');
   }
 
   try {
@@ -251,8 +303,7 @@ export default async function runPrompt(pageUrl, deviceType, options = {}) {
     console.log('✅ Processed rules. Estimated token size: ~', estimateTokenSize(rulesSummary, options.model));
   }
 
-  const cms = detectAEMVersion(har.log.entries[0].headers, fullHtml || resources[pageUrl]);
-  console.log('AEM Version:', cms);
+  const cms = detectAEMVersion(har?.log?.entries?.[0]?.headers, fullHtml || resources[pageUrl]);
 
   // Create LLM instance using the factory
   const llm = LLMFactory.createLLM(options.model, options.llmOptions || {});
@@ -260,8 +311,14 @@ export default async function runPrompt(pageUrl, deviceType, options = {}) {
   // Organize all data into one object for easier passing
   const pageData = {
     pageUrl, deviceType, cms, rulesSummary, resources,
-    crux, psi, perfEntries, har, coverageData,
-    cruxSummary, psiSummary, perfEntriesSummary, harSummary, coverageDataSummary,
+    crux, psi, 
+    perfEntries: perfEntries || null, 
+    har: har || null, 
+    coverageData: coverageData || null,
+    cruxSummary, psiSummary, 
+    perfEntriesSummary: perfEntriesSummary || null, 
+    harSummary: harSummary || null, 
+    coverageDataSummary: coverageDataSummary || null,
   };
 
   // Invoke LLM and handle retries automatically
