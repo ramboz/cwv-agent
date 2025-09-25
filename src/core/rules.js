@@ -20,12 +20,5 @@ export default async function rulesAction(pageUrl, deviceType, options) {
   } else {
     console.log('✅ Processed rules. Estimated token size: ~', estimateTokenSize(result.summary, options.model));
   }
-  console.group('Failed rules:');
-  console.log(result.summary);
-  console.groupEnd();
-  console.group('Rules saved to:');
-  console.log(result.path);
-  console.log(result.summaryPath);
-  console.groupEnd();
   return result;
 }

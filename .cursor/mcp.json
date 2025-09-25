@@ -25,7 +25,7 @@
         "--action",
         "mcp-reviewer"
       ],
-      "cwd": ".",
+      "cwd": "/Users/aarce/Development/agent-cwv-session/cwv-agent",
       "env": {
         "ADOBE_SCOPE": "openid,AdobeID,additional_info.projectedProductContext,additional_info.roles,read_organizations",
         "ADOBE_CLIENT_ID": "pss-user",
