@@ -125,47 +125,69 @@ async function fetchResource(url, deviceType, fetchOptions, skipCache) {
  * @returns {Promise<Object>} - Object containing fetched resources and cache statistics
  */
 export async function collect(pageUrl, deviceType, resources, { skipCache, skipTlsCheck }) {
-  const baseUrl = new URL(pageUrl);
-  const codeFiles = {};
-  let cachedResources = 0;
-  let failedResources = 0;
+  // Add overall timeout for the entire code collection process
+  const overallTimeout = new Promise((_, reject) => 
+    setTimeout(() => reject(new Error('Code collection timeout (2 minutes)')), 120000)
+  );
 
-  // Filter resources that match our criteria
-  const urlsToProcess = resources.filter(url => {
-    try {
-      const requestUrl = new URL(url);
-      return shouldIncludeResource(requestUrl, baseUrl);
-    } catch (error) {
-      console.error(`Invalid URL: ${url}`, error);
-      return false;
-    }
-  });
+  const collectWithTimeout = async () => {
+    const baseUrl = new URL(pageUrl);
+    const codeFiles = {};
+    let cachedResources = 0;
+    let failedResources = 0;
 
-  const totalResources = urlsToProcess.length;
-  const fetchOptions = createFetchOptions(deviceType, skipTlsCheck);
+    // Filter resources that match our criteria
+    const urlsToProcess = resources.filter(url => {
+      try {
+        const requestUrl = new URL(url);
+        return shouldIncludeResource(requestUrl, baseUrl);
+      } catch (error) {
+        console.error(`Invalid URL: ${url}`, error);
+        return false;
+      }
+    });
+
+    const totalResources = urlsToProcess.length;
+    const fetchOptions = createFetchOptions(deviceType, skipTlsCheck);
 
   // Process each resource sequentially to avoid overwhelming the server
   for (const url of urlsToProcess) {
-    const result = await fetchResource(url, deviceType, fetchOptions, skipCache);
-    
-    if (result.fromCache) {
-      cachedResources++;
-    }
-    
-    if (result.failed) {
+    try {
+      // Add timeout for each resource (30 seconds)
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Resource fetch timeout')), 30000)
+      );
+      
+      const result = await Promise.race([
+        fetchResource(url, deviceType, fetchOptions, skipCache),
+        timeoutPromise
+      ]);
+      
+      if (result.fromCache) {
+        cachedResources++;
+      }
+      
+      if (result.failed) {
+        failedResources++;
+      } else if (result.content) {
+        codeFiles[url] = result.content;
+      }
+    } catch (error) {
       failedResources++;
-    } else if (result.content) {
-      codeFiles[url] = result.content;
     }
   }
 
-  return {
-    codeFiles,
-    stats: {
-      total: totalResources,
-      fromCache: cachedResources,
-      failed: failedResources,
-      successful: totalResources - failedResources
-    }
+    return {
+      codeFiles,
+      stats: {
+        total: totalResources,
+        fromCache: cachedResources,
+        failed: failedResources,
+        successful: totalResources - failedResources
+      }
+    };
   };
+
+  // Race between the collection and the timeout
+  return Promise.race([collectWithTimeout(), overallTimeout]);
 }
