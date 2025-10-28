@@ -304,6 +304,7 @@ export default async function runPrompt(pageUrl, deviceType, options = {}) {
   }
 
   const cms = detectAEMVersion(har?.log?.entries?.[0]?.headers, fullHtml || resources[pageUrl]);
+  console.log('AEM Version:', cms);
 
   // Create LLM instance using the factory
   const llm = LLMFactory.createLLM(options.model, options.llmOptions || {});
