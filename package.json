@@ -32,7 +32,7 @@
     "puppeteer": "24.6.1",
     "puppeteer-har": "1.1.2",
     "puppeteer-to-istanbul": "1.4.0",
-    "undici": "7.8.0",
+    "undici": "7.18.2",
     "yargs": "17.7.2",
     "zod": "3.24.3"
   },
