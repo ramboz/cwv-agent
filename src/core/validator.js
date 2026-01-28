@@ -103,12 +103,12 @@ export function validateFindings(findings, causalGraph, config = {}) {
     });
   }
 
-  if (adjusted.length > 0) {
-    console.log('   Adjusted findings:');
-    adjusted.forEach(a => {
-      console.log(`   - ${a.finding.id}: ${a.warnings[0] || 'Impact adjusted'}`);
-    });
-  }
+  // if (adjusted.length > 0) {
+  //   console.log('   Adjusted findings:');
+  //   adjusted.forEach(a => {
+  //     console.log(`   - ${a.finding.id}: ${a.warnings[0] || 'Impact adjusted'}`);
+  //   });
+  // }
 
   // Return validated findings
   return {
@@ -207,8 +207,6 @@ export function saveValidationResults(pageUrl, deviceType, validationResults, mo
 
     const report = generateValidationReport(validationResults);
     cacheResults(pageUrl, deviceType, 'validation-report', report, '', model);
-
-    console.log('   Validation results saved to cache');
   } catch (error) {
     console.warn('Failed to save validation results:', error.message);
   }

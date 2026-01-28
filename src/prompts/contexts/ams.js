@@ -93,6 +93,31 @@ You know the following about AEM AMS.
 - PREFER: Preconnect to font origin (dns-prefetch + preconnect)
 - Example: Use @font-face with font-display: swap and size-adjust property for fallback
 
+**CSS Loading Recommendations:**
+- RECOMMENDED: Inline critical CSS (<14KB) in <style> tag for above-the-fold content
+- RECOMMENDED: Load non-critical CSS asynchronously using JavaScript with requestIdleCallback
+  - Example: Use createElement('link') in requestIdleCallback to load non-critical clientlibs
+- RECOMMENDED: Split clientlibs into critical (sync) and non-critical (async) categories
+- AVOID: Using media="print" hack for async CSS (violates HTML spec, accessibility issues)
+  - Example of anti-pattern: <link rel="stylesheet" href="..." media="print" onload="this.media='all'">
+- AVOID: Loading 15+ render-blocking CSS files synchronously
+- AVOID: Including 100% unused CSS clientlibs (audit with Coverage DevTools)
+- AVOID: Cross-origin render-blocking CSS without preconnect
+- PREFER: JavaScript-based async loading pattern:
+  \`\`\`javascript
+  // Load non-critical CSS asynchronously
+  if ('requestIdleCallback' in window) {
+    requestIdleCallback(() => {
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = '/etc.clientlibs/mysite/clientlibs/clientlib-base.min.css';
+      document.head.appendChild(link);
+    });
+  } else {
+    setTimeout(() => { /* same as above */ }, 1);
+  }
+  \`\`\`
+
 **Resource Hints:**
 - Preconnect: ONLY for external origins in the critical path for LCP (e.g., CDN hosting hero image)
   - Example: <link rel="preconnect" href="https://cdn.example.com"> if hero image loads from cdn.example.com

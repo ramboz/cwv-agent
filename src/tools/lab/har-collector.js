@@ -12,7 +12,7 @@ export function cleanupHarData(har) {
 }
 
 // HAR Analysis Functions
-export function summarizeHAR(harData, deviceType) {
+export function summarizeHAR(harData, deviceType, thirdPartyAnalysis = null) {
   if (!harData?.log?.entries) {
     return 'No valid HTTP Archive data available.';
   }
@@ -22,11 +22,58 @@ export function summarizeHAR(harData, deviceType) {
 
   // Check for different types of bottlenecks
   const bottleneckReports = analyzeBottlenecks(entries, deviceType);
-  
+
   if (bottleneckReports.length > 0) {
     report += bottleneckReports.join('\n');
   } else {
     report += '* No significant bottlenecks found based on provided HAR data.\n';
+  }
+
+  // Priority 1: Add third-party script attribution section
+  if (thirdPartyAnalysis?.summary) {
+    report += '\n\n**Third-Party Script Analysis (Priority 1 Data):**\n\n';
+    report += `* **Total Scripts**: ${thirdPartyAnalysis.summary.totalScripts}\n`;
+    report += `* **Total Transfer Size**: ${Math.round(thirdPartyAnalysis.summary.totalTransferSize / 1024)} KB\n`;
+    report += `* **Total Network Time**: ${thirdPartyAnalysis.summary.totalNetworkTime}ms\n`;
+    report += `* **Total Execution Time**: ${thirdPartyAnalysis.summary.totalExecutionTime}ms\n`;
+    report += `* **Total Blocking Time**: ${thirdPartyAnalysis.summary.totalBlockingTime}ms\n`;
+    report += `* **Render-Blocking Scripts**: ${thirdPartyAnalysis.summary.renderBlockingCount}\n`;
+
+    if (thirdPartyAnalysis.categoryImpact?.length > 0) {
+      report += '\n**By Category (sorted by execution time):**\n';
+      thirdPartyAnalysis.categoryImpact.slice(0, 8).forEach((cat, idx) => {
+        report += `  ${idx + 1}. **${cat.category}**: ${cat.scripts} script${cat.scripts > 1 ? 's' : ''}, ` +
+                  `${Math.round(cat.transferSize / 1024)} KB, ` +
+                  `${cat.executionTime}ms execution, ` +
+                  `${cat.networkTime}ms network\n`;
+      });
+    }
+
+    // Include top individual scripts for context
+    if (thirdPartyAnalysis.scripts?.length > 0) {
+      const topScripts = [...thirdPartyAnalysis.scripts]
+        .sort((a, b) => (b.execution?.totalTime || 0) - (a.execution?.totalTime || 0))
+        .slice(0, 5);
+
+      if (topScripts.some(s => s.execution?.totalTime > 0)) {
+        report += '\n**Top Scripts by Execution Time:**\n';
+        topScripts.forEach((script, idx) => {
+          if (script.execution?.totalTime > 0) {
+            report += `  ${idx + 1}. **${script.domain}** (${script.category})\n`;
+            report += `     - URL: ${script.url.substring(0, 80)}${script.url.length > 80 ? '...' : ''}\n`;
+            report += `     - Execution: ${script.execution.totalTime}ms`;
+            if (script.isRenderBlocking) {
+              report += ' [RENDER-BLOCKING]';
+            }
+            report += '\n';
+            if (script.longTaskAttribution?.length > 0) {
+              const totalLongTask = script.longTaskAttribution.reduce((sum, lt) => sum + lt.duration, 0);
+              report += `     - Long Tasks: ${script.longTaskAttribution.length} (${totalLongTask}ms total)\n`;
+            }
+          }
+        });
+      }
+    }
   }
 
   return report;

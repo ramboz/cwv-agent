@@ -165,7 +165,7 @@ export async function collectPerformanceEntries(page) {
 }
 
 // Performance Entry Analysis Functions
-export function summarizePerformanceEntries(performanceEntries, deviceType, maxTokens = null) {
+export function summarizePerformanceEntries(performanceEntries, deviceType, maxTokens = null, clsAttribution = null) {
   let markdownOutput = `# Performance Analysis (Focused)\n\n`;
 
   // Group entries by type
@@ -217,13 +217,57 @@ export function summarizePerformanceEntries(performanceEntries, deviceType, maxT
 
   // Process layout shifts (if available)
   const significantLayoutShifts = entriesByType['layout-shift']?.filter(entry => entry.value > 0.1) || [];
-  if (significantLayoutShifts.length > 0) {
+  if (significantLayoutShifts.length > 0 || clsAttribution?.summary) {
     markdownOutput += `## Significant Layout Shifts\n\n`;
-    significantLayoutShifts
-      .sort((a, b) => b.value - a.value)
-      .forEach(entry => {
-        markdownOutput += formatLayoutShiftEntry(entry);
-      });
+
+    // Priority 2: Include CSS attribution if available
+    if (clsAttribution?.summary) {
+      markdownOutput += `**Total CLS**: ${clsAttribution.summary.totalCLS.toFixed(3)} (${clsAttribution.summary.totalShifts} shifts)\n\n`;
+
+      if (clsAttribution.summary.byType && Object.keys(clsAttribution.summary.byType).length > 0) {
+        markdownOutput += '**CLS by Type (Priority 2 Data):**\n';
+        Object.entries(clsAttribution.summary.byType)
+          .sort((a, b) => b[1].totalCLS - a[1].totalCLS)
+          .forEach(([type, data]) => {
+            markdownOutput += `* **${type}**: ${data.count} shift${data.count > 1 ? 's' : ''}, CLS ${data.totalCLS.toFixed(3)}\n`;
+          });
+        markdownOutput += '\n';
+      }
+
+      if (clsAttribution.summary.topIssues?.length > 0) {
+        markdownOutput += '**Top CLS Issues (with CSS Attribution):**\n\n';
+        clsAttribution.summary.topIssues.slice(0, 8).forEach((issue, i) => {
+          markdownOutput += `${i + 1}. **Element**: \`${issue.element}\`\n`;
+          markdownOutput += `   - **CLS Value**: ${issue.value.toFixed(3)}\n`;
+          markdownOutput += `   - **Shift Type**: ${issue.cause.type}\n`;
+          markdownOutput += `   - **Cause**: ${issue.cause.description}\n`;
+
+          if (issue.stylesheet?.property && issue.stylesheet?.value) {
+            markdownOutput += `   - **CSS Property**: \`${issue.stylesheet.property}: ${issue.stylesheet.value}\`\n`;
+          }
+
+          if (issue.stylesheet?.href) {
+            markdownOutput += `   - **Stylesheet**: ${issue.stylesheet.href}\n`;
+          } else {
+            markdownOutput += `   - **Stylesheet**: inline or computed\n`;
+          }
+
+          if (issue.stylesheet?.selector) {
+            markdownOutput += `   - **CSS Selector**: \`${issue.stylesheet.selector}\`\n`;
+          }
+
+          markdownOutput += `   - **Recommendation**: ${issue.cause.recommendation}\n`;
+          markdownOutput += `   - **Priority**: ${issue.cause.priority}\n\n`;
+        });
+      }
+    } else {
+      // Fallback to old format without CSS attribution
+      significantLayoutShifts
+        .sort((a, b) => b.value - a.value)
+        .forEach(entry => {
+          markdownOutput += formatLayoutShiftEntry(entry);
+        });
+    }
   }
 
   // Process resource timing (if available)

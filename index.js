@@ -36,9 +36,6 @@ async function main() {
   if (model) {
     console.log(`Using model: ${model}`);
   }
-  if (rumDomainKey) {
-    console.log('RUM domain key provided - will collect Real User Monitoring data');
-  }
 
   // Process each URL
   for (const url of urls) {

@@ -18,6 +18,7 @@ import {
     initializeSystemAgents,
 } from '../prompts/index.js';
 import { buildCausalGraph, generateGraphSummary } from './causal-graph-builder.js';
+import { AgentGating } from './gating.js';
 import { validateFindings, saveValidationResults } from './validator.js';
 import { getCrux, getPsi, getRUM, getLabData, getCode } from './collect.js';
 import { detectAEMVersion } from '../tools/aem.js';
@@ -498,7 +499,6 @@ function collectQualityMetrics(agentOutputs, pageUrl, deviceType, model) {
     // Save metrics alongside suggestions
     try {
         cacheResults(pageUrl, deviceType, 'quality-metrics', metrics, '', model);
-        console.log(`📊 Quality Metrics: ${metrics.totalFindings} findings, avg confidence: ${(metrics.averageConfidence * 100).toFixed(1)}%, ${metrics.rootCauseCount} root causes`);
     } catch (error) {
         console.warn('Failed to cache quality metrics:', error.message);
     }
@@ -630,26 +630,52 @@ function generateConditionalAgentConfig(pageData, cms) {
 
     // Multi-signal gating (include perf pre-LCP signals when available)
     const perfSig = computePerfSignals(perfEntries);
+
+    // UNIFIED GATING: Use new AgentGating class for consistent logic
+    const gating = new AgentGating(device);
+
+    // Coverage gating using unified system
+    const coverageDecision = gating.shouldRunAgent('coverage', {
+        data: {
+            unusedBytes: coverageData?.summary?.unusedBytes || 0,
+            unusedRatio: (coverageData?.summary?.unusedPercent || 0) / 100
+        },
+        psi: {
+            reduceUnusedJS: signals.reduceUnusedJS,
+            renderBlocking: signals.renderBlocking
+        }
+    });
+
+    // Fallback to legacy logic if no coverage data yet (backward compatibility)
     const coverageSignals = [
         signals.reduceUnusedJS === true,
         (signals.tbt ?? 0) > TH.TBT_MS,
         (signals.lcp ?? 0) > TH.LCP_MS,
         perfSig.hasLongTasksPreLcp === true,
     ];
-    const shouldRunCoverage = perfSig.lcpTimeMs != null
-        ? coverageSignals.filter(Boolean).length >= 2
-        : coverageSignals.some(Boolean);
+    const shouldRunCoverage = coverageData?.summary
+        ? coverageDecision.shouldRun
+        : (perfSig.lcpTimeMs != null
+            ? coverageSignals.filter(Boolean).length >= 2
+            : coverageSignals.some(Boolean));
 
-    const harSignals = [
-        harStats.entriesCount > TH.REQUESTS,
-        harStats.transferBytes > TH.TRANSFER_BYTES,
-        signals.redirects,
-        signals.serverResponseSlow,
-        signals.renderBlocking,
-    ];
-    const shouldRunHar = harSignals.filter(Boolean).length >= 2; // require 2+ signals
+    // HAR Agent Gating - Unified logic with lower thresholds
+    const harDecision = gating.shouldRunAgent('har', {
+        data: {
+            entriesCount: harStats.entriesCount,
+            transferBytes: harStats.transferBytes
+        },
+        psi: {
+            redirects: signals.redirects,
+            serverResponseSlow: signals.serverResponseSlow,
+            renderBlocking: signals.renderBlocking
+        }
+    });
 
-    // Code review requires multi-signal when perf windows are available
+    const shouldRunHar = harDecision.shouldRun;
+
+    // Code agent gating - use legacy logic since resources aren't available at this point
+    // (Code is collected earlier in runAgentFlow, before this function is called)
     const codeSignals = [
         shouldRunCoverage,
         signals.reduceUnusedJS === true,
@@ -755,9 +781,6 @@ export async function runMultiAgents(pageData, tokenLimits, llm, model) {
         };
     });
 
-    // Collect and save quality metrics
-    const qualityMetrics = collectQualityMetrics(agentOutputs, pageData.pageUrl, pageData.deviceType, model);
-
     // Phase 3: Build causal graph from all findings
     const allFindings = agentOutputs.flatMap(output => {
         if (output.findings && Array.isArray(output.findings)) {
@@ -770,7 +793,6 @@ export async function runMultiAgents(pageData, tokenLimits, llm, model) {
     let graphSummary = '';
     if (allFindings.length > 0) {
         try {
-            console.log('- building causal graph...');
             // Extract current metric values from findings
             const metricsData = {};
             allFindings.forEach(f => {
@@ -784,7 +806,6 @@ export async function runMultiAgents(pageData, tokenLimits, llm, model) {
 
             // Save causal graph
             cacheResults(pageData.pageUrl, pageData.deviceType, 'causal-graph', causalGraph, '', model);
-            console.log(`🕸️  Causal Graph: ${causalGraph.rootCauses.length} root causes, ${causalGraph.criticalPaths.length} critical paths`);
         } catch (error) {
             console.warn('Failed to build causal graph:', error.message);
         }
@@ -975,18 +996,16 @@ export async function runAgentFlow(pageUrl, deviceType, options = {}) {
         (signals.lcp ?? 0) > TH.LCP_MS,
     ];
     const shouldRunCoverage = coverageSignals.some(Boolean);
-    const shouldRunHar = [signals.redirects, signals.serverResponseSlow, signals.renderBlocking].filter(Boolean).length >= 2;
 
-    // Phase 2: single lab run, conditionally collecting HAR/Coverage as needed
+    // Phase 2: single lab run, always collecting HAR, conditionally collecting Coverage
     const { har: harHeavy, harSummary, perfEntries, perfEntriesSummary, fullHtml, jsApi, coverageData, coverageDataSummary, thirdPartyAnalysis, clsAttribution } = await getLabData(pageUrl, deviceType, {
         ...options,
-        collectHar: shouldRunHar,
+        collectHar: true,  // Always collect HAR
         collectCoverage: shouldRunCoverage,
     });
 
     // Phase 3: conditionally collect code after coverage/har gates
     let resources = undefined;
-    const shouldRunCode = (signals.reduceUnusedJS === true && (signals.tbt ?? 0) > TH.TBT_MS) || shouldRunCoverage;
     if (shouldRunCode) {
         let codeRequests = [];
         if (Array.isArray(harHeavy?.log?.entries)) {
@@ -997,6 +1016,7 @@ export async function runAgentFlow(pageUrl, deviceType, options = {}) {
                 .map(e => e.name)
                 .filter(Boolean);
         }
+        console.log(`   Collecting code for ${codeRequests.length} resources...`);
         const { codeFiles } = await getCode(pageUrl, deviceType, codeRequests, options);
         resources = codeFiles;
     }

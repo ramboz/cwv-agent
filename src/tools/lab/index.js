@@ -273,6 +273,8 @@ export async function collect(pageUrl, deviceType, { skipCache, blockRequests, c
   let fullHtml = getCachedResults(pageUrl, deviceType, 'html');
   let jsApi = getCachedResults(pageUrl, deviceType, 'jsapi');
   let coverageData = getCachedResults(pageUrl, deviceType, 'coverage');
+  let thirdPartyAnalysis = getCachedResults(pageUrl, deviceType, 'third-party');
+  let clsAttribution = getCachedResults(pageUrl, deviceType, 'cls-attribution');
 
   // Determine what we need to collect in this pass
   const needPerf = !perfEntries || skipCache;
@@ -283,15 +285,20 @@ export async function collect(pageUrl, deviceType, { skipCache, blockRequests, c
 
   // If nothing is needed, return from cache only what's relevant
   if (!needPerf && !needHtml && !needJsApi && !needHar && !needCoverage) {
+    // Extract summary from cached CLS attribution if it exists
+    const clsAttributionSummary = clsAttribution?.summary || clsAttribution || null;
+
     return {
       har: collectHar ? harFile : null,
-      harSummary: collectHar && harFile ? summarizeHAR(harFile, deviceType) : null,
+      harSummary: collectHar && harFile ? summarizeHAR(harFile, deviceType, thirdPartyAnalysis) : null,
       perfEntries,
-      perfEntriesSummary: summarizePerformanceEntries(perfEntries, deviceType),
+      perfEntriesSummary: summarizePerformanceEntries(perfEntries, deviceType, null, clsAttributionSummary),
       fullHtml,
       jsApi,
       coverageData: collectCoverage ? coverageData : null,
       coverageDataSummary: collectCoverage && coverageData ? summarizeCoverageData(coverageData, deviceType) : null,
+      thirdPartyAnalysis,
+      clsAttribution: clsAttributionSummary,
       fromCache: true,
     };
   }
@@ -360,7 +367,7 @@ export async function collect(pageUrl, deviceType, { skipCache, blockRequests, c
   }
 
   // Enhanced attribution: Third-party scripts (Priority 1)
-  let thirdPartyAnalysis = null;
+  thirdPartyAnalysis = null;
   if (needHar && harFile && perfEntries) {
     try {
       thirdPartyAnalysis = analyzeThirdPartyScripts(
@@ -375,7 +382,7 @@ export async function collect(pageUrl, deviceType, { skipCache, blockRequests, c
   }
 
   // Enhanced attribution: CLS-to-CSS mapping (Priority 2)
-  let clsAttribution = null;
+  clsAttribution = null;
   if (needPerf && perfEntries && perfEntries.layoutShifts && perfEntries.layoutShifts.length > 0) {
     try {
       clsAttribution = await attributeCLStoCSS(perfEntries.layoutShifts, page);
@@ -411,12 +418,12 @@ export async function collect(pageUrl, deviceType, { skipCache, blockRequests, c
   // Close browser and save results
   await browser.close();
 
-  // Generate performance summary
-  let perfEntriesSummary = summarizePerformanceEntries(perfEntries, deviceType);
+  // Generate performance summary (with Priority 2 CLS attribution)
+  let perfEntriesSummary = summarizePerformanceEntries(perfEntries, deviceType, null, clsAttribution);
   cacheResults(pageUrl, deviceType, 'perf', perfEntriesSummary);
-  
-  // Generate HAR summary (only if we recorded or had it available)
-  const harSummary = (collectHar && harFile) ? summarizeHAR(harFile, deviceType) : null;
+
+  // Generate HAR summary (with Priority 1 third-party analysis)
+  const harSummary = (collectHar && harFile) ? summarizeHAR(harFile, deviceType, thirdPartyAnalysis) : null;
   if (collectHar && harFile) {
     cacheResults(pageUrl, deviceType, 'har', harFile);
     cacheResults(pageUrl, deviceType, 'har', harSummary);

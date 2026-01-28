@@ -2,37 +2,66 @@ import { cacheResults, getCachedResults, getRequestHeaders } from '../utils.js';
 import { Agent } from 'undici';
 
 // Filter resources that match our criteria
-const DENYLIST_REGEX = /(granite|foundation|cq|core\.|wcm|jquery|lodash|moment|minified|bootstrap|react\.|angular|vue\.|rxjs|three\.|videojs|chart|codemirror|ace|monaco|gtag|googletag|optimizely|segment|tealium|adobe-dtm|launch-)/i;
+// Denylist for JS/CSS from common libraries, frameworks, and third-party tools
+// (Images, fonts, etc. are already filtered out by the JS/CSS check)
+const DENYLIST_REGEX = /(granite|foundation|cq|core\.|wcm|jquery|lodash|moment|bootstrap|react\.|angular|vue\.|rxjs|three\.|videojs|chart|codemirror|ace|monaco|tinymce|ckeditor|gtag|googletag|google-analytics|analytics\.js|optimizely|segment|tealium|adobe-dtm|launch-|amplitude|mixpanel|heap|hotjar|leaflet|mapbox|googlemaps|facebook|twitter|linkedin|instagram|pinterest|stripe|paypal|braintree|polyfill|shim|brightcove|youtube|vimeo)/i;
 
 /**
- * Centralized resource inclusion policy
- * @param {URL} requestUrl
- * @param {URL} baseUrl
- * @return {boolean}
+ * Centralized resource inclusion policy for performance analysis
+ *
+ * Focus: Only collect first-party JS/CSS that can be analyzed for optimization
+ *
+ * @param {URL} requestUrl - The resource URL to evaluate
+ * @param {URL} baseUrl - The base page URL
+ * @return {boolean} - True if resource should be collected for analysis
  */
 function shouldIncludeResource(requestUrl, baseUrl) {
-  // Reject any 3rd party resources
+  const pathname = requestUrl.pathname || '';
+
+  // 1. ONLY analyze code resources (JS/CSS)
+  // Reject images, fonts, videos, PDFs, data files, etc.
+  const isJs = pathname.endsWith('.js');
+  const isCss = pathname.endsWith('.css');
+
+  if (!isJs && !isCss) {
+    return false;  // Not code - skip
+  }
+
+  // 2. Reject third-party resources
+  // Third-party scripts are analyzed separately by HAR agent
   if (requestUrl.hostname !== baseUrl.hostname) {
     return false;
   }
 
-  const pathname = requestUrl.pathname || '';
-  const isJs = pathname.endsWith('.js');
-  const isCss = pathname.endsWith('.css');
-
-  // Reject any resources that match our denylist
-  if (DENYLIST_REGEX.test(pathname)) return false;
-
-  // Reject the RUM library itself
-  if (isJs && pathname.includes('.rum/@adobe/helix-rum-js')) return false;
-
-  // Additional heuristics for JS/CSS
-  if (isJs) {
-    return pathname.startsWith('/etc.clientlibs/') || !pathname.endsWith('.min.js');
+  // 3. Reject resources matching denylist
+  // Common libraries, frameworks, analytics tools that don't need analysis
+  if (DENYLIST_REGEX.test(pathname)) {
+    return false;
   }
-  if (isCss) {
-    return pathname.includes('/etc.clientlibs/') || !pathname.endsWith('.min.css');
+
+  // 4. Reject RUM library (monitoring, not application code)
+  if (isJs && pathname.includes('.rum/@adobe/helix-rum-js')) {
+    return false;
   }
+
+  // 5. AEM Clientlibs: Always include (even if minified)
+  // These are project-specific bundles that should be analyzed
+  const isAEMClientlib = pathname.startsWith('/etc.clientlibs/') || pathname.startsWith('/apps/');
+  if (isAEMClientlib) {
+    return true;
+  }
+
+  // 6. Non-AEM resources: Exclude minified files
+  // Prefer source code for better analysis (variable names, comments, structure)
+  if (isJs && pathname.endsWith('.min.js')) {
+    return false;  // Minified JS outside AEM clientlibs
+  }
+
+  if (isCss && pathname.endsWith('.min.css')) {
+    return false;  // Minified CSS outside AEM clientlibs
+  }
+
+  // 7. Include all other first-party JS/CSS
   return true;
 }
 
@@ -157,12 +186,12 @@ export async function collect(pageUrl, deviceType, resources, { skipCache, skipT
       const timeoutPromise = new Promise((_, reject) => 
         setTimeout(() => reject(new Error('Resource fetch timeout')), 30000)
       );
-      
+
       const result = await Promise.race([
         fetchResource(url, deviceType, fetchOptions, skipCache),
         timeoutPromise
       ]);
-      
+
       if (result.fromCache) {
         cachedResources++;
       }
@@ -177,7 +206,7 @@ export async function collect(pageUrl, deviceType, resources, { skipCache, skipT
     }
   }
 
-    return {
+      return {
       codeFiles,
       stats: {
         total: totalResources,

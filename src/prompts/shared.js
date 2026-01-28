@@ -288,6 +288,14 @@ export const PHASE_FOCUS = {
   PERF_OBSERVER: (n) => `### Step ${n}: Performance Observer Analysis
 - Analyze performance entries captured during page load simulation
 - Examine largest-contentful-paint entries to identify LCP candidates, their timings, elements, and potential delays
+- **PRIORITY 2: Use CSS-to-CLS Attribution for layout shift analysis**
+  * Check the "CLS by Type" breakdown (font-swap, unsized-media, content-insertion, animation)
+  * Use the "Top CLS Issues (with CSS Attribution)" section for specific findings
+  * Cite the exact CSS property causing each shift (e.g., "font-family: Proximanova")
+  * Reference the stylesheet location (e.g., "/styles/fonts.css")
+  * Include the element selector affected (e.g., "body > h1")
+  * Use the shift type to inform recommendations (e.g., "font-swap → use font-display: optional or size-adjust")
+  * Example: "Element 'body > h1' has 0.15 CLS due to font-family: Proximanova in /styles/fonts.css (font-swap type)" not just "layout shift detected"
 - Analyze layout-shift entries to pinpoint the exact timing, score, and source elements contributing to CLS
 - Identify longtask entries (duration, timing) that contribute to high TBT/INP, noting potential attribution if available
 - Review resource timing entries for critical resources, comparing with HAR data for discrepancies or finer details
@@ -298,7 +306,14 @@ export const PHASE_FOCUS = {
 - Examine network waterfall for resource loading sequence and timing
 - Identify critical path resources that block rendering
 - Analyze request/response headers for optimization opportunities
-- Pinpoint third-party resources causing delays
+- **PRIORITY 1: Use Third-Party Script Analysis for detailed attribution**
+  * Cite specific third-party categories (analytics, advertising, social, etc.) from the "Third-Party Script Analysis" section
+  * Reference execution times and network times per category
+  * Identify render-blocking third-party scripts by name and domain
+  * Use the "Top Scripts by Execution Time" list for specific recommendations
+  * Reference long task attribution to specific third-party scripts
+  * Example: "analytics category: 3 scripts, 450ms execution (Google Analytics: 280ms)" not just "third-party scripts are slow"
+- Pinpoint third-party resources causing delays with specific domains and timing
 - Identify connection setup overhead (DNS, TCP, TLS) for key domains
 - Examine resource priorities and their impact on loading sequence
 - Detect TTFB issues that might indicate server-side performance problems

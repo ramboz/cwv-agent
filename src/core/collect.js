@@ -94,6 +94,7 @@ export async function getLabData(pageUrl, deviceType, options) {
 
 export async function getCode(pageUrl, deviceType, requests, options) {
   const { codeFiles, stats } = await collectCode(pageUrl, deviceType, requests, options);
+  
   if (stats.fromCache === stats.total) {
     console.log('✓ Loaded code from cache. Estimated token size: ~', estimateTokenSize(codeFiles, options.model));
   } else if (stats.fromCache > 0) {
