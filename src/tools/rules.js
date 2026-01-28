@@ -26,21 +26,65 @@ function prettifyWithOffset(str, offset = 4, code) {
   }
 }
 
+/**
+ * Phase A Optimization: Extract minimal info from HTML elements instead of prettifying full HTML
+ */
+function extractElementInfo(htmlString) {
+  // Handle non-string inputs gracefully
+  if (typeof htmlString !== 'string') {
+    return `[${typeof htmlString}: ${String(htmlString).substring(0, 50)}]`;
+  }
+
+  // Extract tag name
+  const tagMatch = htmlString.match(/<(\w+)/);
+  const tag = tagMatch ? tagMatch[1] : 'element';
+
+  // Extract key attributes (id, class, href, src) - not all attributes
+  const idMatch = htmlString.match(/\sid=["']([^"']+)["']/);
+  const classMatch = htmlString.match(/\sclass=["']([^"']+)["']/);
+  const hrefMatch = htmlString.match(/\shref=["']([^"']+)["']/);
+  const srcMatch = htmlString.match(/\ssrc=["']([^"']+)["']/);
+
+  let selector = `<${tag}`;
+  if (idMatch) selector += ` id="${idMatch[1]}"`;
+  else if (classMatch) {
+    const classes = classMatch[1].split(/\s+/).slice(0, 2).join(' ');
+    selector += ` class="${classes}"`;
+  }
+  if (hrefMatch) selector += ` href="${hrefMatch[1].substring(0, 60)}..."`;
+  else if (srcMatch) selector += ` src="${srcMatch[1].substring(0, 60)}..."`;
+  selector += '>';
+
+  return selector;
+}
+
 function details(rule) {
   if (rule.url) {
     return `Url: ${rule.url}`;
   } else if (rule.urls) {
-    return `Urls: ${rule.urls.join(',')}`;
+    // Phase A: Show count + sample instead of all URLs
+    const count = rule.urls.length;
+    if (count > 3) {
+      return `Urls (${count} total): ${rule.urls.slice(0, 3).join(', ')} ... +${count - 3} more`;
+    }
+    return `Urls: ${rule.urls.join(', ')}`;
   } else if (rule.element) {
     try {
-      return `Element:\n${prettifyWithOffset(rule.element, 4, 'html')}`;
+      // Phase A: Use compact selector instead of prettified HTML
+      return `Element: ${extractElementInfo(rule.element)}`;
     } catch (error) {
       console.error('Error processing element:', error);
       return `Element: [Error processing element]`;
     }
   } else if (rule.elements) {
     try {
-      return `Elements:\n${rule.elements.map((el) => prettifyWithOffset(el, 4, 'html')).join('\n')}`;
+      // Phase A: Show count + sample top 3 instead of all elements
+      const count = rule.elements.length;
+      const samples = rule.elements.slice(0, 3).map(el => extractElementInfo(el));
+      if (count > 3) {
+        return `Elements (${count} total):\n    - ${samples.join('\n    - ')}\n    - ... +${count - 3} more`;
+      }
+      return `Elements:\n    - ${samples.join('\n    - ')}`;
     } catch (error) {
       console.error('Error processing elements:', error);
       return `Elements: [Error processing elements]`;

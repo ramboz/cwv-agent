@@ -8,8 +8,8 @@ export function parseArguments() {
       alias: 'a',
       describe: 'Action to perform',
       type: 'string',
-      default: 'collect',
-      choices: ['collect', 'prompt', 'merge', 'agent', 'rules', 'mcp-reviewer']
+      default: 'agent',
+      choices: ['collect', 'agent', 'rules', 'mcp-reviewer']
     })
     .option('url', {
       alias: 'u',
@@ -39,12 +39,6 @@ export function parseArguments() {
       type: 'string',
       default: DEFAULT_MODEL
     })
-    .option('agent-mode', { // single agent mode or multi-agent mode
-      alias: 'g',
-      describe: 'Run in single agent mode or multi-agent mode',
-      type: 'string',
-      default: 'single',
-    })
     .option('output-suffix', {
       alias: 'o',
       describe: 'Suffix for output recommendations file',
@@ -56,6 +50,11 @@ export function parseArguments() {
       describe: 'Block requests - comma separated list of strings, urls containing these strings will be blocked',
       type: 'string',
       default: ''
+    })
+    .option('rum-domain-key', {
+      alias: 'r',
+      describe: 'RUM domain key for Helix RUM Bundler authentication (per-domain, not per-URL)',
+      type: 'string'
     })
     .check((argv) => {
       if (argv.action === 'mcp-reviewer') {

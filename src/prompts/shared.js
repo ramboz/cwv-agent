@@ -101,7 +101,7 @@ Immediately after the markdown report, include this exact section and schema:
       "effort": "string - Easy, Medium, or Hard",
       "impact": "string - expected improvement range",
       "implementation": "string - technical implementation details",
-      "codeExample": "string - code snippet or example (optional)",
+      "codeExample": "string - REQUIRED concrete code example (see requirements below)",
       "category": "string - performance category (images, css, javascript, fonts, third-party, etc.)"
     }
   ]
@@ -114,6 +114,154 @@ Instructions for JSON extraction:
 - Put technical details and code examples in the appropriate fields
 - Ensure the JSON is valid and properly escaped
 - Include all actionable recommendations
+
+**CRITICAL: Code Example Requirements**
+EVERY suggestion MUST include a concrete, copy-paste code example in the "codeExample" field:
+- For AEM: Include HTL template paths, clientlib categories, or Dispatcher config
+- For image optimizations: Show actual HTML attribute changes (loading, fetchpriority)
+- For font loading: Show @font-face declarations with font-display and size-adjust
+- For JavaScript: Show actual code snippets with file paths
+- For CSS: Show actual selectors and properties
+- AVOID: Generic "use X technique" without actual code
+- EXAMPLE FORMAT: "File: /apps/myproject/components/hero/hero.html\\n<img src=\\"\${image.src}\\" loading=\\"eager\\" fetchpriority=\\"high\\" />"
+`;
+}
+
+/**
+ * Returns structured output format instructions for agent findings (Phase 1)
+ * @param {string} agentName - Name of the agent
+ * @return {string} Structured output format instructions
+ */
+export function getStructuredOutputFormat(agentName) {
+  return `
+## Output Format (Phase 1 - Structured Findings)
+
+You must output your findings as a JSON object with the following schema:
+
+\`\`\`json
+{
+  "agentName": "${agentName}",
+  "findings": [
+    {
+      "id": "string (unique ID, e.g., 'psi-lcp-1', 'har-ttfb-1')",
+      "type": "bottleneck | waste | opportunity",
+      "metric": "LCP | CLS | INP | TBT | TTFB | FCP | TTI | SI",
+      "description": "string (human-readable finding, min 10 chars)",
+
+      "evidence": {
+        "source": "string (data source: psi, har, coverage, crux, rum, code, html, rules, perfEntries)",
+        "reference": "string (specific data point: audit name, file:line, timing breakdown, etc.)",
+        "confidence": number (0-1, your confidence in this finding)
+      },
+
+      "estimatedImpact": {
+        "metric": "string (which metric improves)",
+        "reduction": number (estimated improvement: ms, score, bytes, etc.)",
+        "confidence": number (0-1, confidence in estimate)",
+        "calculation": "string (optional: show your work)"
+      },
+
+      "reasoning": {
+        "observation": "string (what you observed in the data)",
+        "diagnosis": "string (why this is causing the problem)",
+        "mechanism": "string (how it impacts the metric)",
+        "solution": "string (why the proposed fix will work)"
+      },
+
+      "relatedFindings": ["array of related finding IDs (optional)"],
+      "rootCause": boolean (true = root cause, false = symptom)
+    }
+  ],
+  "metadata": {
+    "executionTime": number (ms),
+    "dataSourcesUsed": ["array of data sources examined"],
+    "coverageComplete": boolean (did you examine all relevant data?)
+  }
+}
+\`\`\`
+
+### Finding Type Classification
+
+- **bottleneck**: Resources/code blocking critical metrics (render-blocking scripts, slow TTFB, etc.)
+- **waste**: Unnecessary resources that don't contribute to UX (unused code, oversized images, etc.)
+- **opportunity**: Optimization chances that aren't currently blocking but could improve metrics (missing preload, better caching, etc.)
+
+### Evidence Requirements
+
+- **source**: Must match your data source (e.g., "psi", "har", "coverage")
+- **reference**: Be specific - include audit names, file paths with line numbers, timing breakdowns, etc.
+- **confidence**:
+  - 0.9-1.0: Direct measurement, highly reliable data
+  - 0.7-0.8: Strong correlation, reliable audit
+  - 0.5-0.6: Reasonable inference, some uncertainty
+  - <0.5: Speculative, uncertain
+
+### Impact Estimation
+
+- Provide quantified estimates (not just "improves performance")
+- Show your calculation if non-obvious
+- Be conservative - under-promise, over-deliver
+- Consider cascading effects (e.g., FCP → LCP)
+
+### Root Cause vs Symptom
+
+- **Root cause (true)**: Fundamental issue causing the problem (e.g., "full library imports instead of tree-shaking")
+- **Symptom (false)**: Observable effect of underlying issue (e.g., "LCP is slow at 4.2s")
+
+### Chain-of-Thought Reasoning (Phase 2)
+
+The **reasoning** field captures your analytical process using a structured 4-step chain:
+
+1. **observation**: What specific data point did you observe?
+   - Example: "Hero image (hero.jpg, 850KB) loaded with priority: Low in HAR"
+
+2. **diagnosis**: Why is this observation problematic?
+   - Example: "Low priority prevents browser from prioritizing this LCP resource, causing delayed fetch"
+
+3. **mechanism**: How does this problem affect the metric?
+   - Example: "Image fetch delayed by ~800ms, directly delaying LCP paint event"
+
+4. **solution**: Why will your proposed fix address the root cause?
+   - Example: "Adding fetchpriority='high' signals browser to prioritize image, eliminating the 800ms delay"
+
+**Guidelines**:
+- Be specific with data references (file names, sizes, timings)
+- Connect observation → diagnosis → mechanism → solution
+- Use byte sizes from coverage (not just percentages)
+- Reference per-domain timings from HAR
+- Cite font-display values from font strategy
+
+### Example Finding (Phase 2 with Reasoning)
+
+\`\`\`json
+{
+  "id": "psi-lcp-1",
+  "type": "bottleneck",
+  "metric": "LCP",
+  "description": "Three render-blocking scripts delay LCP by 850ms",
+  "evidence": {
+    "source": "psi.audits.render-blocking-resources",
+    "reference": "app.js (420ms), analytics.js (280ms), vendor.js (150ms)",
+    "confidence": 0.85
+  },
+  "estimatedImpact": {
+    "metric": "LCP",
+    "reduction": 650,
+    "confidence": 0.75,
+    "calculation": "850ms blocking → ~600-700ms LCP improvement (not 1:1 due to cascading)"
+  },
+  "reasoning": {
+    "observation": "PSI reports 3 render-blocking scripts: app.js (420ms), analytics.js (280ms), vendor.js (150ms), total 850ms",
+    "diagnosis": "Scripts without async/defer block HTML parsing until they execute, preventing LCP element from rendering",
+    "mechanism": "Render blocking delays FCP by 850ms, which cascades to delay LCP by ~600-700ms (not 1:1 due to parallel resource loading)",
+    "solution": "Adding async/defer attributes allows parsing to continue, eliminating blocking time and improving LCP"
+  },
+  "relatedFindings": ["coverage-unused-1"],
+  "rootCause": true
+}
+\`\`\`
+
+**IMPORTANT**: Output ONLY valid JSON. Do not include any text before or after the JSON object.
 `;
 }
 

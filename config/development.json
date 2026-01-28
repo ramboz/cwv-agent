@@ -1,0 +1,17 @@
+{
+  "models": {
+    "primary": "gemini-2.5-flash",
+    "fallback": "gemini-2.5-flash",
+    "validation": "gemini-2.5-flash"
+  },
+  "workflow": {
+    "maxIterations": 1,
+    "batchSize": 4
+  },
+  "cache": {
+    "ttl": 3600
+  },
+  "output": {
+    "includeRawData": true
+  }
+}

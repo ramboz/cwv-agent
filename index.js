@@ -17,18 +17,16 @@ async function main() {
   const outputSuffix = argv.outputSuffix;
   const blockRequests = argv.blockRequests;
   const model = argv.model;
-  
+  const rumDomainKey = argv.rumDomainKey;
+
   // Handle MCP reviewer action separately
   if (action === 'mcp-reviewer') {
     // Note: No console output for MCP mode - it interferes with JSON-RPC protocol
-    await processUrl(null, action, deviceType, skipCache, outputSuffix, blockRequests, model);
+    await processUrl(null, action, deviceType, skipCache, outputSuffix, blockRequests, model, rumDomainKey);
     return;
   }
-  
-  // Load URLs for other actions
-  const agentMode = argv.agentMode;
 
-  // Load URLs
+  // Load URLs for other actions
   const urls = loadUrls(argv);
 
   console.log(`Running ${action} for ${urls.length} URL(s) on ${deviceType}...`);
@@ -38,10 +36,13 @@ async function main() {
   if (model) {
     console.log(`Using model: ${model}`);
   }
+  if (rumDomainKey) {
+    console.log('RUM domain key provided - will collect Real User Monitoring data');
+  }
 
   // Process each URL
   for (const url of urls) {
-    await processUrl(url, action, deviceType, skipCache, outputSuffix, blockRequests, model, agentMode);
+    await processUrl(url, action, deviceType, skipCache, outputSuffix, blockRequests, model, rumDomainKey);
 
     // Small delay between processing URLs
     if (urls.length > 1) {

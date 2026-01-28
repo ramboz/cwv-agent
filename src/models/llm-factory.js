@@ -2,20 +2,60 @@ import { ChatVertexAI } from '@langchain/google-vertexai';
 import { AzureChatOpenAI } from '@langchain/openai';
 import { Bedrock } from '@langchain/community/llms/bedrock';
 import { getProviderForModel, getTokenLimits } from './config.js';
+import { ModelAdapter, modelRegistry } from './model-adapter.js';
+import { getConfig } from '../config/index.js';
 
 /**
- * Factory for creating LLM instances
+ * Factory for creating LLM instances with abstraction layer
  */
 export class LLMFactory {
   /**
    * Create an LLM instance based on the model name
    * @param {string} model - The model name
-   * @returns {Object} The LLM instance
+   * @param {Object} options - Additional options
+   * @returns {ModelAdapter} The model adapter instance
    */
-  static createLLM(model) {
+  static createLLM(model, options = {}) {
+    // Check if adapter already exists in registry
+    const existing = modelRegistry.get(model);
+    if (existing && !options.forceNew) {
+      return existing;
+    }
+
     const provider = getProviderForModel(model);
     const tokenLimits = getTokenLimits(model);
-    
+
+    // Create base LLM instance
+    const llmInstance = this.createBaseLLM(model, provider, tokenLimits);
+
+    // Wrap in adapter
+    const adapter = new ModelAdapter(model, llmInstance, options);
+
+    // Setup fallback if configured
+    const config = getConfig();
+    if (config.models.fallback && config.models.fallback !== model) {
+      try {
+        const fallbackAdapter = this.createLLM(config.models.fallback, { ...options, forceNew: true });
+        adapter.setFallback(fallbackAdapter);
+      } catch (error) {
+        console.warn(`Failed to create fallback model ${config.models.fallback}:`, error.message);
+      }
+    }
+
+    // Register adapter
+    modelRegistry.register(model, adapter);
+
+    return adapter;
+  }
+
+  /**
+   * Create base LLM instance without adapter wrapper
+   * @param {string} model - Model name
+   * @param {string} provider - Provider name
+   * @param {Object} tokenLimits - Token limits
+   * @returns {Object} Base LLM instance
+   */
+  static createBaseLLM(model, provider, tokenLimits) {
     switch (provider) {
       case 'gemini':
         // Check for Google Cloud credentials
@@ -25,6 +65,15 @@ export class LLMFactory {
         return new ChatVertexAI({
           model,
           maxOutputTokens: tokenLimits.output,
+          temperature: 0, // Deterministic for consistency
+          topP: 0.95,
+          topK: 40,
+          // Use native JSON mode for Gemini 2.5+ models
+          ...(model.startsWith('gemini-2.5') && {
+            modelKwargs: {
+              response_mime_type: "application/json"
+            }
+          })
         });
       
       case 'openai':

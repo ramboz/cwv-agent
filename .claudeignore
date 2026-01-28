@@ -1,0 +1,31 @@
+# Cache and build artifacts
+.cache/
+node_modules/
+package-lock.json
+
+# UI assets (unless working on UI)
+ui/
+
+# Test outputs
+*.har
+*.performance.json
+*.report.json
+
+# OS files
+.DS_Store
+.git/
+
+# Logs
+*.log
+
+# Environment
+.env
+.env.local
+
+# IDE
+.vscode/
+.cursor/
+.idea/
+
+# GitHub workflows (unless modifying CI/CD)
+.github/

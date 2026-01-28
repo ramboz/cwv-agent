@@ -9,6 +9,261 @@ import {
   collectPageCoverage,
 } from './coverage-collector.js';
 import { collectJSApiData, setupCSPViolationTracking } from './js-api-collector.js';
+import { analyzeThirdPartyScripts } from './third-party-attributor.js';
+import { attributeCLStoCSS, summarizeCLSAttribution } from './cls-attributor.js';
+
+/**
+ * Phase A Optimization: Extract only CWV-relevant HTML sections
+ * Reduces token count from 333K to ~30K by focusing on critical rendering path
+ */
+async function extractCwvRelevantHtml(page) {
+  return await page.evaluate(() => {
+    // Helper: Generate minimal CSS selector
+    const getSelector = (element) => {
+      if (!element) return null;
+      let selector = element.tagName.toLowerCase();
+      if (element.id) {
+        selector += `#${element.id}`;
+      } else if (element.className && typeof element.className === 'string') {
+        const classes = element.className.trim().split(/\s+/).slice(0, 2);
+        selector += classes.map(c => `.${c}`).join('');
+      }
+      return selector;
+    };
+
+    // Extract <head> metadata critical for CWV
+    const head = {
+      preload: Array.from(document.querySelectorAll('link[rel="preload"]'))
+        .map(l => ({
+          href: l.href,
+          as: l.as,
+          type: l.type,
+          fetchpriority: l.fetchPriority
+        })),
+      // Critical Gap Fix: Separate font preloads for easier analysis
+      fontPreloads: Array.from(document.querySelectorAll('link[rel="preload"][as="font"]'))
+        .map(l => ({
+          href: l.href,
+          type: l.type,
+          crossorigin: l.crossOrigin,
+          fetchpriority: l.fetchPriority
+        })),
+      preconnect: Array.from(document.querySelectorAll('link[rel="preconnect"], link[rel="dns-prefetch"]'))
+        .map(l => ({
+          rel: l.rel,
+          href: l.href,
+          crossorigin: l.crossOrigin
+        })),
+      renderBlockingStyles: Array.from(document.querySelectorAll('link[rel="stylesheet"]:not([media="print"])'))
+        .map(l => ({
+          href: l.href,
+          media: l.media || 'all'
+        })),
+      scripts: Array.from(document.querySelectorAll('script[src]'))
+        .map(s => ({
+          src: s.src,
+          async: s.async,
+          defer: s.defer,
+          type: s.type,
+          nomodule: s.noModule,
+          dataRouting: s.getAttribute('data-routing')
+        })),
+      inlineScripts: document.querySelectorAll('script:not([src])').length,
+      meta: {
+        viewport: document.querySelector('meta[name="viewport"]')?.content,
+        charset: document.querySelector('meta[charset]')?.getAttribute('charset')
+      }
+    };
+
+    // Find LCP candidates (large images, hero sections)
+    const lcpCandidates = Array.from(document.querySelectorAll('img, [style*="background-image"]'))
+      .filter(el => {
+        const rect = el.getBoundingClientRect();
+        // Substantial size (likely above-fold)
+        return rect.width > 300 && rect.height > 200 && rect.top < window.innerHeight;
+      })
+      .slice(0, 10)  // Top 10 candidates
+      .map(el => ({
+        tag: el.tagName.toLowerCase(),
+        selector: getSelector(el),
+        width: el.width || el.clientWidth,
+        height: el.height || el.clientHeight,
+        loading: el.loading,
+        fetchpriority: el.fetchPriority,
+        src: el.src || el.currentSrc,
+        hasBackgroundImage: el.style.backgroundImage ? true : false,
+        aboveFold: el.getBoundingClientRect().top < window.innerHeight
+      }));
+
+    // Find lazy-loaded images above fold (performance anti-pattern)
+    const lazyLoadAboveFold = Array.from(document.querySelectorAll('img[loading="lazy"]'))
+      .filter(img => {
+        const rect = img.getBoundingClientRect();
+        return rect.top < window.innerHeight;
+      })
+      .map(img => ({
+        selector: getSelector(img),
+        src: img.src
+      }));
+
+    // Find images without dimensions (CLS risk)
+    const imagesWithoutDimensions = Array.from(document.querySelectorAll('img'))
+      .filter(img => !img.hasAttribute('width') || !img.hasAttribute('height'))
+      .slice(0, 20)  // Sample 20
+      .map(img => ({
+        selector: getSelector(img),
+        src: img.src
+      }));
+
+    // Third-party scripts (often impact CWV)
+    const thirdPartyDomains = ['googletagmanager.com', 'google-analytics.com', 'facebook.net',
+                               'doubleclick.net', 'pushengage.com', 'hotjar.com', 'gtag'];
+    const thirdPartyScripts = Array.from(document.querySelectorAll('script[src]'))
+      .filter(s => thirdPartyDomains.some(d => s.src.includes(d)))
+      .map(s => ({
+        src: s.src,
+        async: s.async,
+        defer: s.defer
+      }));
+
+    // Recommended Improvement: Comprehensive font strategy analysis
+    const fontStrategy = {
+      fontFaces: [],
+      issues: [],
+      summary: {
+        totalFonts: 0,
+        preloadedFonts: 0,
+        fontsWithSwap: 0,
+        fontsWithOptional: 0,
+        fontsWithBlock: 0,
+        fontsWithoutDisplay: 0,
+        externalFontProviders: new Set()
+      }
+    };
+
+    try {
+      // Analyze all @font-face rules
+      Array.from(document.styleSheets).forEach((sheet, idx) => {
+        try {
+          const rules = Array.from(sheet.cssRules || sheet.rules || []);
+          rules.forEach(rule => {
+            if (rule.type === CSSRule.FONT_FACE_RULE) {
+              const fontFamily = rule.style.getPropertyValue('font-family')?.replace(/['"]/g, '') || 'unknown';
+              const fontDisplay = rule.style.getPropertyValue('font-display') || null;
+              const fontWeight = rule.style.getPropertyValue('font-weight') || 'normal';
+              const fontStyle = rule.style.getPropertyValue('font-style') || 'normal';
+              const src = rule.style.getPropertyValue('src');
+              const unicodeRange = rule.style.getPropertyValue('unicode-range') || null;
+
+              // Extract font URL
+              let fontUrl = null;
+              if (src) {
+                const urlMatch = src.match(/url\(['"]?([^'"]+)['"]?\)/);
+                fontUrl = urlMatch ? urlMatch[1] : null;
+              }
+
+              // Determine if external provider (Google Fonts, Adobe Fonts, etc.)
+              if (fontUrl) {
+                try {
+                  const url = new URL(fontUrl, window.location.href);
+                  if (!url.hostname.includes(window.location.hostname)) {
+                    fontStrategy.summary.externalFontProviders.add(url.hostname);
+                  }
+                } catch (e) {
+                  // Relative URL, self-hosted
+                }
+              }
+
+              // Count font-display strategies
+              fontStrategy.summary.totalFonts++;
+              if (fontDisplay === 'swap') fontStrategy.summary.fontsWithSwap++;
+              else if (fontDisplay === 'optional') fontStrategy.summary.fontsWithOptional++;
+              else if (fontDisplay === 'block') fontStrategy.summary.fontsWithBlock++;
+              else if (!fontDisplay) fontStrategy.summary.fontsWithoutDisplay++;
+
+              // Check if this font is preloaded
+              const isPreloaded = Array.from(document.querySelectorAll('link[rel="preload"][as="font"]'))
+                .some(link => fontUrl && link.href.includes(fontUrl.split('/').pop()));
+
+              if (isPreloaded) {
+                fontStrategy.summary.preloadedFonts++;
+              }
+
+              // Add to fontFaces list
+              fontStrategy.fontFaces.push({
+                family: fontFamily,
+                weight: fontWeight,
+                style: fontStyle,
+                display: fontDisplay,
+                url: fontUrl ? fontUrl.substring(0, 100) : null,
+                unicodeRange: unicodeRange,
+                isPreloaded: isPreloaded,
+                stylesheet: sheet.href || `inline-${idx}`
+              });
+
+              // Flag issues
+              if (!fontDisplay || fontDisplay === 'block') {
+                fontStrategy.issues.push({
+                  type: 'missing-font-display',
+                  fontFamily: fontFamily,
+                  currentValue: fontDisplay || 'not set',
+                  recommendation: 'Use font-display: swap or optional to prevent CLS',
+                  severity: 'high'
+                });
+              }
+
+              // Flag if critical font not preloaded
+              if (!isPreloaded && (fontWeight === 'normal' || fontWeight === '400') && fontStyle === 'normal') {
+                fontStrategy.issues.push({
+                  type: 'critical-font-not-preloaded',
+                  fontFamily: fontFamily,
+                  recommendation: `Add <link rel="preload" href="${fontUrl}" as="font" type="font/woff2" crossorigin>`,
+                  severity: 'medium'
+                });
+              }
+
+              // Flag subsetting opportunity
+              if (!unicodeRange && fontUrl && !fontUrl.includes('googlefonts')) {
+                fontStrategy.issues.push({
+                  type: 'missing-subsetting',
+                  fontFamily: fontFamily,
+                  recommendation: 'Consider subsetting font to reduce file size (use unicode-range)',
+                  severity: 'low'
+                });
+              }
+            }
+          });
+        } catch (e) {
+          // Cross-origin stylesheet, skip
+        }
+      });
+
+      // Convert Set to Array for JSON serialization
+      fontStrategy.summary.externalFontProviders = Array.from(fontStrategy.summary.externalFontProviders);
+
+      // Add high-level assessment
+      if (fontStrategy.summary.totalFonts === 0) {
+        fontStrategy.assessment = 'No custom fonts detected (using system fonts)';
+      } else if (fontStrategy.summary.fontsWithSwap + fontStrategy.summary.fontsWithOptional === fontStrategy.summary.totalFonts) {
+        fontStrategy.assessment = 'Good: All fonts use font-display: swap or optional';
+      } else if (fontStrategy.summary.fontsWithoutDisplay + fontStrategy.summary.fontsWithBlock > 0) {
+        fontStrategy.assessment = `Warning: ${fontStrategy.summary.fontsWithoutDisplay + fontStrategy.summary.fontsWithBlock} fonts missing proper font-display (risk of CLS)`;
+      }
+
+    } catch (e) {
+      fontStrategy.error = 'Font analysis failed: ' + e.message;
+    }
+
+    return JSON.stringify({
+      head,
+      lcpCandidates,
+      lazyLoadAboveFold,
+      imagesWithoutDimensions,
+      thirdPartyScripts,
+      fontStrategy
+    }, null, 2);
+  });
+}
 
 // Main Data Collection Function
 export async function collect(pageUrl, deviceType, { skipCache, blockRequests, collectHar = true, collectCoverage = true }) {
@@ -104,9 +359,37 @@ export async function collect(pageUrl, deviceType, { skipCache, blockRequests, c
     const count = Array.isArray(harFile?.log?.entries) ? harFile.log.entries.length : 0;
   }
 
+  // Enhanced attribution: Third-party scripts (Priority 1)
+  let thirdPartyAnalysis = null;
+  if (needHar && harFile && perfEntries) {
+    try {
+      thirdPartyAnalysis = analyzeThirdPartyScripts(
+        harFile.log.entries,
+        perfEntries,
+        pageUrl
+      );
+      cacheResults(pageUrl, deviceType, 'third-party', thirdPartyAnalysis);
+    } catch (err) {
+      console.error('Error analyzing third-party scripts:', err.message);
+    }
+  }
+
+  // Enhanced attribution: CLS-to-CSS mapping (Priority 2)
+  let clsAttribution = null;
+  if (needPerf && perfEntries && perfEntries.layoutShifts && perfEntries.layoutShifts.length > 0) {
+    try {
+      clsAttribution = await attributeCLStoCSS(perfEntries.layoutShifts, page);
+      const clsSummary = summarizeCLSAttribution(clsAttribution);
+      cacheResults(pageUrl, deviceType, 'cls-attribution', { detailed: clsAttribution, summary: clsSummary });
+    } catch (err) {
+      console.error('Error attributing CLS to CSS:', err.message);
+    }
+  }
+
   // Collect HTML content
+  // Phase A Optimization: Extract only CWV-relevant HTML sections instead of full page
   if (needHtml) {
-    fullHtml = await page.evaluate(() => document.documentElement.outerHTML);
+    fullHtml = await extractCwvRelevantHtml(page);
   }
   cacheResults(pageUrl, deviceType, 'html', fullHtml);
 
@@ -147,14 +430,16 @@ export async function collect(pageUrl, deviceType, { skipCache, blockRequests, c
   }
 
   // Return collected data
-  return { 
-    har: collectHar ? harFile : null, 
-    harSummary, 
-    perfEntries, 
-    perfEntriesSummary, 
-    fullHtml, 
+  return {
+    har: collectHar ? harFile : null,
+    harSummary,
+    perfEntries,
+    perfEntriesSummary,
+    fullHtml,
     jsApi,
     coverageData: collectCoverage ? coverageData : null,
-    coverageDataSummary
+    coverageDataSummary,
+    thirdPartyAnalysis,
+    clsAttribution
   };
 }

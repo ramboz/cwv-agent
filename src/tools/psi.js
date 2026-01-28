@@ -60,27 +60,73 @@ export function summarize(psiData) {
     hasBottlenecks = true;
   }
 
-  // Other audits (prioritize those with 'opportunity' details and wastedBytes/wastedMs)
+  // Expanded audit coverage - 40+ audits organized by category
+  // Prioritize audits with actionable 'opportunity' details (wastedBytes/wastedMs)
   const prioritizedAudits = [
-    'uses-optimized-images',
-    'uses-modern-image-formats',
-    'uses-text-compression',
+    // === Critical Path & LCP Optimization (High Priority) ===
     'render-blocking-resources',
-    'unminified-css',
-    'unminified-javascript',
-    'unused-css-rules',
-    'unused-javascript',
-    'uses-responsive-images',
-    'efficient-animated-content',
-    'third-party-summary',
-    'duplicated-javascript',
-    'legacy-javascript',
-    'viewport',
+    'prioritize-lcp-image',
+    'uses-rel-preload',
+    'uses-rel-preconnect',
     'server-response-time',
     'redirects',
-    'uses-rel-preconnect',
-    'prioritize-lcp-image',
-    'unsized-images'
+
+    // === Resource Optimization (High Priority) ===
+    'uses-optimized-images',
+    'uses-modern-image-formats',
+    'uses-responsive-images',
+    'unsized-images',
+    'efficient-animated-content',
+    'uses-text-compression',
+
+    // === JavaScript Optimization (High Priority) ===
+    'unused-javascript',
+    'unminified-javascript',
+    'duplicated-javascript',
+    'legacy-javascript',
+    'bootup-time',
+    'mainthread-work-breakdown',
+    'dom-size',
+
+    // === CSS Optimization (Medium Priority) ===
+    'unused-css-rules',
+    'unminified-css',
+    'non-composited-animations',
+
+    // === Third-Party & Network (Medium Priority) ===
+    'third-party-summary',
+    'third-party-facades',
+    'uses-long-cache-ttl',
+    'uses-http2',
+
+    // === Font Optimization (Medium Priority) ===
+    'font-display',
+    'preload-fonts',
+
+    // === Additional Opportunities (Medium-Low Priority) ===
+    'offscreen-images',
+    'uses-webp-images',
+    'uses-avif-images',
+    'modern-image-formats',
+    'lcp-lazy-loaded',
+
+    // === Accessibility Audits (Affects CWV indirectly) ===
+    'aria-allowed-attr',
+    'aria-required-children',
+    'button-name',
+    'image-alt',
+    'label',
+    'link-name',
+
+    // === PWA & Reliability (Low Priority but comprehensive) ===
+    'viewport',
+    'meta-description',
+    'charset',
+
+    // === Diagnostics (Low Priority) ===
+    'no-document-write',
+    'uses-passive-event-listeners',
+    'inspector-issues'
   ];
 
   for (const auditId of prioritizedAudits) {

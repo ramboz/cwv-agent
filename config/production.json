@@ -1,0 +1,17 @@
+{
+  "models": {
+    "primary": "gemini-2.5-pro",
+    "fallback": "gemini-2.5-flash",
+    "validation": "gemini-2.5-flash"
+  },
+  "workflow": {
+    "enableFeedbackLoop": true,
+    "timeoutPerAgent": 180000
+  },
+  "cache": {
+    "ttl": 259200
+  },
+  "output": {
+    "includeRawData": false
+  }
+}

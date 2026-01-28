@@ -41,13 +41,16 @@ AZURE_OPENAI_API_VERSION=...
 ### Basic Usage
 
 ```bash
-# Quick analysis with AI suggestions
-node index.js --action prompt --url "https://example.com"
+# AI-powered analysis with multi-agent system (default)
+node index.js --url "https://example.com"
 
-# Collect raw performance data
+# Or explicitly specify the agent action
+node index.js --action agent --url "https://example.com"
+
+# Collect raw performance data only
 node index.js --action collect --url "https://example.com" --device mobile
 
-# Start interactive MCP reviewer, but cursor should do it for you automatically
+# Start interactive MCP reviewer (Cursor IDE integration)
 node index.js --action mcp-reviewer
 ```
 
@@ -55,10 +58,9 @@ node index.js --action mcp-reviewer
 
 | Action | Description | Example |
 |--------|-------------|---------|
+| `agent` | **[DEFAULT]** Run multi-agent AI analysis workflow | `--action agent --url example.com` |
 | `collect` | Collect raw performance data (CrUX, PSI, HAR) | `--action collect --url example.com` |
-| `prompt` | Generate AI-powered optimization suggestions | `--action prompt --url example.com` |
 | `rules` | Apply predefined performance rules | `--action rules --url example.com` |
-| `agent` | Run the full AI agent workflow (multi-agent) | `--action agent --url example.com` |
 | `mcp-reviewer` | Start interactive suggestion reviewer | `--action mcp-reviewer` |
 
 ## 🎛️ Command Line Options
@@ -67,12 +69,12 @@ node index.js --action mcp-reviewer
 node index.js [options]
 
 Options:
-  --action, -a     Action to perform [collect|prompt|rules|agent|mcp-reviewer]
+  --action, -a     Action to perform [agent|collect|rules|mcp-reviewer] (default: agent)
   --url, -u        URL to analyze
   --urls           Path to JSON file with multiple URLs
   --device, -d     Device type [mobile|desktop] (default: mobile)
   --skip-cache, -s Skip cached data and force new collection
-  --model, -m      LLM model to use (default: gemini-2.5-pro-preview-05-06)
+  --model, -m      LLM model to use (default: gemini-2.5-pro)
   --output-suffix  Suffix for output files
   --block-requests Block specific requests (comma-separated)
   --help           Show help
@@ -80,17 +82,24 @@ Options:
 
 ## 🤖 Supported AI Models
 
-### Gemini Models (via Vertex AI)
-- `gemini-2.5-pro-preview-05-06` (default, recommended)
-- `gemini-2.5-flash-preview-05-20` (faster, less detailed)
+### Gemini Models (via Vertex AI) - Recommended
+- `gemini-2.5-pro` (default, 2M context, native JSON mode)
+- `gemini-2.5-flash` (faster, 1M context)
+- `gemini-exp-1206` (experimental 2.0 Flash with thinking)
+- `gemini-1.5-flash` (legacy, still supported)
 
 ### OpenAI Models (via Azure)
-- `gpt-5` (latest GPT-5 model)
-- `gpt-4o` (GPT-4 model)
-- `gpt-4.1` (previous version)
+- `o1` (latest reasoning model, 200K context)
+- `o1-mini` (faster reasoning, 128K context)
+- `gpt-4o` (128K context, 16K output)
+- `gpt-4o-mini` (faster, smaller)
+- `o3-mini` (if available in your region)
 
 ### Claude Models (via AWS Bedrock)
-- `claude-3-7-sonnet-20250219` (coming soon)
+- `claude-sonnet-4-5-20250929` (Claude Sonnet 4.5 - latest)
+- `claude-opus-4-5-20251101` (Claude Opus 4.5 - most capable)
+- `claude-haiku-4-0-20250514` (Claude Haiku 4.0 - fastest)
+- `claude-3-7-sonnet-20250219` (previous version)
 
 ## 🎯 Interactive MCP Reviewer
 
@@ -102,14 +111,11 @@ The CWV Agent includes a powerful MCP (Model Context Protocol) reviewer for inte
 
 ### Single URL Analysis
 ```bash
-# Complete analysis workflow
-node index.js --action prompt --url "https://www.qualcomm.com" --device mobile
-```
+# Complete AI-powered analysis (default: multi-agent workflow)
+node index.js --url "https://www.qualcomm.com" --device mobile
 
-### Agent Modes (multi-agent)
-```bash
-# Conditional multi-agent (PSI-gated; only runs heavy agents like HAR/Coverage/Code when needed)
-node index.js --action agent --url "https://example.com" --device mobile
+# Or explicitly specify agent action
+node index.js --action agent --url "https://www.qualcomm.com" --device mobile
 ```
 
 ### Batch Processing
@@ -124,13 +130,13 @@ Create `urls.json`:
 
 Run batch analysis:
 ```bash
-node index.js --action prompt --urls urls.json --device mobile
+node index.js --urls urls.json --device mobile
 ```
 
 ### Force Fresh Data
 ```bash
 # Skip cache and collect new data
-node index.js --action prompt --url "https://example.com" --skip-cache
+node index.js --url "https://example.com" --skip-cache
 ```
 
 ## 📊 Output Files
@@ -150,7 +156,7 @@ The tool generates files in the `.cache/` directory:
 ### Custom Models
 ```bash
 # Use different AI model
-node index.js --action prompt --url example.com --model gpt-4o
+node index.js --url example.com --model gpt-4o
 ```
 
 ### Request Blocking

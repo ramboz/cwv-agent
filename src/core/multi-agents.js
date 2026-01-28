@@ -3,11 +3,12 @@ import {DynamicTool} from '@langchain/core/tools';
 import {RunnableSequence} from '@langchain/core/runnables';
 import {StringOutputParser} from '@langchain/core/output_parsers';
 import {cacheResults, estimateTokenSize} from '../utils.js';
+import { z } from 'zod';
 import {
     actionPrompt, codeStep, coverageSummaryStep,
     cruxSummaryStep, harSummaryStep,
     htmlStep, perfSummaryStep,
-    psiSummaryStep, rulesStep
+    psiSummaryStep, rulesStep, rumSummaryStep
 } from '../prompts/index.js';
 import {HumanMessage, SystemMessage} from '@langchain/core/messages';
 import {
@@ -16,7 +17,9 @@ import {
     perfObserverAgentPrompt, psiAgentPrompt, rulesAgentPrompt,
     initializeSystemAgents,
 } from '../prompts/index.js';
-import { getCrux, getPsi, getLabData, getCode } from './collect.js';
+import { buildCausalGraph, generateGraphSummary } from './causal-graph-builder.js';
+import { validateFindings, saveValidationResults } from './validator.js';
+import { getCrux, getPsi, getRUM, getLabData, getCode } from './collect.js';
 import { detectAEMVersion } from '../tools/aem.js';
 import merge from '../tools/merge.js';
 import { applyRules } from '../tools/rules.js';
@@ -37,6 +40,129 @@ const DEFAULT_THRESHOLDS = {
         TRANSFER_BYTES: 3_500_000,
     }
 };
+
+/** Zod Schema for Structured Suggestions Output (Final synthesis) */
+const suggestionSchema = z.object({
+    url: z.string().url(),
+    deviceType: z.enum(['mobile', 'desktop']),
+    timestamp: z.string(),
+    suggestions: z.array(z.object({
+        title: z.string().min(1),
+        description: z.string().min(1),
+        // Allow either single metric or array of metrics (for multi-metric improvements)
+        metric: z.union([
+            z.enum(['LCP', 'CLS', 'INP', 'TBT', 'TTFB', 'FCP', 'TTI', 'SI']),
+            z.array(z.enum(['LCP', 'CLS', 'INP', 'TBT', 'TTFB', 'FCP', 'TTI', 'SI']))
+        ]).optional(),
+        priority: z.enum(['High', 'Medium', 'Low']).optional(),
+        effort: z.enum(['Easy', 'Medium', 'Hard']).optional(),
+        estimatedImpact: z.string().optional(),
+        confidence: z.number().min(0).max(1).optional(),
+        evidence: z.array(z.string()).optional(),
+        codeChanges: z.array(z.object({
+            file: z.string(),
+            line: z.number().optional(),
+            before: z.string().optional(),
+            after: z.string().optional()
+        })).optional(),
+        validationCriteria: z.array(z.string()).optional()
+    }))
+});
+
+/** Zod Schema for Agent Findings (Phase 1 - Individual Agent Outputs) */
+const agentFindingSchema = z.object({
+    id: z.string(), // Unique ID for cross-referencing (e.g., "psi-lcp-1")
+    type: z.enum(['bottleneck', 'waste', 'opportunity']),
+    metric: z.enum(['LCP', 'CLS', 'INP', 'TBT', 'TTFB', 'FCP', 'TTI', 'SI']),
+    description: z.string().min(10), // Human-readable finding
+
+    // Evidence structure
+    evidence: z.object({
+        source: z.string(), // 'psi', 'har', 'coverage', 'perfEntries', 'crux', 'rum', 'code', 'html', 'rules'
+        reference: z.string(), // Specific data point (audit name, file:line, timing breakdown, etc.)
+        confidence: z.number().min(0).max(1) // 0-1 confidence score
+    }),
+
+    // Impact estimation
+    estimatedImpact: z.object({
+        metric: z.string(), // Which metric improves
+        reduction: z.number(), // Estimated improvement (ms, score, bytes, etc.)
+        confidence: z.number().min(0).max(1), // Confidence in estimate
+        calculation: z.string().optional() // Show your work
+    }),
+
+    // Causal relationships (for Phase 3 graph building)
+    relatedFindings: z.array(z.string()).optional(), // IDs of related findings
+    rootCause: z.boolean(), // true = root cause, false = symptom
+
+    // Chain-of-thought reasoning (Phase 2 will populate)
+    reasoning: z.object({
+        symptom: z.string(), // What is observed
+        rootCauseHypothesis: z.string(), // Why it occurs
+        evidenceSupport: z.string(), // How evidence supports hypothesis
+        impactRationale: z.string() // Why this impact estimate
+    }).optional()
+});
+
+const agentOutputSchema = z.object({
+    agentName: z.string(),
+    findings: z.array(agentFindingSchema),
+    metadata: z.object({
+        executionTime: z.number(),
+        dataSourcesUsed: z.array(z.string()),
+        coverageComplete: z.boolean() // Did agent examine all relevant data?
+    })
+});
+
+/** Quality Metrics Schema (Phase 1 - Track Suggestion Quality) */
+const qualityMetricsSchema = z.object({
+    runId: z.string(),
+    timestamp: z.string(),
+    url: z.string(),
+    deviceType: z.string(),
+    model: z.string(),
+
+    // Finding counts
+    totalFindings: z.number(),
+    findingsByType: z.object({
+        bottleneck: z.number(),
+        waste: z.number(),
+        opportunity: z.number()
+    }),
+    findingsByMetric: z.object({
+        LCP: z.number(),
+        CLS: z.number(),
+        INP: z.number(),
+        TBT: z.number(),
+        TTFB: z.number(),
+        FCP: z.number(),
+        TTI: z.number().optional(),
+        SI: z.number().optional()
+    }),
+
+    // Evidence quality
+    averageConfidence: z.number(),
+    withConcreteReference: z.number(), // Ratio (0-1) with specific data references
+    withImpactEstimate: z.number(), // Ratio (0-1) with quantified impact
+
+    // Root cause analysis
+    rootCauseCount: z.number(),
+    rootCauseRatio: z.number(), // Ratio (0-1) marked as root cause vs symptoms
+
+    // Agent performance
+    agentExecutionTimes: z.record(z.number()),
+    totalExecutionTime: z.number(),
+
+    // Coverage completeness
+    agentCoverageComplete: z.record(z.boolean()),
+
+    // Validation (Phase 4 will populate)
+    validationStatus: z.object({
+        passed: z.boolean(),
+        issueCount: z.number(),
+        blockedCount: z.number()
+    }).optional()
+});
 
 /** Tool Wrapper */
 export class Tool {
@@ -68,46 +194,48 @@ export class Agent {
         this.tools = tools;
         // this.llm = LangchainLLMFactory.createLLM(llm);
         this.llm = llm
-        this.chain = RunnableSequence.from([prompt, this.llm, new StringOutputParser()]); // ← Fixed: use this.llm
+        // Extract the base LLM from ModelAdapter if needed for RunnableSequence
+        const baseLLM = llm.getBaseLLM ? llm.getBaseLLM() : llm;
+        this.chain = RunnableSequence.from([prompt, baseLLM, new StringOutputParser()]);
     }
 
     async invoke(input) {
-        let processedInput = input;
+        // Use native tool calling if tools are available
+        if (this.tools.length > 0) {
+            // Extract base LLM for tool binding
+            const baseLLM = this.llm.getBaseLLM ? this.llm.getBaseLLM() : this.llm;
+            // Bind tools to LLM for native tool calling
+            const llmWithTools = baseLLM.bindTools(this.tools.map(t => t.instance));
 
-        const toolDecision = await this.shouldUseTool(input);
-        if (toolDecision?.use && toolDecision?.toolObj) {
-            const toolResult = await toolDecision.toolObj.instance.func(toolDecision.query);
-            processedInput += `\n\nTool Result: ${toolResult}`;
+            // Create message array with system and human messages
+            const messages = [
+                new SystemMessage(this.chain.steps[0].promptMessages[0].prompt.template),
+                new HumanMessage(input)
+            ];
+
+            // Initial invocation
+            let aiMessage = await llmWithTools.invoke(messages);
+            messages.push(aiMessage);
+
+            // Auto-loop on tool calls
+            while (aiMessage.tool_calls && aiMessage.tool_calls.length > 0) {
+                for (const toolCall of aiMessage.tool_calls) {
+                    const tool = this.tools.find(t => t.name === toolCall.name);
+                    if (tool) {
+                        const toolMessage = await tool.instance.invoke(toolCall);
+                        messages.push(toolMessage);
+                    }
+                }
+                aiMessage = await llmWithTools.invoke(messages);
+                messages.push(aiMessage);
+            }
+
+            return aiMessage.content;
         }
 
-        const result = await this.chain.invoke({ input: processedInput });
+        // Fallback to simple chain for agents without tools
+        const result = await this.chain.invoke({ input });
         return result;
-    }
-
-    async shouldUseTool(input) {
-        if (!this.tools.length) return {use: false};
-
-        const toolNames = this.tools.map(t => t.name).join(", ");
-        const toolPrompt = `
-Given this input: "${input}"
-Available tools: ${toolNames}
-Should I use a tool? Respond as:
-{"use": true/false, "tool": "tool_name", "query": "search_query"}
-`;
-
-        try {
-            const response = await this.llm.invoke([
-                new SystemMessage('You are a tool selector. Return a compact JSON with keys: use, tool, query.'),
-                { role: "user", content: toolPrompt }
-            ]);
-            const raw = response.content.replace(/```json|```/gi, "").trim();
-            const parsed = JSON.parse(raw);
-            const selectedTool = this.tools.find(t => t.name === parsed.tool);
-            return {...parsed, toolObj: selectedTool};
-        } catch (error) {
-            console.warn("Tool decision parsing failed:", error.message);
-            return {use: false};
-        }
     }
 }
 
@@ -140,24 +268,67 @@ export class MultiAgentSystem {
     async executeParallelTasks(tasks) {
         const total = tasks.length;
         let completed = 0;
-        const results = await Promise.all(tasks.map(async ({agent: agentName, description}) => {
+
+        // Rate limiting configuration
+        const BATCH_SIZE = parseInt(process.env.AGENT_BATCH_SIZE || '3', 10);
+        const DELAY_BETWEEN_BATCHES = parseInt(process.env.AGENT_BATCH_DELAY || '2000', 10); // ms
+        const MAX_RETRIES = 3;
+        const INITIAL_RETRY_DELAY = 5000; // 5 seconds
+
+        // Helper: Execute single agent with retry logic
+        const executeAgentWithRetry = async ({agent: agentName, description}, retryCount = 0) => {
             const agent = this.agents.get(agentName);
             if (!agent) throw new Error(`Agent ${agentName} not found`);
             const input = description || `Please perform your assigned role as ${agent.role}`;
             const t0 = Date.now();
+
             try {
-            const output = await agent.invoke(input);
+                const output = await agent.invoke(input);
                 const dt = ((Date.now() - t0) / 1000).toFixed(1);
                 completed++;
                 console.log(`✅ ${agentName} (${Math.round(completed/total*100)}%, ${Number(dt)}s)`);
-            return {agent: agentName, output};
+                return {agent: agentName, output};
             } catch (err) {
                 const dt = ((Date.now() - t0) / 1000).toFixed(1);
+
+                // Check if it's a rate limit error (429)
+                const isRateLimitError = err.message?.includes('429') ||
+                                        err.message?.includes('Resource exhausted') ||
+                                        err.message?.includes('rateLimitExceeded');
+
+                if (isRateLimitError && retryCount < MAX_RETRIES) {
+                    const retryDelay = INITIAL_RETRY_DELAY * Math.pow(2, retryCount); // Exponential backoff
+                    console.log(`⚠️  ${agentName} hit rate limit, retrying in ${retryDelay/1000}s (attempt ${retryCount + 1}/${MAX_RETRIES})`);
+                    await new Promise(resolve => setTimeout(resolve, retryDelay));
+                    return executeAgentWithRetry({agent: agentName, description}, retryCount + 1);
+                }
+
                 completed++;
                 console.log(`❌ ${agentName} (${Math.round(completed/total*100)}%, ${Number(dt)}s):`, err.message);
                 return {agent: agentName, output: `Error: ${err.message}`};
             }
-        }));
+        };
+
+        // Execute tasks in batches to avoid rate limiting
+        const results = [];
+        for (let i = 0; i < tasks.length; i += BATCH_SIZE) {
+            const batch = tasks.slice(i, i + BATCH_SIZE);
+            const batchNum = Math.floor(i / BATCH_SIZE) + 1;
+            const totalBatches = Math.ceil(tasks.length / BATCH_SIZE);
+
+            console.log(`🔄 Executing batch ${batchNum}/${totalBatches} (${batch.length} agents)...`);
+
+            // Execute batch in parallel
+            const batchResults = await Promise.all(batch.map(task => executeAgentWithRetry(task)));
+            results.push(...batchResults);
+
+            // Add delay between batches (except after last batch)
+            if (i + BATCH_SIZE < tasks.length) {
+                console.log(`⏳ Waiting ${DELAY_BETWEEN_BATCHES/1000}s before next batch...`);
+                await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_BATCHES));
+            }
+        }
+
         return results;
     }
 }
@@ -197,18 +368,152 @@ function extractStructuredSuggestions(content, pageUrl, deviceType) {
             else if (parsed1.data && Array.isArray(parsed1.data.actions)) suggestions = parsed1.data.actions;
         }
 
-        return {
+        // Normalize suggestions to fix common LLM output issues
+        const normalizedSuggestions = Array.isArray(suggestions) ? suggestions.map(s => {
+            // Fix comma-separated metrics (e.g., "LCP, INP" → ["LCP", "INP"])
+            if (s.metric && typeof s.metric === 'string' && s.metric.includes(',')) {
+                s.metric = s.metric.split(',').map(m => m.trim());
+            }
+            return s;
+        }) : [];
+
+        const normalized = {
             ...parsed1,
             url: parsed1.url || pageUrl,
             deviceType: parsed1.deviceType || deviceType,
             timestamp: parsed1.timestamp || new Date().toISOString(),
-            suggestions: Array.isArray(suggestions) ? suggestions : [],
+            suggestions: normalizedSuggestions,
         };
+
+        // Validate with Zod schema (logs warnings but doesn't block)
+        try {
+            suggestionSchema.parse(normalized);
+        } catch (zodError) {
+            console.warn('Multi-agent: Suggestion schema validation failed:', zodError.errors);
+            // Continue despite validation errors for now (Phase 1 will enforce strict validation)
+        }
+
+        return normalized;
     } catch (e) {
         console.warn('Multi-agent: failed to parse structured JSON:', e.message);
         return {};
     }
 }
+
+/**
+ * Collect quality metrics from agent findings (Phase 1)
+ * @param {Array} agentOutputs - Array of agent output objects with findings
+ * @param {string} pageUrl - URL being analyzed
+ * @param {string} deviceType - Device type (mobile/desktop)
+ * @param {string} model - Model name used
+ * @returns {Object} Quality metrics object
+ */
+function collectQualityMetrics(agentOutputs, pageUrl, deviceType, model) {
+    // Extract all findings from all agents
+    const allFindings = agentOutputs.flatMap(output => {
+        // Handle both old format (string output) and new format (structured findings)
+        if (output.findings && Array.isArray(output.findings)) {
+            return output.findings;
+        }
+        return [];
+    });
+
+    // If no structured findings yet, return minimal metrics
+    if (allFindings.length === 0) {
+        return {
+            runId: generateRunId(),
+            timestamp: new Date().toISOString(),
+            url: pageUrl,
+            deviceType,
+            model,
+            totalFindings: 0,
+            findingsByType: { bottleneck: 0, waste: 0, opportunity: 0 },
+            findingsByMetric: { LCP: 0, CLS: 0, INP: 0, TBT: 0, TTFB: 0, FCP: 0, TTI: 0, SI: 0 },
+            averageConfidence: 0,
+            withConcreteReference: 0,
+            withImpactEstimate: 0,
+            rootCauseCount: 0,
+            rootCauseRatio: 0,
+            agentExecutionTimes: {},
+            totalExecutionTime: 0,
+            agentCoverageComplete: {}
+        };
+    }
+
+    // Calculate metrics
+    const metrics = {
+        runId: generateRunId(),
+        timestamp: new Date().toISOString(),
+        url: pageUrl,
+        deviceType,
+        model,
+
+        totalFindings: allFindings.length,
+        findingsByType: {
+            bottleneck: allFindings.filter(f => f.type === 'bottleneck').length,
+            waste: allFindings.filter(f => f.type === 'waste').length,
+            opportunity: allFindings.filter(f => f.type === 'opportunity').length
+        },
+        findingsByMetric: {
+            LCP: allFindings.filter(f => f.metric === 'LCP').length,
+            CLS: allFindings.filter(f => f.metric === 'CLS').length,
+            INP: allFindings.filter(f => f.metric === 'INP').length,
+            TBT: allFindings.filter(f => f.metric === 'TBT').length,
+            TTFB: allFindings.filter(f => f.metric === 'TTFB').length,
+            FCP: allFindings.filter(f => f.metric === 'FCP').length,
+            TTI: allFindings.filter(f => f.metric === 'TTI').length,
+            SI: allFindings.filter(f => f.metric === 'SI').length
+        },
+
+        averageConfidence: allFindings.reduce((sum, f) => sum + (f.evidence?.confidence || 0), 0) / allFindings.length,
+        withConcreteReference: allFindings.filter(f => f.evidence?.reference && f.evidence.reference.length > 10).length / allFindings.length,
+        withImpactEstimate: allFindings.filter(f => f.estimatedImpact?.reduction && f.estimatedImpact.reduction > 0).length / allFindings.length,
+
+        rootCauseCount: allFindings.filter(f => f.rootCause === true).length,
+        rootCauseRatio: allFindings.filter(f => f.rootCause === true).length / allFindings.length,
+
+        agentExecutionTimes: Object.fromEntries(
+            agentOutputs
+                .filter(a => a.metadata?.executionTime)
+                .map(a => [a.agentName, a.metadata.executionTime])
+        ),
+        totalExecutionTime: agentOutputs
+            .filter(a => a.metadata?.executionTime)
+            .reduce((sum, a) => sum + a.metadata.executionTime, 0),
+
+        agentCoverageComplete: Object.fromEntries(
+            agentOutputs
+                .filter(a => a.metadata?.coverageComplete !== undefined)
+                .map(a => [a.agentName, a.metadata.coverageComplete])
+        )
+    };
+
+    // Validate with Zod schema (logs warnings but doesn't block)
+    try {
+        qualityMetricsSchema.parse(metrics);
+    } catch (zodError) {
+        console.warn('Multi-agent: Quality metrics schema validation failed:', zodError.errors);
+    }
+
+    // Save metrics alongside suggestions
+    try {
+        cacheResults(pageUrl, deviceType, 'quality-metrics', metrics, '', model);
+        console.log(`📊 Quality Metrics: ${metrics.totalFindings} findings, avg confidence: ${(metrics.averageConfidence * 100).toFixed(1)}%, ${metrics.rootCauseCount} root causes`);
+    } catch (error) {
+        console.warn('Failed to cache quality metrics:', error.message);
+    }
+
+    return metrics;
+}
+
+/**
+ * Generate unique run ID for tracking
+ * @returns {string} Unique run ID
+ */
+function generateRunId() {
+    return `run-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+}
+
 /** Conditional Utilities */
 /**
  * Safely extract a Lighthouse audit by id
@@ -359,6 +664,12 @@ function generateConditionalAgentConfig(pageData, cms) {
 
     // Always-on lightweight agents (use summaries where possible)
     steps.push({ name: 'CrUX Agent', sys: cruxAgentPrompt(cms), hum: cruxSummaryStep(pageData.cruxSummary) });
+
+    // RUM Agent (only if RUM data is available)
+    if (pageData.rumSummary) {
+        steps.push({ name: 'RUM Agent', sys: cruxAgentPrompt(cms), hum: rumSummaryStep(pageData.rumSummary) });
+    }
+
     steps.push({ name: 'PSI Agent', sys: psiAgentPrompt(cms), hum: psiSummaryStep(pageData.psiSummary) });
     steps.push({ name: 'Perf Observer Agent', sys: perfObserverAgentPrompt(cms), hum: perfSummaryStep(perfEntriesSummary) });
     // Prefer fullHtml when available for correctness; fallback to resources[pageUrl]
@@ -423,6 +734,62 @@ export async function runMultiAgents(pageData, tokenLimits, llm, model) {
     const tasks = agentsConfig.map(agent => ({ agent: agent.name }));
     const responses = await system.executeParallelTasks(tasks);
 
+    // Phase 1: Collect quality metrics from agent outputs
+    // Parse agent outputs to extract structured findings (if present)
+    const agentOutputs = responses.map(({ agent, output }) => {
+        try {
+            // Try to parse as structured JSON output
+            const jsonMatch = output.match(/\{[\s\S]*"agentName"[\s\S]*\}/);
+            if (jsonMatch) {
+                const parsed = JSON.parse(jsonMatch[0]);
+                return parsed;
+            }
+        } catch (e) {
+            // Not JSON or parse failed, return placeholder
+        }
+        // Return minimal structure for non-JSON agents
+        return {
+            agentName: agent,
+            findings: [],
+            metadata: { executionTime: 0, dataSourcesUsed: [], coverageComplete: false }
+        };
+    });
+
+    // Collect and save quality metrics
+    const qualityMetrics = collectQualityMetrics(agentOutputs, pageData.pageUrl, pageData.deviceType, model);
+
+    // Phase 3: Build causal graph from all findings
+    const allFindings = agentOutputs.flatMap(output => {
+        if (output.findings && Array.isArray(output.findings)) {
+            return output.findings;
+        }
+        return [];
+    });
+
+    let causalGraph = null;
+    let graphSummary = '';
+    if (allFindings.length > 0) {
+        try {
+            console.log('- building causal graph...');
+            // Extract current metric values from findings
+            const metricsData = {};
+            allFindings.forEach(f => {
+                if (f.metric && f.estimatedImpact?.metric) {
+                    metricsData[f.metric] = f.estimatedImpact.current || 0;
+                }
+            });
+
+            causalGraph = buildCausalGraph(allFindings, metricsData);
+            graphSummary = generateGraphSummary(causalGraph);
+
+            // Save causal graph
+            cacheResults(pageData.pageUrl, pageData.deviceType, 'causal-graph', causalGraph, '', model);
+            console.log(`🕸️  Causal Graph: ${causalGraph.rootCauses.length} root causes, ${causalGraph.criticalPaths.length} critical paths`);
+        } catch (error) {
+            console.warn('Failed to build causal graph:', error.message);
+        }
+    }
+
     let result = '';
     let context = '';
     responses.forEach(({ agent, output }, index) => {
@@ -431,18 +798,120 @@ export async function runMultiAgents(pageData, tokenLimits, llm, model) {
         context += `\n${agent}: ${output}`;
     });
 
+    // Add causal graph summary to context for final synthesis
+    if (graphSummary) {
+        context += `\n\nCausal Graph Analysis:\n${graphSummary}`;
+    }
+
+    // Phase 4: Validate findings
+    let validatedFindings = allFindings;
+    let validationSummary = '';
+    if (allFindings.length > 0 && causalGraph) {
+        try {
+            const validationResults = validateFindings(allFindings, causalGraph, {
+                blockingMode: true,   // Block invalid findings
+                adjustMode: true,     // Apply adjustments to questionable findings
+                strictMode: false,    // Don't block warnings, only errors
+            });
+
+            validatedFindings = [
+                ...validationResults.approvedFindings,
+                ...validationResults.adjustedFindings,
+            ];
+
+            // Save validation results
+            saveValidationResults(pageData.pageUrl, pageData.deviceType, validationResults, model);
+
+            // Add validation summary to context
+            validationSummary = `\n\nValidation Summary:
+- Total findings: ${validationResults.summary.total}
+- Approved: ${validationResults.summary.approved}
+- Adjusted: ${validationResults.summary.adjusted}
+- Blocked: ${validationResults.summary.blocked}
+- Average confidence: ${(validationResults.summary.averageConfidence * 100).toFixed(1)}%`;
+
+            context += validationSummary;
+
+            // Update agent outputs to reflect validated findings
+            agentOutputs.forEach(output => {
+                if (output.findings && Array.isArray(output.findings)) {
+                    output.findings = output.findings.filter(f =>
+                        validatedFindings.some(vf => vf.id === f.id)
+                    );
+                }
+            });
+
+            // Collect post-validation quality metrics for comparison
+            const postValidationMetrics = collectQualityMetrics(agentOutputs, pageData.pageUrl, pageData.deviceType, model);
+            console.log(`✅ Post-Validation: ${postValidationMetrics.totalFindings} findings (${validationResults.summary.blocked} blocked, ${validationResults.summary.adjusted} adjusted)`);
+        } catch (error) {
+            console.warn('Failed to validate findings:', error.message);
+        }
+    }
+
+    // Phase 5: Build graph-enhanced context for synthesis
+    let graphEnhancedContext = context;
+    if (causalGraph && causalGraph.rootCauses && causalGraph.rootCauses.length > 0) {
+        // Extract root causes and calculate their total impact
+        const rootCauseImpacts = causalGraph.rootCauses.map(rcId => {
+            const node = causalGraph.nodes[rcId];
+            if (!node) return null;
+
+            // Calculate total impact: sum of all downstream effects
+            const outgoingEdges = causalGraph.edges.filter(e => e.from === rcId);
+            const totalImpact = outgoingEdges.reduce((sum, edge) => {
+                // Get the impact from the target node
+                const targetNode = causalGraph.nodes[edge.to];
+                if (targetNode?.metadata?.estimatedImpact?.reduction) {
+                    return sum + targetNode.metadata.estimatedImpact.reduction;
+                }
+                return sum;
+            }, 0);
+
+            return {
+                id: rcId,
+                description: node.description,
+                metric: node.metadata?.metric,
+                totalImpact,
+                affectedFindings: outgoingEdges.length,
+                depth: node.depth,
+            };
+        }).filter(Boolean);
+
+        // Sort by total impact (highest first)
+        rootCauseImpacts.sort((a, b) => b.totalImpact - a.totalImpact);
+
+        // Add root cause prioritization to context
+        if (rootCauseImpacts.length > 0) {
+            graphEnhancedContext += `\n\n## Root Cause Prioritization (from Causal Graph)
+
+The causal graph has identified ${rootCauseImpacts.length} root causes. Focus your recommendations on these fundamental issues:
+
+${rootCauseImpacts.slice(0, 10).map((rc, i) => `
+${i + 1}. **${rc.description}**
+   - Primary metric: ${rc.metric}
+   - Total downstream impact: ${rc.totalImpact > 0 ? `~${Math.round(rc.totalImpact)}ms` : 'multiple metrics'}
+   - Affects ${rc.affectedFindings} other finding(s)
+   - Graph depth: ${rc.depth} (${rc.depth === 1 ? 'immediate cause' : rc.depth === 2 ? 'fundamental cause' : 'deep root cause'})
+`).join('\n')}
+
+**IMPORTANT**: Prioritize suggestions that address these root causes over symptoms. When multiple findings share the same root cause, combine them into a single holistic recommendation.`;
+        }
+    }
+
     const finalPrompt = actionPrompt(pageData.pageUrl, pageData.deviceType);
+    const baseLLM = llm.getBaseLLM ? llm.getBaseLLM() : llm;
     const finalChain = RunnableSequence.from([
         ChatPromptTemplate.fromMessages([
             new SystemMessage(finalPrompt),
-            new HumanMessage(`Here is the context from previous agents:\n${context}`)
+            new HumanMessage(`Here is the context from previous agents:\n${graphEnhancedContext}`)
         ]),
-        llm,
+        baseLLM,
         new StringOutputParser()
     ]);
 
     console.log('- running final analysis...');
-    const finalOutput = await finalChain.invoke({ input: context });
+    const finalOutput = await finalChain.invoke({ input: graphEnhancedContext });
 
 
     console.groupEnd();
@@ -460,7 +929,8 @@ async function reduceAgentOutputs(responses, pageData, llm) {
             new SystemMessage(schemaPrompt),
             new HumanMessage(`URL: ${pageData.pageUrl}\nDevice: ${pageData.deviceType}\n\nAgent outputs:\n${body}`)
         ]);
-        const chain = RunnableSequence.from([prompt, llm, new StringOutputParser()]);
+        const baseLLM = llm.getBaseLLM ? llm.getBaseLLM() : llm;
+        const chain = RunnableSequence.from([prompt, baseLLM, new StringOutputParser()]);
         const raw = await chain.invoke({});
         const jsonMatch = raw.match(/\{[\s\S]*\}$/);
         const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : raw);
@@ -488,10 +958,11 @@ async function reduceAgentOutputs(responses, pageData, llm) {
  * @return {Promise<String>}
  */
 export async function runAgentFlow(pageUrl, deviceType, options = {}) {
-    // Phase 1: collect CRUX and PSI (parallel), derive gates from PSI
-    const [{ full: crux, summary: cruxSummary }, { full: psi, summary: psiSummary }] = await Promise.all([
+    // Phase 1: collect CRUX, PSI, and RUM (parallel), derive gates from PSI
+    const [{ full: crux, summary: cruxSummary }, { full: psi, summary: psiSummary }, { data: rum, summary: rumSummary }] = await Promise.all([
         getCrux(pageUrl, deviceType, options),
         getPsi(pageUrl, deviceType, options),
+        getRUM(pageUrl, deviceType, options),
     ]);
 
     // Derive gates using PSI only (single lab run later)
@@ -507,7 +978,7 @@ export async function runAgentFlow(pageUrl, deviceType, options = {}) {
     const shouldRunHar = [signals.redirects, signals.serverResponseSlow, signals.renderBlocking].filter(Boolean).length >= 2;
 
     // Phase 2: single lab run, conditionally collecting HAR/Coverage as needed
-    const { har: harHeavy, harSummary, perfEntries, perfEntriesSummary, fullHtml, jsApi, coverageData, coverageDataSummary } = await getLabData(pageUrl, deviceType, {
+    const { har: harHeavy, harSummary, perfEntries, perfEntriesSummary, fullHtml, jsApi, coverageData, coverageDataSummary, thirdPartyAnalysis, clsAttribution } = await getLabData(pageUrl, deviceType, {
         ...options,
         collectHar: shouldRunHar,
         collectCoverage: shouldRunCoverage,
@@ -560,15 +1031,19 @@ export async function runAgentFlow(pageUrl, deviceType, options = {}) {
         resources,
         crux,
         psi,
+        rum,
         perfEntries,
         har: (harHeavy && harHeavy.log ? harHeavy : { log: { entries: [] } }),
         coverageData,
         cruxSummary,
         psiSummary,
+        rumSummary,
         perfEntriesSummary,
         harSummary,
         coverageDataSummary,
         fullHtml,
+        thirdPartyAnalysis,
+        clsAttribution,
     };
 
     // Execute flow (force conditional multi-agent mode)

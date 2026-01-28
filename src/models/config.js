@@ -1,26 +1,38 @@
 /**
  * Model configuration for different LLM providers
+ * Updated January 2026
  */
 
 // Model token limits
 export const MAX_TOKENS = {
-  // Gemini models - Updated to match other folder
-  'gemini-2.5-pro': { input: 1_048_576, output: 65_535 },
-  'gemini-2.5-pro-preview-05-06': { input: 1_048_576, output: 65_535 },
-  'gemini-2.5-flash-preview-05-20	': { input: 1_048_576, output: 65_535 },
-  'gemini-1.5-flash': { input: 100_000, output: 8_192 },
-  
-  // OpenAI models
-  'gpt-5': { input: 227_000, output: 128_000 },
-  'gpt-4.1': { input: 1_048_576, output: 32_768 },
-  'gpt-4o': { input: 128_000, output: 4_096 },
-  'gpt-o3': { input: 1_048_576, output: 32_768 },
-  
+  // Gemini models (Google Vertex AI)
+  'gemini-2.5-pro': { input: 2_000_000, output: 8_192 },
+  'gemini-2.5-pro-preview-05-06': { input: 1_048_576, output: 65_535 }, // Legacy preview
+  'gemini-2.5-flash': { input: 1_000_000, output: 8_192 },
+  'gemini-2.5-flash-preview-05-20': { input: 1_048_576, output: 65_535 }, // Legacy preview
+  'gemini-1.5-flash': { input: 1_000_000, output: 8_192 }, // Still supported
+  'gemini-exp-1206': { input: 2_000_000, output: 8_192 }, // Experimental 2.0 Flash Thinking
+
+  // OpenAI models (Azure)
+  'o1': { input: 200_000, output: 100_000 }, // Latest reasoning model
+  'o1-mini': { input: 128_000, output: 65_536 }, // Faster reasoning
+  'gpt-4o': { input: 128_000, output: 16_384 }, // Updated output limit
+  'gpt-4o-mini': { input: 128_000, output: 16_384 },
+  'o3-mini': { input: 200_000, output: 100_000 }, // Latest (if available)
+
+  // Legacy OpenAI models (deprecated, will be removed)
+  'gpt-5': { input: 227_000, output: 128_000 }, // Deprecated - use o1 instead
+  'gpt-4.1': { input: 1_048_576, output: 32_768 }, // Deprecated
+  'gpt-o3': { input: 1_048_576, output: 32_768 }, // Deprecated
+
   // Claude models via Amazon Bedrock
-  'claude-3-7-sonnet-20250219': { input: 200_000, output: 128_000 },
+  'claude-opus-4-5-20251101': { input: 200_000, output: 16_000 }, // Latest Opus
+  'claude-sonnet-4-5-20250929': { input: 200_000, output: 16_000 }, // Latest Sonnet (this is Claude Sonnet 4.5)
+  'claude-3-7-sonnet-20250219': { input: 200_000, output: 128_000 }, // Previous version
+  'claude-haiku-4-0-20250514': { input: 200_000, output: 16_000 }, // Latest Haiku
 };
 
-// Default model - Use gemini-2.5-pro for better performance
+// Default model - Use gemini-2.5-pro for best balance of performance and cost
 export const DEFAULT_MODEL = 'gemini-2.5-pro';
 
 // Model provider types

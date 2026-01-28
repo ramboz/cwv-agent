@@ -12,8 +12,19 @@ export function detectAEMVersion(headers, htmlSource, options = {}) {
     return null;
   }
 
-  // Create a normalized version of the HTML for simpler pattern matching
-  const normalizedHtml = htmlSource.toLowerCase();
+  // Handle both JSON-structured HTML data and raw HTML strings
+  let normalizedHtml = htmlSource.toLowerCase();
+  let parsedHtmlData = null;
+
+  // Check if htmlSource is JSON-structured data from extractCwvRelevantHtml
+  if (htmlSource.trim().startsWith('{')) {
+    try {
+      parsedHtmlData = JSON.parse(htmlSource);
+      // Keep the JSON string for regex matching but also parse for structured access
+    } catch (e) {
+      // Not JSON, treat as raw HTML
+    }
+  }
 
   // Check HAR entries for .model.json requests (runtime behavior)
   let hasModelJsonRequest = false;
@@ -65,8 +76,9 @@ export function detectAEMVersion(headers, htmlSource, options = {}) {
     /scripts\.js/i,
     // Block HTML patterns
     /<div class="[^"]*block[^"]*"[^>]*>/i,
-    // RUM data-routing for EDS
-    /data-routing="[^"]*eds=([^,"]*)/i
+    // RUM data-routing for EDS (both HTML attribute and JSON property formats)
+    /data-routing="[^"]*eds=([^,"]*)/i,
+    /"dataRouting":"[^"]*eds=([^,"]*)/i
   ];
 
   // CS Indicators (Cloud Service)
@@ -84,8 +96,9 @@ export function detectAEMVersion(headers, htmlSource, options = {}) {
     /content\/experience-fragments\//i,
     // SPA editor references
     /data-cq-/i,
-    // RUM data-routing for CS
-    /data-routing="[^"]*cs=([^,"]*)/i
+    // RUM data-routing for CS (both HTML attribute and JSON property formats)
+    /data-routing="[^"]*cs=([^,"]*)/i,
+    /"dataRouting":"[^"]*cs=([^,"]*)/i
   ];
 
   // AMS Indicators (Managed Services) - typically older AEM patterns
@@ -104,8 +117,9 @@ export function detectAEMVersion(headers, htmlSource, options = {}) {
     // Legacy CQ references
     /\/CQ\//i,
     /\/apps\//i,
-    // RUM data-routing for AMS
-    /data-routing="[^"]*ams=([^,"]*)/i
+    // RUM data-routing for AMS (both HTML attribute and JSON property formats)
+    /data-routing="[^"]*ams=([^,"]*)/i,
+    /"dataRouting":"[^"]*ams=([^,"]*)/i
   ];
 
   const aemHeadlessPatterns = [
@@ -118,6 +132,25 @@ export function detectAEMVersion(headers, htmlSource, options = {}) {
   let csMatches = 0;
   let amsMatches = 0;
   let aemHeadlessMatches = 0;
+
+  // If we have parsed JSON structure, check data-routing directly
+  if (parsedHtmlData?.head?.scripts) {
+    for (const script of parsedHtmlData.head.scripts) {
+      if (script.dataRouting) {
+        const routing = script.dataRouting.toLowerCase();
+        
+        if (routing.includes('ams=')) {
+          amsMatches += 5;
+        }
+        if (routing.includes('cs=')) {
+          csMatches += 5;
+        }
+        if (routing.includes('eds=')) {
+          edsMatches += 5;
+        }
+      }
+    }
+  }
 
   // Check EDS patterns
   for (const pattern of edsPatterns) {
@@ -171,15 +204,16 @@ export function detectAEMVersion(headers, htmlSource, options = {}) {
   }
   
   // Give significant weight to explicit RUM data-routing indicators
-  if (/data-routing="[^"]*ams=([^,"]*)/i.test(normalizedHtml)) {
+  // Check both HTML attribute format and JSON property format
+  if (/data-routing="[^"]*ams=([^,"]*)/i.test(normalizedHtml) || /"dataRouting":"[^"]*ams=([^,"]*)/i.test(normalizedHtml)) {
     amsMatches += 5;
   }
-  
-  if (/data-routing="[^"]*eds=([^,"]*)/i.test(normalizedHtml)) {
+
+  if (/data-routing="[^"]*eds=([^,"]*)/i.test(normalizedHtml) || /"dataRouting":"[^"]*eds=([^,"]*)/i.test(normalizedHtml)) {
     edsMatches += 5;
   }
-  
-  if (/data-routing="[^"]*cs=([^,"]*)/i.test(normalizedHtml)) {
+
+  if (/data-routing="[^"]*cs=([^,"]*)/i.test(normalizedHtml) || /"dataRouting":"[^"]*cs=([^,"]*)/i.test(normalizedHtml)) {
     csMatches += 5;
   }
 
@@ -188,7 +222,7 @@ export function detectAEMVersion(headers, htmlSource, options = {}) {
   
   // Require a minimum threshold of matches to make a determination
   const MIN_THRESHOLD = 2;
-  
+
   if (maxMatches < MIN_THRESHOLD) {
     return null;
   }

@@ -67,4 +67,37 @@ You know the following about AEM EDS.
 - Do not preload JS and CSS for individual blocks. This is considered overkill and would require page-specific rules that won't scale
 - Do not preload custom fonts. This would clutter the LCP critical path. Instead, defer the fonts to the lazy phase with appropriate font fallbacks defined
 - Do not preload/preconnect any third-party resource that is not in the critical path for the LCP. Instead, let them load async in "loadLazy" or "loadDelayed"
+
+### Practical Implementation Constraints
+
+**Image Optimization Recommendations:**
+- AVOID: Suggesting page-specific <link rel="preload"> for hero images (not maintainable across site)
+- PREFER: Use loading="eager" and fetchpriority="high" on hero images (works in templates)
+- PREFER: Component-level image attribute configuration (scales across pages)
+- Example: Update Image Core Component HTL to add fetchpriority="high" for above-fold images
+
+**Font Loading Recommendations:**
+- AVOID: Preloading fonts (can cause wasted bandwidth, CLS issues)
+- PREFER: font-display: swap with size-adjusted fallback fonts (minimizes FOUT and CLS)
+- PREFER: Preconnect to font origin (dns-prefetch + preconnect)
+- Example: Use @font-face with font-display: swap and size-adjust property for fallback
+
+**Resource Hints:**
+- Preconnect: ONLY for external origins in the critical path for LCP (e.g., CDN hosting hero image)
+  - Example: <link rel="preconnect" href="https://cdn.example.com"> if hero image loads from cdn.example.com
+- AVOID: Preconnect for non-critical resources (analytics, fonts loaded async, third-party scripts)
+  - Bad: <link rel="preconnect" href="https://fonts.googleapis.com"> (fonts should use font-display:swap, not preconnect)
+  - Bad: <link rel="preconnect" href="https://analytics.example.com"> (analytics is not in LCP critical path)
+- Preload: Only for critical, discoverable-late resources in clientlibs (not content images)
+  - Example: Critical CSS/JS in clientlibs that would otherwise be discovered late
+- DNS-prefetch: Avoid - no practical use case for modern sites
+  - If it's blocking LCP, use preconnect instead (does DNS + TCP + TLS)
+  - If it's not blocking LCP, load it async later (no hint needed)
+- Rule of thumb: If it affects LCP, use preconnect. If it doesn't affect LCP, load it async later.
+
+**Code Example Requirements:**
+- Always provide AEM-specific implementation paths (HTL templates, clientlib categories, Dispatcher config)
+- Show actual file locations: /apps/myproject/components/content/hero/hero.html
+- Include Dispatcher configuration snippets when suggesting caching changes
+- Reference Core Components version-specific APIs when applicable
 `; 

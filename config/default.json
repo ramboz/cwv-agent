@@ -1,0 +1,144 @@
+{
+  "models": {
+    "primary": "gemini-2.5-pro",
+    "fallback": "gemini-2.5-flash",
+    "validation": "gemini-2.5-pro",
+    "costTracking": {
+      "gemini-2.5-pro": {
+        "input": 0.00125,
+        "output": 0.005
+      },
+      "gemini-2.5-flash": {
+        "input": 0.000075,
+        "output": 0.0003
+      },
+      "claude-sonnet-4-5": {
+        "input": 0.003,
+        "output": 0.015
+      },
+      "gpt-4o": {
+        "input": 0.0025,
+        "output": 0.01
+      }
+    }
+  },
+  "thresholds": {
+    "mobile": {
+      "lcp": 2500,
+      "cls": 0.1,
+      "inp": 200,
+      "tbt": 250,
+      "ttfb": 800,
+      "fcp": 1800
+    },
+    "desktop": {
+      "lcp": 2500,
+      "cls": 0.1,
+      "inp": 200,
+      "tbt": 200,
+      "ttfb": 600,
+      "fcp": 1200
+    }
+  },
+  "validation": {
+    "blockingMode": true,
+    "adjustMode": true,
+    "strictMode": false,
+    "minConfidence": {
+      "evidence": 0.5,
+      "impact": 0.5,
+      "overall": 0.6
+    },
+    "maxImpact": {
+      "LCP": 2000,
+      "CLS": 0.3,
+      "INP": 500,
+      "TBT": 1000,
+      "TTFB": 1500,
+      "FCP": 1500
+    },
+    "minActionableImpact": {
+      "LCP": 200,
+      "CLS": 0.03,
+      "INP": 50,
+      "TBT": 100,
+      "TTFB": 100,
+      "FCP": 200
+    },
+    "cascadeEfficiency": {
+      "TTFB→FCP": 0.8,
+      "FCP→LCP": 0.6,
+      "TBT→INP": 0.5,
+      "blocking→LCP": 0.7
+    }
+  },
+  "conditionalGating": {
+    "har": {
+      "minSignals": 2,
+      "thresholds": {
+        "mobile": {
+          "requestCount": 150,
+          "transferBytes": 3145728
+        },
+        "desktop": {
+          "requestCount": 180,
+          "transferBytes": 3670016
+        }
+      }
+    },
+    "coverage": {
+      "enabled": true,
+      "minTotalBytes": 102400
+    },
+    "code": {
+      "enabled": true,
+      "requiresCoverage": false
+    }
+  },
+  "workflow": {
+    "maxIterations": 2,
+    "parallelAgents": true,
+    "enableFeedbackLoop": false,
+    "batchSize": 2,
+    "timeoutPerAgent": 120000
+  },
+  "dataCollection": {
+    "rum": {
+      "enabled": true,
+      "requiresDomainKey": true
+    },
+    "crux": {
+      "enabled": true
+    },
+    "psi": {
+      "enabled": true,
+      "maxAuditsPerCategory": 20
+    },
+    "har": {
+      "enabled": true,
+      "captureTimeline": true
+    },
+    "coverage": {
+      "enabled": true,
+      "includeMinified": true,
+      "maxSegmentSize": 1000
+    },
+    "perfObserver": {
+      "enabled": true,
+      "collectLongTasks": true,
+      "collectLayoutShifts": true
+    }
+  },
+  "cache": {
+    "enabled": true,
+    "ttl": 86400,
+    "directory": ".cache"
+  },
+  "output": {
+    "formats": ["json", "markdown"],
+    "includeRawData": false,
+    "saveGraph": true,
+    "saveValidation": true,
+    "saveMetrics": true
+  }
+}

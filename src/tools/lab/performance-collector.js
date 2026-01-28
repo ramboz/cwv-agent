@@ -8,6 +8,44 @@ export async function collectPerformanceEntries(page) {
     const clone = (obj) => {
       return JSON.parse(JSON.stringify(obj));
     };
+
+    // Helper: Generate minimal CSS selector for CWV analysis
+    const getSelector = (element) => {
+      if (!element) return null;
+      let selector = element.tagName.toLowerCase();
+      if (element.id) {
+        selector += `#${element.id}`;
+      } else if (element.className && typeof element.className === 'string') {
+        const classes = element.className.trim().split(/\s+/).slice(0, 2);
+        selector += classes.map(c => `.${c}`).join('');
+      }
+      return selector;
+    };
+
+    // Helper: Detect CLS-causing CSS issues
+    const detectCssIssues = (element, computedStyle) => {
+      if (!element || !computedStyle) return [];
+      const issues = [];
+
+      // Check for missing dimensions
+      if (element.tagName === 'IMG') {
+        if (!element.hasAttribute('width') || !element.hasAttribute('height')) {
+          issues.push('missing-dimensions');
+        }
+      }
+
+      // Check for missing aspect-ratio or min-height
+      if (computedStyle.aspectRatio === 'auto' && computedStyle.minHeight === '0px') {
+        issues.push('no-reserved-space');
+      }
+
+      // Check font loading
+      if (computedStyle.fontFamily && !computedStyle.fontDisplay) {
+        issues.push('font-loading-unoptimized');
+      }
+
+      return issues;
+    };
   
     const appendEntries = async (entries, type, cb) => {
       const res = await new Promise((resolve) => {
@@ -32,17 +70,61 @@ export async function collectPerformanceEntries(page) {
 
     const entries = window.performance.getEntries();
 
-    await appendEntries(entries, 'largest-contentful-paint', (e) => ({
-      ...clone(e),
-      element: e.element?.outerHTML
-    }));
+    // Phase A Optimization: LCP - Send only CWV-relevant data, not full HTML
+    await appendEntries(entries, 'largest-contentful-paint', (e) => {
+      const elem = e.element;
+      return {
+        name: e.name,
+        entryType: e.entryType,
+        startTime: e.startTime,
+        duration: e.duration,
+        renderTime: e.renderTime,
+        loadTime: e.loadTime,
+        size: e.size,
+        id: e.id,
+        url: e.url,
+        // Minimal element info (no full HTML)
+        element: elem ? {
+          tag: elem.tagName?.toLowerCase(),
+          selector: getSelector(elem),
+          width: elem.width || elem.clientWidth,
+          height: elem.height || elem.clientHeight,
+          src: elem.src || elem.currentSrc,
+          loading: elem.loading,
+          fetchpriority: elem.fetchPriority
+        } : null
+      };
+    });
 
+    // Phase A Optimization: CLS - Send only top 5 sources with minimal data
     await appendEntries(entries, 'layout-shift', (e) => ({
-      ...clone(e),
-      sources: e.sources?.map((s) => ({
-        ...clone(s),
-        node: s.node?.outerHTML,
-      })) || []
+      name: e.name,
+      entryType: e.entryType,
+      startTime: e.startTime,
+      duration: e.duration,
+      value: e.value,
+      hadRecentInput: e.hadRecentInput,
+      // Limit to top 5 sources by impact
+      sources: e.sources?.slice(0, 5).map((s) => {
+        const computedStyle = s.node ? window.getComputedStyle(s.node) : null;
+        const parent = s.node?.parentElement;
+        const parentStyle = parent ? window.getComputedStyle(parent) : null;
+
+        return {
+          // Layout shift metrics (no full HTML)
+          previousRect: clone(s.previousRect),
+          currentRect: clone(s.currentRect),
+          // Minimal element info
+          node: s.node ? {
+            tag: s.node.tagName?.toLowerCase(),
+            selector: getSelector(s.node)
+          } : null,
+          // CLS-relevant CSS issues only
+          cssIssues: detectCssIssues(s.node, computedStyle),
+          // Minimal parent layout context
+          parentLayout: parentStyle ? `${parentStyle.display}${parentStyle.flexDirection ? ' ' + parentStyle.flexDirection : ''}` : null
+        };
+      }) || []
     }));
 
     await appendEntries(entries, 'longtask', (e) => ({
@@ -52,7 +134,33 @@ export async function collectPerformanceEntries(page) {
       })) || []
     }));
 
-    return JSON.stringify(entries, null, 2);
+    // Phase A+ Optimization: Filter to only CWV-critical entries
+    // Resource timing is redundant (already in HAR), only keep VERY problematic ones
+    const cwvCriticalEntries = entries.filter(entry => {
+      // Always keep: navigation, LCP, CLS, long tasks, long animation frames
+      if (['navigation', 'largest-contentful-paint', 'layout-shift', 'longtask', 'long-animation-frame'].includes(entry.entryType)) {
+        return true;
+      }
+
+      // For resource timing: VERY selective - only truly problematic resources
+      // (All resource data is in HAR anyway, this is just for quick reference)
+      if (entry.entryType === 'resource') {
+        return entry.renderBlockingStatus === 'blocking' ||
+               (entry.duration > 3000 && entry.decodedBodySize > 100000);  // Very slow AND large only
+      }
+
+      // Keep FCP, FID, other paint/mark entries
+      if (['paint', 'mark', 'measure', 'first-input'].includes(entry.entryType)) {
+        return true;
+      }
+
+      // Filter out everything else (visibility-state, event, etc.)
+      return false;
+    });
+
+    console.log(`Filtered performance entries: ${entries.length} → ${cwvCriticalEntries.length} (${Math.round((1 - cwvCriticalEntries.length/entries.length) * 100)}% reduction)`);
+
+    return JSON.stringify(cwvCriticalEntries, null, 2);
   }, { timeout: 30_000 }));
 }
 
@@ -232,16 +340,52 @@ function formatLayoutShiftEntry(entry) {
   let output = `### Shift at ${entry.startTime.toFixed(2)} ms\n`;
   output += `*   **Value:** ${entry.value.toFixed(4)} (Significant Shift)\n`;
   output += `*   **Had Recent Input:** ${entry.hadRecentInput}\n`;
-  
+
   if (entry.sources && entry.sources.length > 0) {
-    output += `*   **Affected Elements:**\n`;
-    entry.sources.forEach(source => {
-      output += `    *   Element: ${source.node}\n`;
-      output += `        *   Previous Rect: ${JSON.stringify(source.previousRect)}\n`;
-      output += `        *   Current Rect: ${JSON.stringify(source.currentRect)}\n`;
+    output += `*   **Affected Elements (top ${entry.sources.length}):**\n`;
+    entry.sources.forEach((source, idx) => {
+      // Phase A: Use minimal node info instead of full HTML
+      const node = source.node;
+      const tagName = node?.tag || 'Unknown';
+      output += `    ${idx + 1}. **<${tagName}>** (${node?.selector || 'no selector'}):\n`;
+
+      // Show rect changes
+      const prevRect = source.previousRect;
+      const currRect = source.currentRect;
+      if (prevRect && currRect) {
+        const yShift = Math.abs(currRect.top - prevRect.top);
+        const xShift = Math.abs(currRect.left - prevRect.left);
+        const heightChange = Math.abs(currRect.height - prevRect.height);
+        const widthChange = Math.abs(currRect.width - prevRect.width);
+
+        output += `       *   Position shift: Y: ${yShift.toFixed(1)}px, X: ${xShift.toFixed(1)}px\n`;
+        if (heightChange > 0 || widthChange > 0) {
+          output += `       *   Size change: Height: ${heightChange.toFixed(1)}px, Width: ${widthChange.toFixed(1)}px\n`;
+        }
+      }
+
+      // Show CSS issues (Phase A: pre-detected issues instead of all properties)
+      if (source.cssIssues && source.cssIssues.length > 0) {
+        output += `       *   **CSS Issues:**\n`;
+        source.cssIssues.forEach(issue => {
+          const issueMap = {
+            'missing-dimensions': 'Image missing width/height attributes',
+            'no-reserved-space': 'No aspect-ratio or min-height set (element can shift)',
+            'font-loading-unoptimized': 'Font loading not optimized (can cause FOUT)'
+          };
+          output += `           * ⚠️ ${issueMap[issue] || issue}\n`;
+        });
+      }
+
+      // Show parent layout context (Phase A: simplified string instead of object)
+      if (source.parentLayout) {
+        output += `       *   **Parent Layout:** ${source.parentLayout}\n`;
+      }
+
+      output += `\n`;
     });
   }
-  
+
   output += `\n`;
   return output;
 }
@@ -264,35 +408,29 @@ function formatLongTaskEntry(entry) {
 
 function formatLCPEntry(entry) {
   let output = '';
-  
-  // Extract element type from the HTML
-  let elementType = 'Unknown Element';
-  if (entry.element) {
-    const match = entry.element.match(/<(\w+)/);
-    if (match && match[1]) {
-      elementType = match[1].toUpperCase();
+  // Phase A: entry.element is now an object, not HTML string
+  const elem = entry.element;
+  const tag = elem?.tag || 'unknown';
+  output += `### LCP element: <${tag}>\n`;
+
+  output += `*   **Start Time:** ${entry.startTime.toFixed(2)} ms\n`;
+  output += `*   **Render Time:** ${entry.renderTime ? entry.renderTime.toFixed(2) : 'N/A'} ms\n`;
+  output += `*   **Load Time:** ${entry.loadTime ? entry.loadTime.toFixed(2) : 'N/A'} ms\n`;
+  output += `*   **Size:** ${entry.size} pixels\n`;
+  output += `*   **URL:** ${entry.url || elem?.src || 'N/A'}\n`;
+
+  // Phase A: Show minimal element info
+  if (elem) {
+    output += `*   **Element:** <${elem.tag}${elem.selector ? ' ' + elem.selector : ''}>\n`;
+    output += `*   **Dimensions:** ${elem.width}×${elem.height}px\n`;
+    if (elem.loading) {
+      output += `*   **Loading:** ${elem.loading}\n`;
+    }
+    if (elem.fetchpriority) {
+      output += `*   **Fetch Priority:** ${elem.fetchpriority}\n`;
     }
   }
-  
-  // For LCP, there's typically only one main entry that matters,
-  // so we can use a more descriptive heading
-  output += `### LCP element ${entry.url || elementType}\n`;
-  
-  output += `*   **Start Time:** ${entry.startTime.toFixed(2)} ms\n`;
-  output += `*   **Render Time:** ${entry.renderTime.toFixed(2)} ms\n`;
-  output += `*   **Load Time:** ${entry.loadTime.toFixed(2)} ms\n`;
-  output += `*   **Size:** ${entry.size} bytes\n`;
-  output += `*   **URL:** ${entry.url || 'N/A'}\n`;
-  
-  output += `*   **Element Type:** ${elementType}\n`;
-  
-  // Only include full element HTML if it's not too large
-  if (entry.element && entry.element.length < 200) {
-    output += `*   **Element:** ${entry.element}\n`;
-  } else if (entry.element) {
-    output += `*   **Element:** ${entry.element.substring(0, 197)}...\n`;
-  }
-  
+
   output += `\n`;
   return output;
 } 

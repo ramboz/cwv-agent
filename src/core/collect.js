@@ -2,6 +2,7 @@ import { collect as collectCrux } from '../tools/crux.js';
 import { collect as collectLabData } from '../tools/lab/index.js';
 import { collect as collectPsi } from '../tools/psi.js';
 import { collect as collectCode } from '../tools/code.js';
+import { collectRUMData, summarizeRUM } from '../tools/rum.js';
 import { estimateTokenSize } from '../utils.js';
 
 export async function getCrux(pageUrl, deviceType, options) {
@@ -16,6 +17,34 @@ export async function getCrux(pageUrl, deviceType, options) {
     console.log('✅ Processed CrUX data. Estimated token size: ~', estimateTokenSize(full, options.model));
   }
   return { full, summary };
+}
+
+export async function getRUM(pageUrl, deviceType, options) {
+  // Check if RUM domain key is available
+  const rumDomainKey = options.rumDomainKey || process.env.RUM_DOMAIN_KEY;
+
+  if (!rumDomainKey) {
+    console.log('ℹ️  Skipping RUM data collection (no domain key provided). Use --rum-domain-key or set RUM_DOMAIN_KEY env variable.');
+    return { data: null, summary: null };
+  }
+
+  const { data, fromCache, error } = await collectRUMData(pageUrl, deviceType, options);
+
+  if (error) {
+    console.warn(`⚠️  RUM data collection failed: ${error}`);
+    return { data: null, summary: null };
+  }
+
+  // Generate markdown summary for agents
+  const summary = summarizeRUM(data);
+
+  if (fromCache) {
+    console.log('✓ Loaded RUM data from cache. Estimated token size: ~', estimateTokenSize(summary, options.model));
+  } else {
+    console.log('✅ Processed RUM data. Estimated token size: ~', estimateTokenSize(summary, options.model));
+  }
+
+  return { data, summary };
 }
 
 export async function getPsi(pageUrl, deviceType, options) {
@@ -81,6 +110,9 @@ export default async function collectArtifacts(pageUrl, deviceType, options) {
   const { full: crux, summary: cruxSummary } = await getCrux(pageUrl, deviceType, options);
   const { full: psi, summary: psiSummary } = await getPsi(pageUrl, deviceType, options);
 
+  // Collect RUM data (Real User Monitoring - more recent than CrUX)
+  const { data: rum, summary: rumSummary } = await getRUM(pageUrl, deviceType, options);
+
   // Collect lab data based on options (respect lazy heavy flags)
   const { har, harSummary, perfEntries, perfEntriesSummary, fullHtml, jsApi, coverageData, coverageDataSummary } = await getLabData(pageUrl, deviceType, options);
   const requests = har?.log?.entries?.map((e) => e.request.url) || [];
@@ -88,7 +120,7 @@ export default async function collectArtifacts(pageUrl, deviceType, options) {
   // Check if code analysis should be skipped
   const skipCode = process.env.SKIP_CODE_ANALYSIS === 'true';
   let resources = {};
-  
+
   if (skipCode) {
     console.log('🚀 Skipping code analysis due to SKIP_CODE_ANALYSIS environment variable');
   } else {
@@ -106,6 +138,8 @@ export default async function collectArtifacts(pageUrl, deviceType, options) {
     perfEntriesSummary,
     crux,
     cruxSummary,
+    rum,
+    rumSummary,
     fullHtml,
     jsApi,
     coverageData,

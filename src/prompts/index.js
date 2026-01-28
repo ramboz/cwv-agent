@@ -14,6 +14,7 @@ import {
   resetStepCounter,
   coverageStep,
   coverageSummaryStep,
+  rumSummaryStep,
   // Agent prompts
   cruxAgentPrompt,
   psiAgentPrompt,
@@ -23,6 +24,8 @@ import {
   rulesAgentPrompt,
   coverageAgentPrompt,
   codeReviewAgentPrompt,
+  causalGraphBuilderPrompt,
+  validationAgentPrompt,
 } from './analysis.js';
 import { actionPrompt } from './action.js';
 
@@ -44,6 +47,7 @@ export {
   resetStepCounter,
   coverageStep,
   coverageSummaryStep,
+  rumSummaryStep,
   cruxAgentPrompt,
   psiAgentPrompt,
   perfObserverAgentPrompt,
@@ -52,4 +56,6 @@ export {
   rulesAgentPrompt,
   coverageAgentPrompt,
   codeReviewAgentPrompt,
+  causalGraphBuilderPrompt,
+  validationAgentPrompt,
 }

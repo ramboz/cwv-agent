@@ -1,11 +1,10 @@
 import collecetAction from './collect.js';
 import rulesAction from './rules.js';
-import runPrompt from './multishot-prompt.js';
 import { startMCPReviewer } from './mcp-reviewer.js';
 import { getNormalizedUrl, getCachePath } from '../utils.js';
 import { runAgentFlow } from './multi-agents.js';
 
-export async function processUrl(pageUrl, action, deviceType, skipCache, outputSuffix, blockRequests, model) {
+export async function processUrl(pageUrl, action, deviceType, skipCache, outputSuffix, blockRequests, model, rumDomainKey) {
   // Handle MCP reviewer action separately (doesn't need URL processing)
   if (action === 'mcp-reviewer') {
     // Note: No console output for MCP mode - it interferes with JSON-RPC protocol
@@ -26,23 +25,25 @@ export async function processUrl(pageUrl, action, deviceType, skipCache, outputS
     let result;
 
     switch (action) {
-      case 'prompt':
-        result = await runPrompt(normalizedUrl.url, deviceType, {
+      case 'collect':
+        result = await collecetAction(normalizedUrl.url, deviceType, {
           skipCache,
           skipTlsCheck: normalizedUrl.skipTlsCheck,
           outputSuffix,
           blockRequests,
-          model,
+          rumDomainKey,
         });
-        break;
-
-      case 'collect':
-        result = await collecetAction(normalizedUrl.url, deviceType, { skipCache, skipTlsCheck: normalizedUrl.skipTlsCheck, outputSuffix, blockRequests });
         console.log('Done. Check the `.cache` folder');
         break;
 
       case 'rules':
-        result = await rulesAction(normalizedUrl.url, deviceType, { skipCache, skipTlsCheck: normalizedUrl.skipTlsCheck, outputSuffix, blockRequests });
+        result = await rulesAction(normalizedUrl.url, deviceType, {
+          skipCache,
+          skipTlsCheck: normalizedUrl.skipTlsCheck,
+          outputSuffix,
+          blockRequests,
+          rumDomainKey,
+        });
         break;
 
         case 'agent':
@@ -52,6 +53,7 @@ export async function processUrl(pageUrl, action, deviceType, skipCache, outputS
             outputSuffix,
             blockRequests,
             model,
+            rumDomainKey,
           });
         break;
 
