@@ -52,78 +52,89 @@ Do not provide recommendations for:
 export function getDeliverableFormat() {
   return `## Deliverable Format
 
-If any metric already meets Google's "good" thresholds, explicitly state this and skip all recommendations for that metric.
+**IMPORTANT**: You will generate ONLY structured JSON. The markdown report will be automatically formatted from your JSON output.
 
-Present your findings as:
+If any metric already meets Google's "good" thresholds, you may skip recommendations for that metric OR include low-priority maintenance suggestions.
 
-### 1. MARKDOWN REPORT (for human review):
-1. Executive summary with the url that was tested, key metrics and impact estimates
-2. Prioritized recommendations table (only for metrics that fail thresholds) with:
-  - Impact rating (High/Medium/Low)
-  - Implementation complexity (Easy/Medium/Hard)
-  - Affected metric(s)
-  - Expected improvement range
-3. Detailed technical recommendations (only for failing metrics), organized by metric, with:
-  - a short title
-  - a description for the issue targeted towards business users
-  - implementation priority (High/Medium/Low)
-  - implementation effort (Easy/Medium/Hard)
-  - expected impact on metrics
-  - order the suggestions from High impact / Low effort to Low impact / High effort
-4. Implementation roadmap highlighting quick wins vs. strategic improvements
+### Output Schema (Structured JSON)
 
-Only provide actionable recommendations that will meaningfully improve user experience and Core Web Vitals scores.
-
-### 2. STRUCTURED JSON (for automation) - MANDATORY
-Immediately after the markdown report, include this exact section and schema:
-
----
-
-## STRUCTURED DATA FOR AUTOMATION
+You must return a JSON object matching this exact schema:
 
 \`\`\`json
 {
   "url": "string - tested URL",
   "deviceType": "string - mobile or desktop",
-  "timestamp": "string - ISO timestamp of analysis",
-  "summary": {
-    "lcp": { "current": "string", "target": "2.5s", "status": "good|needs-improvement|poor" },
-    "cls": { "current": "string", "target": "0.1", "status": "good|needs-improvement|poor" },
-    "inp": { "current": "string", "target": "200ms", "status": "good|needs-improvement|poor" }
-  },
+  "timestamp": "string - ISO timestamp of analysis (use new Date().toISOString())",
   "suggestions": [
     {
-      "id": "number - sequential ID starting from 1",
-      "title": "string - short, actionable title",
-      "description": "string - business-friendly description of the issue",
-      "metric": "string - primary metric affected (LCP, CLS, INP)",
-      "priority": "string - High, Medium, or Low",
-      "effort": "string - Easy, Medium, or Hard",
-      "impact": "string - expected improvement range",
-      "implementation": "string - technical implementation details",
-      "codeExample": "string - REQUIRED concrete code example (see requirements below)",
-      "category": "string - performance category (images, css, javascript, fonts, third-party, etc.)"
+      "title": "string - short, actionable title (required)",
+      "description": "string - business-friendly description of the issue (required)",
+      "metric": "string OR array - primary metric(s) affected: LCP, CLS, INP, TBT, TTFB, FCP (optional)",
+      "priority": "High | Medium | Low (optional)",
+      "effort": "Easy | Medium | Hard (optional)",
+      "estimatedImpact": "string - expected improvement range (optional)",
+      "confidence": "number - 0-1 confidence score (optional)",
+      "evidence": ["array of strings - specific evidence supporting this recommendation (optional)"],
+      "codeChanges": [
+        {
+          "file": "string - file path",
+          "line": "number - line number (optional)",
+          "before": "string - code before change (optional)",
+          "after": "string - code after change (optional)"
+        }
+      ],
+      "validationCriteria": ["array of strings - how to verify the fix worked (optional)"]
     }
   ]
 }
 \`\`\`
 
-Instructions for JSON extraction:
-- Extract individual recommendations from the detailed section
-- Each item becomes one suggestion object
-- Put technical details and code examples in the appropriate fields
-- Ensure the JSON is valid and properly escaped
-- Include all actionable recommendations
+### Guidelines for Suggestions
 
-**CRITICAL: Code Example Requirements**
-EVERY suggestion MUST include a concrete, copy-paste code example in the "codeExample" field:
-- For AEM: Include HTL template paths, clientlib categories, or Dispatcher config
-- For image optimizations: Show actual HTML attribute changes (loading, fetchpriority)
-- For font loading: Show @font-face declarations with font-display and size-adjust
-- For JavaScript: Show actual code snippets with file paths
-- For CSS: Show actual selectors and properties
-- AVOID: Generic "use X technique" without actual code
-- EXAMPLE FORMAT: "File: /apps/myproject/components/hero/hero.html\\n<img src=\\"\${image.src}\\" loading=\\"eager\\" fetchpriority=\\"high\\" />"
+1. **Prioritization**: Order suggestions by impact (high-impact, low-effort first)
+2. **Combine Related Issues**: When multiple findings share a root cause, create ONE holistic suggestion
+3. **Be Specific**: Include concrete file paths, line numbers, and code examples in codeChanges
+4. **Evidence-Based**: Each suggestion should reference specific data from agent findings
+5. **Actionable**: Focus on what to change, not just what's wrong
+6. **Confidence Scoring**: Provide realistic confidence based on evidence quality
+
+### Code Change Requirements
+
+For each suggestion with code changes:
+- **file**: Full path to the file that needs modification
+- **line**: Specific line number (if applicable)
+- **before**: Current code (for context)
+- **after**: Proposed code change
+
+**Examples**:
+
+AEM Image Optimization:
+\`\`\`json
+{
+  "file": "/apps/myproject/components/content/hero/hero.html",
+  "line": 12,
+  "before": "<img src=\\"\${image.src}\\" alt=\\"\${image.alt}\\">",
+  "after": "<img src=\\"\${image.src}\\" alt=\\"\${image.alt}\\" loading=\\"eager\\" fetchpriority=\\"high\\" width=\\"\${image.width}\\" height=\\"\${image.height}\\">"
+}
+\`\`\`
+
+Font Loading:
+\`\`\`json
+{
+  "file": "/apps/myproject/clientlibs/clientlib-base/css/fonts.css",
+  "after": "@font-face {\\n  font-family: 'CustomFont';\\n  src: url('/fonts/custom.woff2') format('woff2');\\n  font-display: swap;\\n  font-weight: 400;\\n}"
+}
+\`\`\`
+
+### Validation Criteria
+
+Include validation criteria so developers can verify the fix:
+- "Bundle size reduces by ~165KB"
+- "TBT improves by at least 300ms"
+- "Coverage shows <10% unused code in main bundle"
+- "LCP element loads within first 2 requests"
+
+**Note**: Your JSON output will be automatically formatted into a human-readable markdown report. Focus on generating complete, accurate, structured data.
 `;
 }
 
@@ -276,7 +287,14 @@ export const PHASE_FOCUS = {
 - Determine if there are specific user segments experiencing poor performance
 - Identify pages with similar templates that perform better
 - Set realistic improvement targets based on field data percentiles
-- Note regional variations in performance if present`,
+- Note regional variations in performance if present
+
+**Evidence Requirements for Field Data**:
+- CrUX evidence references must include BOTH metric name AND value with percentile
+- ✅ GOOD: "CLS p75: 1.81 (poor, 18x threshold)" or "LCP p75: 3500ms, FCP p75: 1800ms"
+- ❌ BAD: "CLS: 1.81" (too short, missing context)
+- Include distribution data when relevant: "75% of users experience CLS > 0.25"
+- Reference histogram bins for severity context: "good: 15%, needs-improvement: 20%, poor: 65%"`,
 
   PSI: (n) => `### Step ${n}: PageSpeed Assessment
 - Evaluate PSI/Lighthouse mobile results
@@ -328,7 +346,26 @@ export const PHASE_FOCUS = {
 - Analyze critical CSS strategy and render-blocking resources
 - Evaluate HTML structure and its impact on rendering sequence
 - Examine script loading strategies (async, defer, modules)
-- Check for proper image attributes (width, height, loading, fetchpriority)`,
+- Check for proper image attributes (width, height, loading, fetchpriority)
+
+**CRITICAL: Third-Party Script Analysis** (for Causal Graph Completeness)
+- Coverage agent will find large third-party scripts as SYMPTOMS
+- You MUST create ROOT CAUSE findings about HOW they're loaded to connect the graph
+- Required checks:
+  1. **Loading Strategy**: Are third-party scripts async/defer or render-blocking?
+     - ✅ GOOD: \`<script async src="https://cdn.cookielaw.org/otBannerSdk.js">\`
+     - ❌ BAD: \`<script src="https://cdn.cookielaw.org/otBannerSdk.js">\` (blocks rendering)
+  2. **Preconnect Optimization**: Large third-party domains (>50KB) should have preconnect hints
+     - ✅ GOOD: \`<link rel="preconnect" href="https://cdn.cookielaw.org">\`
+     - ❌ BAD: No preconnect for 100KB+ third-party scripts
+  3. **Load Timing**: Are consent/analytics scripts in <head> (early) or before </body> (late)?
+     - ⚠️ Note: Consent scripts may need early load for legal compliance
+     - ❌ BAD: Non-essential analytics in <head> blocking render
+- Evidence requirements:
+  - Reference specific script URLs with async/defer/type attributes
+  - Note position in document (<head> vs <body>)
+  - Include category (consent, analytics, tag-manager, social, monitoring)
+  - Example: "OneTrust consent script (otBannerSdk.js) in <head> without async/defer, category: consent"`,
 
   RULES: (n) => `### Step ${n}: Rule Violation Analysis
 - Review the provided summary of failed, manually evaluated rules
@@ -361,5 +398,13 @@ export const PHASE_FOCUS = {
 - Examine JS patterns that might cause long tasks
 - Review CSS for render-blocking issues and optimization opportunities
 - Identify inefficient code patterns and suggest specific improvements
-- Analyze event listener implementations for INP impact`,
+- Analyze event listener implementations for INP impact
+
+**Evidence Requirements for Code Review**:
+- Code evidence must reference specific files with context (>10 chars)
+- ✅ GOOD: "Files: main.js and /d251aa49a8a3/main.js from cdn-cgi/challenge-platform" or "clientlib-site.js:L45 uses blocking fetch()"
+- ❌ BAD: "main.js" (too short, no context)
+- Include line numbers when possible for specific patterns
+- Reference multiple related files together for pattern-based findings
+- When hypothesizing about performance impact, note that you're predicting (use "likely", "may", "could") since Code Agent doesn't see actual execution data`,
 };

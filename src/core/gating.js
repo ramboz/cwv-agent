@@ -1,3 +1,5 @@
+import { DEVICE_THRESHOLDS } from '../config/thresholds.js';
+
 /**
  * Unified Agent Gating System
  *
@@ -6,57 +8,36 @@
  * Key features:
  * - Single decision point per agent (no double-gating)
  * - Declarative rule definitions
- * - Device-aware thresholds
+ * - Device-aware thresholds (from centralized config)
  * - Clear decision logging
  * - Easy to test and maintain
  */
 
 /**
+ * Map centralized threshold keys to gating system keys
+ * Centralized config uses uppercase (REQUESTS), gating uses lowercase (requests)
+ */
+function mapThresholds(deviceThresholds) {
+  return {
+    requests: deviceThresholds.REQUESTS,
+    transferBytes: deviceThresholds.TRANSFER_BYTES,
+    unusedBytes: deviceThresholds.UNUSED_BYTES,
+    unusedRatio: deviceThresholds.UNUSED_RATIO,
+    firstPartyBytes: deviceThresholds.FIRST_PARTY_BYTES,
+    bundleCount: deviceThresholds.BUNDLE_COUNT,
+    cls: deviceThresholds.CLS,
+    thirdPartyCount: deviceThresholds.THIRD_PARTY_COUNT,
+    thirdPartyTime: deviceThresholds.THIRD_PARTY_TIME
+  };
+}
+
+/**
  * Unified thresholds for all agents
- * Based on 50th-75th percentile of real-world websites
+ * Now sourced from centralized config for consistency
  */
 const UNIFIED_THRESHOLDS = {
-  mobile: {
-    // HAR thresholds
-    requests: 60,              // Typical: 50-100, threshold catches 70%+
-    transferBytes: 1_500_000,  // 1.5 MB - Typical: 1.5-2.5 MB
-
-    // Coverage thresholds
-    unusedBytes: 300_000,      // 300 KB of unused code
-    unusedRatio: 0.30,         // 30% unused ratio
-
-    // Code thresholds
-    firstPartyBytes: 500_000,  // 500 KB of first-party code
-    bundleCount: 3,            // 3+ bundles
-
-    // CLS thresholds
-    cls: 0.1,                  // CLS threshold (Good: <0.1, Needs work: 0.1-0.25)
-
-    // Third-party thresholds
-    thirdPartyCount: 5,        // 5+ third-party scripts
-    thirdPartyTime: 500        // 500ms execution time
-  },
-
-  desktop: {
-    // HAR thresholds (slightly higher for desktop)
-    requests: 80,              // Typical: 60-120
-    transferBytes: 2_000_000,  // 2 MB
-
-    // Coverage thresholds
-    unusedBytes: 400_000,      // 400 KB
-    unusedRatio: 0.30,         // 30%
-
-    // Code thresholds
-    firstPartyBytes: 700_000,  // 700 KB
-    bundleCount: 3,            // 3+ bundles
-
-    // CLS thresholds (same as mobile)
-    cls: 0.1,
-
-    // Third-party thresholds (same as mobile)
-    thirdPartyCount: 5,
-    thirdPartyTime: 500
-  }
+  mobile: mapThresholds(DEVICE_THRESHOLDS.mobile),
+  desktop: mapThresholds(DEVICE_THRESHOLDS.desktop)
 };
 
 /**

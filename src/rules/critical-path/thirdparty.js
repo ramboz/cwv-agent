@@ -23,8 +23,12 @@ export default function evaluate({ summary, report, har }) {
           });
         }
       } catch (e) {
-        // TODO understand why this happens
-        console.error('Error parsing URL', r.url, e);
+        // URL parsing can fail for:
+        // 1. Malformed URLs (e.g., missing protocol, invalid characters)
+        // 2. Relative URLs that need a base URL
+        // 3. Data URIs or blob URLs
+        // These are typically edge cases and can be safely skipped
+        console.warn('Skipping resource with invalid URL:', r.url, e.message);
       }
     }
   });

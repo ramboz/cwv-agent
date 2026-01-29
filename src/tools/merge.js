@@ -57,19 +57,7 @@ const reportResources = (entry, matchingHar) => {
     responseEnd,
     redirectStart,
     redirectEnd,
-    // connectStart,
-    // connectEnd,
-    // domainLookupStart,
-    // domainLookupEnd,
   } = entry;
-
-  // const tcpHandshake = connectEnd - connectStart;
-  // const dnsLookup = domainLookupEnd - domainLookupStart;
-  // if (tcpHandshake > 0 || dnsLookup > 0 || renderBlockingStatus !== 'non-blocking') {
-  //   if (tcpHandshake > 0) title.push(`TCP handshake: ${formatTimeMS(tcpHandshake)}`);
-  //   if (dnsLookup > 0) title.push(`DNS lookup: ${formatTimeMS(dnsLookup)}`);
-  //   if (renderBlockingStatus !== 'non-blocking') title.push(`Render blocking: ${renderBlockingStatus}`);
-  // }
 
   const redirect = redirectEnd - redirectStart;
   const size = transferSize || matchingHar?.response?.bodySize || 0;

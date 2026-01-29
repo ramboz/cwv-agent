@@ -6,6 +6,7 @@ import { Tiktoken } from 'js-tiktoken/lite';
 import cl100k_base from 'js-tiktoken/ranks/cl100k_base';
 import { DEFAULT_MODEL } from './models/config.js';
 import { createHash } from 'crypto';
+import { sanitizeUrlForFilename } from './config/regex-patterns.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -75,7 +76,7 @@ const projectRoot = getProjectRoot();
 const OUTPUT_DIR = normalizePath('.cache');
 
 export function getFilePrefix(urlString, deviceType, type) {
-  return `${OUTPUT_DIR}/${urlString.replace('https://', '').replace(/[^A-Za-z0-9-]/g, '-').replace(/\//g, '--').replace(/(^-+|-+$)/, '')}.${deviceType}.${type}`
+  return `${OUTPUT_DIR}/${sanitizeUrlForFilename(urlString)}.${deviceType}.${type}`;
 }
 
 function getFilename(url) {

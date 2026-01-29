@@ -182,7 +182,11 @@ function validateEvidence(evidence) {
 
   // Check reference quality
   const ref = evidence.reference || '';
-  if (ref.length < ValidationRules.EVIDENCE.minReferenceLength) {
+  const isFieldData = evidence.source === 'crux' || evidence.source === 'rum';
+
+  // Field data (CrUX/RUM) is aggregate - no file-level specificity exists
+  // Allow shorter references for field data (e.g., "CLS: 1.81" is specific enough)
+  if (!isFieldData && ref.length < ValidationRules.EVIDENCE.minReferenceLength) {
     errors.push('Evidence reference too vague (must be >10 chars with specifics)');
   }
 

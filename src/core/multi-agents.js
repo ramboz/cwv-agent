@@ -1,5 +1,4 @@
 import {ChatPromptTemplate} from '@langchain/core/prompts';
-import {DynamicTool} from '@langchain/core/tools';
 import {RunnableSequence} from '@langchain/core/runnables';
 import {StringOutputParser} from '@langchain/core/output_parsers';
 import {cacheResults, estimateTokenSize} from '../utils.js';
@@ -27,20 +26,71 @@ import { applyRules } from '../tools/rules.js';
 import { LLMFactory } from '../models/llm-factory.js';
 import { getTokenLimits } from '../models/config.js';
 
-const DEFAULT_THRESHOLDS = {
-    mobile: {
-        LCP_MS: 3000,
-        TBT_MS: 250,
-        REQUESTS: 150,
-        TRANSFER_BYTES: 3_000_000,
-    },
-    desktop: {
-        LCP_MS: 2800,
-        TBT_MS: 300,
-        REQUESTS: 180,
-        TRANSFER_BYTES: 3_500_000,
-    }
+// Import refactored Agent System classes
+import { Tool, Agent, MultiAgentSystem } from './multi-agents/agent-system.js';
+
+// Import refactored Orchestration logic
+import {
+    runAgentFlow as runAgentFlowImpl,
+    extractPsiSignals,
+    computeHarStats,
+    computePerfSignals,
+    selectCodeResources,
+    getPsiAudit,
+    DEFAULT_THRESHOLDS
+} from './multi-agents/orchestrator.js';
+
+// Import refactored Suggestions Engine
+import {
+    runMultiAgents as runMultiAgentsImpl,
+    generateConditionalAgentConfig
+} from './multi-agents/suggestions-engine.js';
+
+// Import refactored JSON Parser utilities
+import { extractStructuredSuggestions as extractStructuredSuggestionsImpl } from './multi-agents/utils/json-parser.js';
+
+// Import refactored Transformer utilities
+import {
+    transformFindingsToSuggestions as transformFindingsToSuggestionsImpl,
+    formatSuggestionsToMarkdown as formatSuggestionsToMarkdownImpl
+} from './multi-agents/utils/transformers.js';
+
+// ============================================================================
+// BARREL EXPORTS - Public API for backward compatibility
+// ============================================================================
+
+// Agent System Classes (from ./multi-agents/agent-system.js)
+export { Tool, Agent, MultiAgentSystem };
+
+// Main Orchestration Functions
+export { runAgentFlow as runAgentFlowImpl } from './multi-agents/orchestrator.js';
+export const runAgentFlow = runAgentFlowImpl;
+
+export { runMultiAgents as runMultiAgentsImpl } from './multi-agents/suggestions-engine.js';
+export const runMultiAgents = runMultiAgentsImpl;
+
+// Parser and Transformer Functions
+export { extractStructuredSuggestions as extractStructuredSuggestionsImpl } from './multi-agents/utils/json-parser.js';
+export const extractStructuredSuggestions = extractStructuredSuggestionsImpl;
+
+export { transformFindingsToSuggestions as transformFindingsToSuggestionsImpl } from './multi-agents/utils/transformers.js';
+export const transformFindingsToSuggestions = transformFindingsToSuggestionsImpl;
+
+export { formatSuggestionsToMarkdown as formatSuggestionsToMarkdownImpl } from './multi-agents/utils/transformers.js';
+export const formatSuggestionsToMarkdown = formatSuggestionsToMarkdownImpl;
+
+// Helper Functions (from ./multi-agents/orchestrator.js)
+export {
+    extractPsiSignals,
+    computeHarStats,
+    computePerfSignals,
+    selectCodeResources,
+    getPsiAudit,
+    DEFAULT_THRESHOLDS
 };
+
+// Conditional Agent Configuration (from ./multi-agents/suggestions-engine.js)
+export { generateConditionalAgentConfig };
 
 /** Zod Schema for Structured Suggestions Output (Final synthesis) */
 const suggestionSchema = z.object({
@@ -165,178 +215,20 @@ const qualityMetricsSchema = z.object({
     }).optional()
 });
 
-/** Tool Wrapper */
-export class Tool {
-    constructor({name, description, func}) {
-        this.name = name;
-        this.description = description;
-        this.instance = new DynamicTool({name, description, func});
-    }
-}
+// Export Zod Schemas (used by refactored modules)
+export {
+    suggestionSchema,
+    agentFindingSchema,
+    agentOutputSchema,
+    qualityMetricsSchema
+};
 
-/** Agent */
-export class Agent {
-    constructor({name, role, systemPrompt, humanPrompt = "", llm, tools = [], globalSystemPrompt = ""}) {
-        if (typeof systemPrompt !== "string" || typeof humanPrompt !== "string") {
-            throw new Error(`Invalid prompt for Agent "${name}"`);
-        }
-
-        const combinedSystem = [globalSystemPrompt, systemPrompt]
-            .filter((s) => typeof s === 'string' && s.trim().length > 0)
-            .join('\n\n');
-
-        const prompt = ChatPromptTemplate.fromMessages([
-            new SystemMessage(combinedSystem),
-            new HumanMessage(humanPrompt)
-        ]);
-
-        this.name = name;
-        this.role = role;
-        this.tools = tools;
-        // this.llm = LangchainLLMFactory.createLLM(llm);
-        this.llm = llm
-        // Extract the base LLM from ModelAdapter if needed for RunnableSequence
-        const baseLLM = llm.getBaseLLM ? llm.getBaseLLM() : llm;
-        this.chain = RunnableSequence.from([prompt, baseLLM, new StringOutputParser()]);
-    }
-
-    async invoke(input) {
-        // Use native tool calling if tools are available
-        if (this.tools.length > 0) {
-            // Extract base LLM for tool binding
-            const baseLLM = this.llm.getBaseLLM ? this.llm.getBaseLLM() : this.llm;
-            // Bind tools to LLM for native tool calling
-            const llmWithTools = baseLLM.bindTools(this.tools.map(t => t.instance));
-
-            // Create message array with system and human messages
-            const messages = [
-                new SystemMessage(this.chain.steps[0].promptMessages[0].prompt.template),
-                new HumanMessage(input)
-            ];
-
-            // Initial invocation
-            let aiMessage = await llmWithTools.invoke(messages);
-            messages.push(aiMessage);
-
-            // Auto-loop on tool calls
-            while (aiMessage.tool_calls && aiMessage.tool_calls.length > 0) {
-                for (const toolCall of aiMessage.tool_calls) {
-                    const tool = this.tools.find(t => t.name === toolCall.name);
-                    if (tool) {
-                        const toolMessage = await tool.instance.invoke(toolCall);
-                        messages.push(toolMessage);
-                    }
-                }
-                aiMessage = await llmWithTools.invoke(messages);
-                messages.push(aiMessage);
-            }
-
-            return aiMessage.content;
-        }
-
-        // Fallback to simple chain for agents without tools
-        const result = await this.chain.invoke({ input });
-        return result;
-    }
-}
-
-/** MultiAgentSystem */
-export class MultiAgentSystem {
-    constructor({llm, toolsConfig, agentsConfig, globalSystemPrompt = ""}) {
-        this.llm = llm;
-        this.tools = new Map();
-        this.agents = new Map();
-        this.globalSystemPrompt = globalSystemPrompt;
-
-        this.initTools(toolsConfig);
-        this.initAgents(agentsConfig);
-    }
-
-    initTools(toolsConfig) {
-        for (const toolConf of toolsConfig) {
-            const tool = new Tool(toolConf);
-            this.tools.set(tool.name, tool);
-        }
-    }
-
-    initAgents(agentsConfig) {
-        for (const config of agentsConfig) {
-            const tools = config.toolNames?.map(name => this.tools.get(name)).filter(Boolean) || [];
-            const agent = new Agent({...config, llm: this.llm, tools, globalSystemPrompt: this.globalSystemPrompt});
-            this.agents.set(config.name, agent);
-        }
-    }
-    async executeParallelTasks(tasks) {
-        const total = tasks.length;
-        let completed = 0;
-
-        // Rate limiting configuration
-        const BATCH_SIZE = parseInt(process.env.AGENT_BATCH_SIZE || '3', 10);
-        const DELAY_BETWEEN_BATCHES = parseInt(process.env.AGENT_BATCH_DELAY || '2000', 10); // ms
-        const MAX_RETRIES = 3;
-        const INITIAL_RETRY_DELAY = 5000; // 5 seconds
-
-        // Helper: Execute single agent with retry logic
-        const executeAgentWithRetry = async ({agent: agentName, description}, retryCount = 0) => {
-            const agent = this.agents.get(agentName);
-            if (!agent) throw new Error(`Agent ${agentName} not found`);
-            const input = description || `Please perform your assigned role as ${agent.role}`;
-            const t0 = Date.now();
-
-            try {
-                const output = await agent.invoke(input);
-                const dt = ((Date.now() - t0) / 1000).toFixed(1);
-                completed++;
-                console.log(`✅ ${agentName} (${Math.round(completed/total*100)}%, ${Number(dt)}s)`);
-                return {agent: agentName, output};
-            } catch (err) {
-                const dt = ((Date.now() - t0) / 1000).toFixed(1);
-
-                // Check if it's a rate limit error (429)
-                const isRateLimitError = err.message?.includes('429') ||
-                                        err.message?.includes('Resource exhausted') ||
-                                        err.message?.includes('rateLimitExceeded');
-
-                if (isRateLimitError && retryCount < MAX_RETRIES) {
-                    const retryDelay = INITIAL_RETRY_DELAY * Math.pow(2, retryCount); // Exponential backoff
-                    console.log(`⚠️  ${agentName} hit rate limit, retrying in ${retryDelay/1000}s (attempt ${retryCount + 1}/${MAX_RETRIES})`);
-                    await new Promise(resolve => setTimeout(resolve, retryDelay));
-                    return executeAgentWithRetry({agent: agentName, description}, retryCount + 1);
-                }
-
-                completed++;
-                console.log(`❌ ${agentName} (${Math.round(completed/total*100)}%, ${Number(dt)}s):`, err.message);
-                return {agent: agentName, output: `Error: ${err.message}`};
-            }
-        };
-
-        // Execute tasks in batches to avoid rate limiting
-        const results = [];
-        for (let i = 0; i < tasks.length; i += BATCH_SIZE) {
-            const batch = tasks.slice(i, i + BATCH_SIZE);
-            const batchNum = Math.floor(i / BATCH_SIZE) + 1;
-            const totalBatches = Math.ceil(tasks.length / BATCH_SIZE);
-
-            console.log(`🔄 Executing batch ${batchNum}/${totalBatches} (${batch.length} agents)...`);
-
-            // Execute batch in parallel
-            const batchResults = await Promise.all(batch.map(task => executeAgentWithRetry(task)));
-            results.push(...batchResults);
-
-            // Add delay between batches (except after last batch)
-            if (i + BATCH_SIZE < tasks.length) {
-                console.log(`⏳ Waiting ${DELAY_BETWEEN_BATCHES/1000}s before next batch...`);
-                await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_BATCHES));
-            }
-        }
-
-        return results;
-    }
-}
+// Tool, Agent, and MultiAgentSystem classes moved to ./multi-agents/agent-system.js
+// and re-exported above for backward compatibility
 
 /** Utility Functions */
 
-const isPromptValid = (length, limits) => length <= (limits.input - limits.output) * 0.9;
+// isPromptValid moved to ./multi-agents/suggestions-engine.js
 
 
 function extractMarkdownSuggestions(content) {
@@ -351,55 +243,11 @@ function extractMarkdownSuggestions(content) {
     return md.trim();
 }
 
-function extractStructuredSuggestions(content, pageUrl, deviceType) {
-    try {
-        const match1 = content.match(/## STRUCTURED DATA FOR AUTOMATION[\s\S]*?```json\s*(\{[\s\S]*?\})\s*```/)
-            || content.match(/```json\s*(\{[\s\S]*?\})\s*```/)
-            || content.match(/(\{[\s\S]*"suggestions"[\s\S]*?\})/);
-        if (!match1) return {};
-        const parsed1 = JSON.parse(match1[1]);
+// transformFindingsToSuggestions and formatSuggestionsToMarkdown moved to ./multi-agents/utils/transformers.js
+// Re-exported above (lines 52-69) for backward compatibility
 
-        // Normalize suggestion list
-        let suggestions = parsed1.suggestions;
-        if (!Array.isArray(suggestions)) {
-            if (Array.isArray(parsed1.actions)) suggestions = parsed1.actions;
-            else if (Array.isArray(parsed1.recommendations)) suggestions = parsed1.recommendations;
-            else if (parsed1.suggestions && typeof parsed1.suggestions === 'object') suggestions = Object.values(parsed1.suggestions);
-            else if (parsed1.data && Array.isArray(parsed1.data.suggestions)) suggestions = parsed1.data.suggestions;
-            else if (parsed1.data && Array.isArray(parsed1.data.actions)) suggestions = parsed1.data.actions;
-        }
-
-        // Normalize suggestions to fix common LLM output issues
-        const normalizedSuggestions = Array.isArray(suggestions) ? suggestions.map(s => {
-            // Fix comma-separated metrics (e.g., "LCP, INP" → ["LCP", "INP"])
-            if (s.metric && typeof s.metric === 'string' && s.metric.includes(',')) {
-                s.metric = s.metric.split(',').map(m => m.trim());
-            }
-            return s;
-        }) : [];
-
-        const normalized = {
-            ...parsed1,
-            url: parsed1.url || pageUrl,
-            deviceType: parsed1.deviceType || deviceType,
-            timestamp: parsed1.timestamp || new Date().toISOString(),
-            suggestions: normalizedSuggestions,
-        };
-
-        // Validate with Zod schema (logs warnings but doesn't block)
-        try {
-            suggestionSchema.parse(normalized);
-        } catch (zodError) {
-            console.warn('Multi-agent: Suggestion schema validation failed:', zodError.errors);
-            // Continue despite validation errors for now (Phase 1 will enforce strict validation)
-        }
-
-        return normalized;
-    } catch (e) {
-        console.warn('Multi-agent: failed to parse structured JSON:', e.message);
-        return {};
-    }
-}
+// extractStructuredSuggestions moved to ./multi-agents/utils/json-parser.js
+// Re-exported above for backward compatibility
 
 /**
  * Collect quality metrics from agent findings (Phase 1)
@@ -521,424 +369,13 @@ function generateRunId() {
  * @param {String} auditId
  * @return {Object|null}
  */
-function getPsiAudit(psi, auditId) {
-    try {
-        return psi?.data?.lighthouseResult?.audits?.[auditId] || null;
-    } catch (e) {
-        return null;
-    }
-}
+// Helper functions moved to ./multi-agents/orchestrator.js
+// Re-exported above for backward compatibility
 
-/**
- * Extract key PSI signals for gating
- * @param {Object} psi
- * @return {Object}
- */
-function extractPsiSignals(psi) {
-    const lcp = getPsiAudit(psi, 'largest-contentful-paint')?.numericValue ?? null;
-    const tbt = getPsiAudit(psi, 'total-blocking-time')?.numericValue ?? null;
-    const cls = getPsiAudit(psi, 'cumulative-layout-shift')?.numericValue ?? null;
-    const redirects = (getPsiAudit(psi, 'redirects')?.score ?? 1) < 1;
-    const unusedJsAudit = getPsiAudit(psi, 'unused-javascript');
-    const reduceUnusedJS = !!(unusedJsAudit && ((unusedJsAudit.score ?? 1) < 1));
-    const serverResponseSlow = (getPsiAudit(psi, 'server-response-time')?.score ?? 1) < 1;
-    const renderBlocking = (getPsiAudit(psi, 'render-blocking-resources')?.score ?? 1) < 1;
-    const usesRelPreconnect = (getPsiAudit(psi, 'uses-rel-preconnect')?.score ?? 1) < 1;
-    return { lcp, tbt, cls, redirects, reduceUnusedJS, serverResponseSlow, renderBlocking, usesRelPreconnect };
-}
+// generateConditionalAgentConfig moved to ./multi-agents/suggestions-engine.js
 
-/**
- * Compute HAR stats used for gating
- * @param {Object} har
- * @return {{entriesCount: Number, transferBytes: Number}}
- */
-function computeHarStats(har) {
-    try {
-        const entries = har?.log?.entries || [];
-        let transferBytes = 0;
-        for (const e of entries) {
-            // Prefer _transferSize, fallback to bodySize/content.size
-            const t = (e.response?._transferSize ?? e.response?.bodySize ?? e.response?.content?.size ?? 0);
-            transferBytes += Math.max(0, t);
-        }
-        return { entriesCount: entries.length, transferBytes };
-    } catch (e) {
-        return { entriesCount: 0, transferBytes: 0 };
-    }
-}
-
-/**
- * Compute performance signals from PerformanceObserver entries
- * - Detect long tasks before LCP
- */
-function computePerfSignals(perfEntries) {
-    try {
-        const entries = Array.isArray(perfEntries) ? perfEntries : [];
-        const lcpEntries = entries.filter(e => e.entryType === 'largest-contentful-paint');
-        const lcpTimeMs = lcpEntries.length > 0 ? Math.min(...lcpEntries.map(e => e.startTime || Number.MAX_VALUE)) : null;
-        const longTasks = entries.filter(e => e.entryType === 'longtask');
-        const longTasksPre = longTasks.filter(e => (lcpTimeMs == null) || (e.startTime <= lcpTimeMs));
-        const totalLongTaskMsPreLcp = longTasksPre.reduce((acc, e) => acc + (e.duration || 0), 0);
-        const hasLongTasksPreLcp = longTasksPre.some(e => (e.duration || 0) >= 200);
-        return { hasLongTasksPreLcp, totalLongTaskMsPreLcp, lcpTimeMs };
-    } catch (_) {
-        return { hasLongTasksPreLcp: false, totalLongTaskMsPreLcp: 0, lcpTimeMs: null };
-    }
-}
-
-/**
- * Filter resources for targeted code review
- * Keeps HTML at pageUrl and a subset of JS/CSS likely relevant
- * @param {String} pageUrl
- * @param {Object} resources
- * @return {Object}
- */
-function selectCodeResources(pageUrl, resources) {
-    if (!resources || typeof resources !== 'object') return resources || {};
-    const html = resources[pageUrl];
-    const DENYLIST_REGEX = /(granite|foundation|cq|core\.|wcm|jquery|lodash|moment|minified|bootstrap|react\.|angular|vue\.|rxjs|three\.|videojs|chart|codemirror|ace|monaco|gtag|googletag|optimizely|segment|tealium|adobe-dtm|launch-)/i;
-    const subset = {};
-    if (html) subset[pageUrl] = html;
-
-    for (const [url, content] of Object.entries(resources)) {
-        if (url === pageUrl) continue;
-        const isJsOrCss = url.endsWith('.js') || url.endsWith('.css');
-        if (!isJsOrCss) continue;
-        if (DENYLIST_REGEX.test(url)) continue;
-        // Prefer files referenced in HTML or known critical patterns
-        const referencedInHtml = !!(html && url.includes('://') && html.includes(new URL(url).pathname));
-        if (!referencedInHtml) continue;
-        subset[url] = content;
-    }
-    return subset;
-}
-
-/**
- * Build conditional agent config using summaries for heavy artifacts
- * @param {Object} pageData
- * @param {String} cms
- * @return {Array}
- */
-function generateConditionalAgentConfig(pageData, cms) {
-    const { psi, har, harSummary, perfEntries, perfEntriesSummary, pageUrl, resources, coverageData, coverageDataSummary, rulesSummary } = pageData;
-    const signals = extractPsiSignals(psi);
-    const harStats = computeHarStats(har);
-
-    // Device-aware thresholds
-    const device = (pageData.deviceType || 'mobile').toLowerCase();
-    const TH = DEFAULT_THRESHOLDS[device] || DEFAULT_THRESHOLDS.mobile;
-
-    // Multi-signal gating (include perf pre-LCP signals when available)
-    const perfSig = computePerfSignals(perfEntries);
-
-    // UNIFIED GATING: Use new AgentGating class for consistent logic
-    const gating = new AgentGating(device);
-
-    // Coverage gating using unified system
-    const coverageDecision = gating.shouldRunAgent('coverage', {
-        data: {
-            unusedBytes: coverageData?.summary?.unusedBytes || 0,
-            unusedRatio: (coverageData?.summary?.unusedPercent || 0) / 100
-        },
-        psi: {
-            reduceUnusedJS: signals.reduceUnusedJS,
-            renderBlocking: signals.renderBlocking
-        }
-    });
-
-    // Fallback to legacy logic if no coverage data yet (backward compatibility)
-    const coverageSignals = [
-        signals.reduceUnusedJS === true,
-        (signals.tbt ?? 0) > TH.TBT_MS,
-        (signals.lcp ?? 0) > TH.LCP_MS,
-        perfSig.hasLongTasksPreLcp === true,
-    ];
-    const shouldRunCoverage = coverageData?.summary
-        ? coverageDecision.shouldRun
-        : (perfSig.lcpTimeMs != null
-            ? coverageSignals.filter(Boolean).length >= 2
-            : coverageSignals.some(Boolean));
-
-    // HAR Agent Gating - Unified logic with lower thresholds
-    const harDecision = gating.shouldRunAgent('har', {
-        data: {
-            entriesCount: harStats.entriesCount,
-            transferBytes: harStats.transferBytes
-        },
-        psi: {
-            redirects: signals.redirects,
-            serverResponseSlow: signals.serverResponseSlow,
-            renderBlocking: signals.renderBlocking
-        }
-    });
-
-    const shouldRunHar = harDecision.shouldRun;
-
-    // Code agent gating - use legacy logic since resources aren't available at this point
-    // (Code is collected earlier in runAgentFlow, before this function is called)
-    const codeSignals = [
-        shouldRunCoverage,
-        signals.reduceUnusedJS === true,
-        (signals.tbt ?? 0) > TH.TBT_MS,
-        perfSig.hasLongTasksPreLcp === true,
-    ];
-    const shouldRunCode = perfSig.lcpTimeMs != null
-        ? codeSignals.filter(Boolean).length >= 2
-        : (shouldRunCoverage || (signals.reduceUnusedJS === true && (signals.tbt ?? 0) > TH.TBT_MS));
-
-    const steps = [];
-
-    // Always-on lightweight agents (use summaries where possible)
-    steps.push({ name: 'CrUX Agent', sys: cruxAgentPrompt(cms), hum: cruxSummaryStep(pageData.cruxSummary) });
-
-    // RUM Agent (only if RUM data is available)
-    if (pageData.rumSummary) {
-        steps.push({ name: 'RUM Agent', sys: cruxAgentPrompt(cms), hum: rumSummaryStep(pageData.rumSummary) });
-    }
-
-    steps.push({ name: 'PSI Agent', sys: psiAgentPrompt(cms), hum: psiSummaryStep(pageData.psiSummary) });
-    steps.push({ name: 'Perf Observer Agent', sys: perfObserverAgentPrompt(cms), hum: perfSummaryStep(perfEntriesSummary) });
-    // Prefer fullHtml when available for correctness; fallback to resources[pageUrl]
-    const htmlPayload = pageData.fullHtml || resources;
-    steps.push({ name: 'HTML Agent', sys: htmlAgentPrompt(cms), hum: htmlStep(pageUrl, htmlPayload) });
-    steps.push({ name: 'Rules Agent', sys: rulesAgentPrompt(cms), hum: rulesStep(rulesSummary) });
-
-    if (shouldRunHar) {
-        steps.push({ name: 'HAR Agent', sys: harAgentPrompt(cms), hum: harSummaryStep(harSummary) });
-    }
-
-    if (shouldRunCoverage) {
-        steps.push({ name: 'Code Coverage Agent', sys: coverageAgentPrompt(cms), hum: coverageSummaryStep(coverageDataSummary || coverageData) });
-    }
-
-    if (shouldRunCode) {
-        steps.push({ name: 'Code Review Agent', sys: codeReviewAgentPrompt(cms), hum: codeStep(pageUrl, resources, 10_000) });
-    }
-
-    // Debug/log the gating outcome so users can see why agent count == N
-    const selectedNames = steps.map(s => s.name);
-    console.log(`- with → har: ${shouldRunHar}, coverage: ${shouldRunCoverage}, code: ${shouldRunCode}`);
-    console.log(`- using ${selectedNames.length} agent(s): ${selectedNames.map((n) => n.replace(' Agent', '')).join(', ')}`);
-
-    return steps.map(({ name, sys, hum }) => ({
-        name,
-        role: name.replace(/_/g, ' ').replace('agent', '').trim(),
-        systemPrompt: sys,
-        humanPrompt: hum,
-    }));
-}
-
-/**
- * Conditional, signal-driven multi-agent runner
- * Starts cheap and conditionally adds heavy agents
- * @param {Object} pageData
- * @param {Object} tokenLimits
- * @param {Object} llm
- * @return {Promise<String|null>}
- */
-export async function runMultiAgents(pageData, tokenLimits, llm, model) {
-    console.group('Starting multi-agent flow...');
-    if (!pageData || !tokenLimits || !llm) {
-        console.warn('runMultiAgents: invalid arguments');
-        return null;
-    }
-
-    let agentsConfig = generateConditionalAgentConfig(pageData, pageData.cms);
-
-    // Validate token budgets (include global init)
-    const baseInit = initializeSystemAgents(pageData.cms);
-    const baseTokens = estimateTokenSize(baseInit, model);
-    agentsConfig = agentsConfig.map((agent) => {
-        const tokenLength = baseTokens + estimateTokenSize(agent.systemPrompt, model) + estimateTokenSize(agent.humanPrompt, model);
-        if (!isPromptValid(tokenLength, tokenLimits)) {
-            // For this conditional flow, humanPrompt is already summarized for heavy artifacts.
-        }
-        return agent;
-    });
-
-    const system = new MultiAgentSystem({ llm, toolsConfig: [], agentsConfig, globalSystemPrompt: initializeSystemAgents(pageData.cms) });
-    const tasks = agentsConfig.map(agent => ({ agent: agent.name }));
-    const responses = await system.executeParallelTasks(tasks);
-
-    // Phase 1: Collect quality metrics from agent outputs
-    // Parse agent outputs to extract structured findings (if present)
-    const agentOutputs = responses.map(({ agent, output }) => {
-        try {
-            // Try to parse as structured JSON output
-            const jsonMatch = output.match(/\{[\s\S]*"agentName"[\s\S]*\}/);
-            if (jsonMatch) {
-                const parsed = JSON.parse(jsonMatch[0]);
-                return parsed;
-            }
-        } catch (e) {
-            // Not JSON or parse failed, return placeholder
-        }
-        // Return minimal structure for non-JSON agents
-        return {
-            agentName: agent,
-            findings: [],
-            metadata: { executionTime: 0, dataSourcesUsed: [], coverageComplete: false }
-        };
-    });
-
-    // Phase 3: Build causal graph from all findings
-    const allFindings = agentOutputs.flatMap(output => {
-        if (output.findings && Array.isArray(output.findings)) {
-            return output.findings;
-        }
-        return [];
-    });
-
-    let causalGraph = null;
-    let graphSummary = '';
-    if (allFindings.length > 0) {
-        try {
-            // Extract current metric values from findings
-            const metricsData = {};
-            allFindings.forEach(f => {
-                if (f.metric && f.estimatedImpact?.metric) {
-                    metricsData[f.metric] = f.estimatedImpact.current || 0;
-                }
-            });
-
-            causalGraph = buildCausalGraph(allFindings, metricsData);
-            graphSummary = generateGraphSummary(causalGraph);
-
-            // Save causal graph
-            cacheResults(pageData.pageUrl, pageData.deviceType, 'causal-graph', causalGraph, '', model);
-        } catch (error) {
-            console.warn('Failed to build causal graph:', error.message);
-        }
-    }
-
-    let result = '';
-    let context = '';
-    responses.forEach(({ agent, output }, index) => {
-        const section = `## Phase ${index + 1} - ${agent}:\n${output}`;
-        result += `\n\n${section}`;
-        context += `\n${agent}: ${output}`;
-    });
-
-    // Add causal graph summary to context for final synthesis
-    if (graphSummary) {
-        context += `\n\nCausal Graph Analysis:\n${graphSummary}`;
-    }
-
-    // Phase 4: Validate findings
-    let validatedFindings = allFindings;
-    let validationSummary = '';
-    if (allFindings.length > 0 && causalGraph) {
-        try {
-            const validationResults = validateFindings(allFindings, causalGraph, {
-                blockingMode: true,   // Block invalid findings
-                adjustMode: true,     // Apply adjustments to questionable findings
-                strictMode: false,    // Don't block warnings, only errors
-            });
-
-            validatedFindings = [
-                ...validationResults.approvedFindings,
-                ...validationResults.adjustedFindings,
-            ];
-
-            // Save validation results
-            saveValidationResults(pageData.pageUrl, pageData.deviceType, validationResults, model);
-
-            // Add validation summary to context
-            validationSummary = `\n\nValidation Summary:
-- Total findings: ${validationResults.summary.total}
-- Approved: ${validationResults.summary.approved}
-- Adjusted: ${validationResults.summary.adjusted}
-- Blocked: ${validationResults.summary.blocked}
-- Average confidence: ${(validationResults.summary.averageConfidence * 100).toFixed(1)}%`;
-
-            context += validationSummary;
-
-            // Update agent outputs to reflect validated findings
-            agentOutputs.forEach(output => {
-                if (output.findings && Array.isArray(output.findings)) {
-                    output.findings = output.findings.filter(f =>
-                        validatedFindings.some(vf => vf.id === f.id)
-                    );
-                }
-            });
-
-            // Collect post-validation quality metrics for comparison
-            const postValidationMetrics = collectQualityMetrics(agentOutputs, pageData.pageUrl, pageData.deviceType, model);
-            console.log(`✅ Post-Validation: ${postValidationMetrics.totalFindings} findings (${validationResults.summary.blocked} blocked, ${validationResults.summary.adjusted} adjusted)`);
-        } catch (error) {
-            console.warn('Failed to validate findings:', error.message);
-        }
-    }
-
-    // Phase 5: Build graph-enhanced context for synthesis
-    let graphEnhancedContext = context;
-    if (causalGraph && causalGraph.rootCauses && causalGraph.rootCauses.length > 0) {
-        // Extract root causes and calculate their total impact
-        const rootCauseImpacts = causalGraph.rootCauses.map(rcId => {
-            const node = causalGraph.nodes[rcId];
-            if (!node) return null;
-
-            // Calculate total impact: sum of all downstream effects
-            const outgoingEdges = causalGraph.edges.filter(e => e.from === rcId);
-            const totalImpact = outgoingEdges.reduce((sum, edge) => {
-                // Get the impact from the target node
-                const targetNode = causalGraph.nodes[edge.to];
-                if (targetNode?.metadata?.estimatedImpact?.reduction) {
-                    return sum + targetNode.metadata.estimatedImpact.reduction;
-                }
-                return sum;
-            }, 0);
-
-            return {
-                id: rcId,
-                description: node.description,
-                metric: node.metadata?.metric,
-                totalImpact,
-                affectedFindings: outgoingEdges.length,
-                depth: node.depth,
-            };
-        }).filter(Boolean);
-
-        // Sort by total impact (highest first)
-        rootCauseImpacts.sort((a, b) => b.totalImpact - a.totalImpact);
-
-        // Add root cause prioritization to context
-        if (rootCauseImpacts.length > 0) {
-            graphEnhancedContext += `\n\n## Root Cause Prioritization (from Causal Graph)
-
-The causal graph has identified ${rootCauseImpacts.length} root causes. Focus your recommendations on these fundamental issues:
-
-${rootCauseImpacts.slice(0, 10).map((rc, i) => `
-${i + 1}. **${rc.description}**
-   - Primary metric: ${rc.metric}
-   - Total downstream impact: ${rc.totalImpact > 0 ? `~${Math.round(rc.totalImpact)}ms` : 'multiple metrics'}
-   - Affects ${rc.affectedFindings} other finding(s)
-   - Graph depth: ${rc.depth} (${rc.depth === 1 ? 'immediate cause' : rc.depth === 2 ? 'fundamental cause' : 'deep root cause'})
-`).join('\n')}
-
-**IMPORTANT**: Prioritize suggestions that address these root causes over symptoms. When multiple findings share the same root cause, combine them into a single holistic recommendation.`;
-        }
-    }
-
-    const finalPrompt = actionPrompt(pageData.pageUrl, pageData.deviceType);
-    const baseLLM = llm.getBaseLLM ? llm.getBaseLLM() : llm;
-    const finalChain = RunnableSequence.from([
-        ChatPromptTemplate.fromMessages([
-            new SystemMessage(finalPrompt),
-            new HumanMessage(`Here is the context from previous agents:\n${graphEnhancedContext}`)
-        ]),
-        baseLLM,
-        new StringOutputParser()
-    ]);
-
-    console.log('- running final analysis...');
-    const finalOutput = await finalChain.invoke({ input: graphEnhancedContext });
-
-
-    console.groupEnd();
-
-    return result + "\n\n## Final Suggestions:\n" + finalOutput;
-}
+// runMultiAgents function moved to ./multi-agents/suggestions-engine.js
+// Re-exported above for backward compatibility
 
 /** Reducer: Schema-first aggregation */
 async function reduceAgentOutputs(responses, pageData, llm) {
@@ -978,109 +415,15 @@ async function reduceAgentOutputs(responses, pageData, llm) {
  * @param {Object} [options={}]
  * @return {Promise<String>}
  */
-export async function runAgentFlow(pageUrl, deviceType, options = {}) {
-    // Phase 1: collect CRUX, PSI, and RUM (parallel), derive gates from PSI
-    const [{ full: crux, summary: cruxSummary }, { full: psi, summary: psiSummary }, { data: rum, summary: rumSummary }] = await Promise.all([
-        getCrux(pageUrl, deviceType, options),
-        getPsi(pageUrl, deviceType, options),
-        getRUM(pageUrl, deviceType, options),
-    ]);
+// runAgentFlow function moved to ./multi-agents/orchestrator.js
+// Re-exported above for backward compatibility
 
-    // Derive gates using PSI only (single lab run later)
-    const signals = extractPsiSignals(psi);
-    const device = (deviceType || 'mobile').toLowerCase();
-    const TH = DEFAULT_THRESHOLDS[device] || DEFAULT_THRESHOLDS.mobile;
-    const coverageSignals = [
-        signals.reduceUnusedJS === true,
-        (signals.tbt ?? 0) > TH.TBT_MS,
-        (signals.lcp ?? 0) > TH.LCP_MS,
-    ];
-    const shouldRunCoverage = coverageSignals.some(Boolean);
-
-    // Phase 2: single lab run, always collecting HAR, conditionally collecting Coverage
-    const { har: harHeavy, harSummary, perfEntries, perfEntriesSummary, fullHtml, jsApi, coverageData, coverageDataSummary, thirdPartyAnalysis, clsAttribution } = await getLabData(pageUrl, deviceType, {
-        ...options,
-        collectHar: true,  // Always collect HAR
-        collectCoverage: shouldRunCoverage,
-    });
-
-    // Phase 3: conditionally collect code after coverage/har gates
-    let resources = undefined;
-    if (shouldRunCode) {
-        let codeRequests = [];
-        if (Array.isArray(harHeavy?.log?.entries)) {
-            codeRequests = harHeavy.log.entries.map(e => e.request?.url).filter(Boolean);
-        } else if (Array.isArray(perfEntries)) {
-            codeRequests = perfEntries
-                .filter(e => e.entryType === 'resource' && (e.initiatorType === 'script' || e.initiatorType === 'link'))
-                .map(e => e.name)
-                .filter(Boolean);
-        }
-        console.log(`   Collecting code for ${codeRequests.length} resources...`);
-        const { codeFiles } = await getCode(pageUrl, deviceType, codeRequests, options);
-        resources = codeFiles;
-    }
-
-    // Apply rules (cached when available)
-    const report = merge(pageUrl, deviceType);
-    const { summary: rulesSummary, fromCache } = await applyRules(
-        pageUrl,
-        deviceType,
-        options,
-        { crux, psi, har: (harHeavy && harHeavy.log ? harHeavy : { log: { entries: [] } }), perfEntries, resources, fullHtml, jsApi, report }
-    );
-    if (fromCache) {
-        console.log('✓ Loaded rules from cache. Estimated token size: ~', estimateTokenSize(rulesSummary, options.model));
-    } else {
-        console.log('✅ Processed rules. Estimated token size: ~', estimateTokenSize(rulesSummary, options.model));
-    }
-
-    const cms = detectAEMVersion(harHeavy?.log?.entries?.[0]?.headers, fullHtml || resources[pageUrl]);
-    console.log('AEM Version:', cms);
-
-    // Create LLM instance and compute token limits
-    const llm = LLMFactory.createLLM(options.model, options.llmOptions || {});
-    const tokenLimits = getTokenLimits(options.model);
-
-    // Assemble page data for prompts/agents
-    const pageData = {
-        pageUrl,
-        deviceType,
-        cms,
-        rulesSummary,
-        resources,
-        crux,
-        psi,
-        rum,
-        perfEntries,
-        har: (harHeavy && harHeavy.log ? harHeavy : { log: { entries: [] } }),
-        coverageData,
-        cruxSummary,
-        psiSummary,
-        rumSummary,
-        perfEntriesSummary,
-        harSummary,
-        coverageDataSummary,
-        fullHtml,
-        thirdPartyAnalysis,
-        clsAttribution,
-    };
-
-    // Execute flow (force conditional multi-agent mode)
-    const result = await runMultiAgents(pageData, tokenLimits, llm, options.model);
-
-    // Persist a copy labeled under agent action
-    cacheResults(pageUrl, deviceType, 'report', result, '', options.model);
-
-    const markdownData = extractMarkdownSuggestions(result);
-    const path = cacheResults(pageUrl, deviceType, 'report', markdownData, '', options.model);
-    console.log('✅ CWV report generated at:', path);
-    
-    // Extract and save structured JSON if present
-    const structuredData = extractStructuredSuggestions(result, pageUrl, deviceType);
-    if (structuredData) {
-      const suggestionPath = cacheResults(pageUrl, deviceType, 'suggestions', structuredData, '', options.model);
-      console.log('✅ Structured suggestions saved at:', suggestionPath);
-    }
-    return result;
-}
+// ============================================================================
+// Export Utility Functions (still in this file, to be refactored in future phases)
+// ============================================================================
+export {
+    extractMarkdownSuggestions,
+    collectQualityMetrics,
+    generateRunId,
+    reduceAgentOutputs
+};

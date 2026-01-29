@@ -22,8 +22,6 @@ export function validateFindings(findings, causalGraph, config = {}) {
     strictMode = false,            // Strict validation (block warnings too)
   } = config;
 
-  console.log('- validating findings...');
-
   // Run validation on all findings
   const validationResults = validateAllFindings(findings, causalGraph);
 
@@ -94,7 +92,7 @@ export function validateFindings(findings, causalGraph, config = {}) {
   });
 
   // Log validation summary
-  console.log(`✅ Validation: ${approved.length} approved, ${adjusted.length} adjusted, ${blocked.length} blocked`);
+  console.log(`✅ Findings Validation: ${approved.length} approved, ${adjusted.length} adjusted, ${blocked.length} blocked`);
 
   if (blocked.length > 0) {
     console.log('   Blocked findings:');
@@ -102,13 +100,6 @@ export function validateFindings(findings, causalGraph, config = {}) {
       console.log(`   - ${b.finding.id}: ${b.issues[0]}`);
     });
   }
-
-  // if (adjusted.length > 0) {
-  //   console.log('   Adjusted findings:');
-  //   adjusted.forEach(a => {
-  //     console.log(`   - ${a.finding.id}: ${a.warnings[0] || 'Impact adjusted'}`);
-  //   });
-  // }
 
   // Return validated findings
   return {

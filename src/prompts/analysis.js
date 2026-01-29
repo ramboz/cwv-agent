@@ -720,6 +720,42 @@ For each relationship you identify, use this reasoning:
 4. **Use duplicates relationship**: Same issue from multiple agents
 5. **Compound relationships**: Multiple findings → one symptom
 6. **Strength reflects confidence**: Be honest about uncertainty
+7. **Connect Configuration → Waste → Performance** (Orphan Prevention):
+   - Coverage findings about third-party scripts are SYMPTOMS, not root causes
+   - Look for HTML findings about script loading attributes (async/defer, preconnect)
+   - Create edge chain: html-third-party-loading → coverage-js-third-party → metric-tbt
+   - Example: html-onetrust-blocking ("No async on otBannerSdk.js") → coverage-js-third-party-1 ("119KB otBannerSdk with unused code") → metric-tbt ("430ms TBT")
+8. **Every finding needs edges** (Orphan Prevention):
+   - If finding describes "large file" or "unused code" → it's a symptom → needs incoming edge from config/code finding
+   - If finding describes "missing attribute" or "poor config" → it's a root cause → needs outgoing edge to waste/perf finding
+   - Orphaned nodes indicate missing data or incomplete analysis
+
+## Critical: Edge Direction Rules ⚠️
+
+**Always create edges in this direction**: **Fundamental Cause → Observed Effect**
+
+Common patterns to follow:
+
+1. **Code patterns → Performance observations**
+   - ✅ CORRECT: code-pattern-id → perf-observation-id
+   - ❌ WRONG: perf-observation-id → code-pattern-id
+   - Example: "Code review finds render-blocking script" → "Perf Observer sees 420ms delay"
+
+2. **Configuration issues → Metric failures**
+   - ✅ CORRECT: html-missing-preload → har-slow-fetch → metric-lcp
+   - ❌ WRONG: metric-lcp → html-missing-preload
+
+3. **Hypotheses (Code Agent) → Facts (Perf/HAR Agent)**
+   - ✅ CORRECT: code-js-cloudflare-1 (hypothesis: "scripts likely block") → perf-inp-1 (fact: "1.5s long task observed")
+   - ❌ WRONG: perf-inp-1 (observation) → code-js-cloudflare-1 (explanation)
+   - **Rule**: When Code Agent hypothesizes about a pattern and Perf/HAR Agent observes the actual impact, the code pattern is the cause, the observation is the effect
+
+4. **Root cause checking**:
+   - If finding A describes "why" something happens → A is likely a cause
+   - If finding B describes "what" happens → B is likely an effect
+   - Example: "Missing dimensions" (why) → "Layout shift" (what)
+
+**When in doubt**: Ask "Which happened first in the causal chain?" - that's the 'from' node.
 
 ## Your Task
 

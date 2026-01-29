@@ -2,24 +2,348 @@
 import puppeteerToIstanbul from 'puppeteer-to-istanbul';
 import PTI from 'puppeteer-to-istanbul/lib/puppeteer-to-istanbul.js';
 import { getFilePrefix } from '../../utils.js';
+import { LabDataCollector } from './base-collector.js';
+import { COVERAGE_THRESHOLDS } from '../../config/thresholds.js';
 
-// Code Coverage Collection Functions
+// CoverageCollector Class
+export class CoverageCollector extends LabDataCollector {
+  async setup(page) {
+    return Promise.all([
+      page.coverage.startJSCoverage({
+        includeRawScriptCoverage: true,
+        useBlockCoverage: false,
+      }),
+      page.coverage.startCSSCoverage(),
+    ]);
+  }
+
+  async collect(page, setupResult) {
+    const [jsCoverage, cssCoverage] = await Promise.all([
+      page.coverage.stopJSCoverage(),
+      page.coverage.stopCSSCoverage(),
+    ]);
+    return [...jsCoverage, ...cssCoverage];
+  }
+
+  summarize(coverageUsageAnalysis, options = {}) {
+    const error = this.validateOrDefault(
+      coverageUsageAnalysis,
+      'coverage usage analysis',
+      'No coverage data available for analysis.'
+    );
+    if (error) return error;
+
+    if (Object.keys(coverageUsageAnalysis).length === 0) {
+      return 'No coverage data available for analysis.';
+    }
+
+    // Calculate overall statistics
+    const stats = this.calculateCoverageStats(coverageUsageAnalysis);
+
+    // Group files by type (JS vs CSS)
+    const { jsFiles, cssFiles } = this.categorizeFilesByType(coverageUsageAnalysis);
+
+    // Add optimization recommendations
+    let markdownOutput = this.generateOptimizationRecommendations(stats, jsFiles, cssFiles);
+
+    // Add JavaScript files section
+    if (jsFiles.length > 0) {
+      const problematicJsFiles = jsFiles.map(fileData => this.formatFileUsage(fileData, 'JavaScript')).filter(output => output);
+      if (problematicJsFiles.length > 0) {
+        markdownOutput += `### JavaScript Optimization Opportunities:\n\n${problematicJsFiles.join('')}\n`;
+      }
+    }
+
+    // Add CSS files section
+    if (cssFiles.length > 0) {
+      const problematicCssFiles = cssFiles.map(fileData => this.formatFileUsage(fileData, 'CSS')).filter(output => output);
+      if (problematicCssFiles.length > 0) {
+        markdownOutput += `### CSS Optimization Opportunities:\n\n${problematicCssFiles.join('')}\n`;
+      }
+    }
+
+    return markdownOutput;
+  }
+
+  // Coverage-specific helper methods
+  calculateCoverageStats(coverageUsageAnalysis) {
+    let totalSegments = 0;
+    let preLcp = 0;
+    let postLcp = 0;
+    let unused = 0;
+
+    // Critical Gap Fix: Track byte-level stats across all files
+    let totalBytes = 0;
+    let usedBytes = 0;
+    let preLcpBytes = 0;
+    let postLcpBytes = 0;
+
+    Object.values(coverageUsageAnalysis).forEach(fileData => {
+      // Add file-level byte stats if available
+      if (fileData._bytes) {
+        totalBytes += fileData._bytes.total;
+        usedBytes += fileData._bytes.used;
+        preLcpBytes += fileData._bytes.preLcp;
+        postLcpBytes += fileData._bytes.postLcp;
+      }
+
+      Object.entries(fileData).forEach(([key, value]) => {
+        // Skip metadata fields
+        if (key.startsWith('_')) return;
+
+        totalSegments++;
+
+        // Handle both old format (string) and new format (object)
+        const usage = typeof value === 'string' ? value : value.usage;
+
+        switch (usage) {
+          case 'pre-lcp':
+            preLcp++;
+            break;
+          case 'post-lcp':
+            postLcp++;
+            break;
+          case 'not-used':
+            unused++;
+            break;
+        }
+      });
+    });
+
+    const preLcpPercent = this.percentage(preLcp, totalSegments);
+    const postLcpPercent = this.percentage(postLcp, totalSegments);
+    const unusedPercent = this.percentage(unused, totalSegments);
+
+    return {
+      totalFiles: Object.keys(coverageUsageAnalysis).length,
+      totalSegments,
+      preLcp,
+      postLcp,
+      unused,
+      preLcpPercent,
+      postLcpPercent,
+      unusedPercent,
+      // Critical Gap Fix: Add byte-level totals
+      bytes: totalBytes > 0 ? {
+        total: totalBytes,
+        used: usedBytes,
+        unused: totalBytes - usedBytes,
+        preLcp: preLcpBytes,
+        postLcp: postLcpBytes,
+        unusedPercent: this.percentage(totalBytes - usedBytes, totalBytes),
+        preLcpPercent: this.percentage(preLcpBytes, totalBytes),
+        postLcpPercent: this.percentage(postLcpBytes, totalBytes)
+      } : null
+    };
+  }
+
+  categorizeFilesByType(coverageUsageAnalysis) {
+    const jsFiles = [];
+    const cssFiles = [];
+
+    Object.entries(coverageUsageAnalysis).forEach(([filePath, fileData]) => {
+      const fileStats = this.calculateFileStats(fileData);
+      const fileInfo = {
+        path: filePath,
+        data: fileData,
+        stats: fileStats
+      };
+
+      // Determine file type based on extension or content
+      if (filePath.includes('.css')) {
+        cssFiles.push(fileInfo);
+      } else {
+        jsFiles.push(fileInfo);
+      }
+    });
+
+    return { jsFiles, cssFiles };
+  }
+
+  calculateFileStats(fileData) {
+    // Extract byte stats if available (added in critical gap fix)
+    const byteStats = fileData._bytes || null;
+
+    // Filter out metadata fields (start with _)
+    const segments = Object.entries(fileData)
+      .filter(([key]) => !key.startsWith('_'))
+      .map(([key, value]) => {
+        // Handle both old format (string) and new format (object)
+        if (typeof value === 'string') {
+          return { usage: value, executionCount: 0 };
+        }
+        return value;
+      });
+
+    const preLcp = segments.filter(seg => seg.usage === 'pre-lcp').length;
+    const postLcp = segments.filter(seg => seg.usage === 'post-lcp').length;
+    const unused = segments.filter(seg => seg.usage === 'not-used').length;
+    const total = segments.length;
+
+    // Find hot paths (frequently executed functions)
+    const hotPaths = segments
+      .filter(seg => seg.executionCount > 10)  // Executed more than 10 times
+      .sort((a, b) => b.executionCount - a.executionCount)
+      .slice(0, 5);  // Top 5
+
+    return {
+      total,
+      preLcp,
+      preLcpPercent: this.percentage(preLcp, total),
+      postLcp,
+      postLcpPercent: this.percentage(postLcp, total),
+      unused,
+      unusedPercent: this.percentage(unused, total),
+      // Critical Gap Fix: Add byte-level stats
+      bytes: byteStats,
+      hotPaths: hotPaths.length > 0 ? hotPaths : null
+    };
+  }
+
+  formatFileUsage(fileInfo, fileType) {
+    const { path, data, stats } = fileInfo;
+
+    // REMOVED: No longer exclude minified files - they're production code and need analysis
+    // Old code: if (path.includes('.min.')) { return ''; }
+
+    // Skip files with good efficiency (< ACCEPTABLE_UNUSED and good LCP balance)
+    if (stats.unusedPercent < COVERAGE_THRESHOLDS.ACCEPTABLE_UNUSED && (stats.preLcp >= stats.postLcp || !fileInfo._isLoadedPreLcp)) {
+      return '';
+    }
+
+    let output;
+    try {
+      const pathname = new URL(path).pathname;
+      const isMinified = path.includes('.min.');
+
+      // Critical Gap Fix: Show file size in KB and byte-level breakdown
+      let sizeInfo = '';
+      if (stats.bytes) {
+        const totalKB = this.formatBytes(stats.bytes.total, 0).replace(' ', '');
+        const unusedKB = this.formatBytes(stats.bytes.unused, 0).replace(' ', '');
+        const preLcpKB = this.formatBytes(stats.bytes.preLcp, 0).replace(' ', '');
+        const postLcpKB = this.formatBytes(stats.bytes.postLcp, 0).replace(' ', '');
+        sizeInfo = ` (${totalKB}): ${stats.bytes.unusedPercent}% unused (${unusedKB}), ${stats.bytes.preLcpPercent}% pre-LCP (${preLcpKB}), ${stats.bytes.postLcpPercent}% post-LCP (${postLcpKB})`;
+      } else {
+        // Fallback to old format if byte stats not available
+        sizeInfo = `: ${stats.postLcpPercent}% post LCP / ${stats.unusedPercent}% unused`;
+      }
+
+      output = `- \`${pathname}\`${isMinified ? ' (minified)' : ''}${sizeInfo}`;
+    } catch (err) {
+      return '';
+    }
+
+    if (stats.postLcp > stats.preLcp) {
+      output += ` (consider code splitting to defer post-LCP code)`;
+    }
+
+    // Show top 10 post-LCP segments (increased from 5 to avoid data loss)
+    // Handle both old format (string) and new format (object with {usage, executionCount})
+    const postLcpSegments = Object.entries(data)
+      .filter(([key, value]) => {
+        if (key.startsWith('_')) return false;  // Skip metadata
+        const usage = typeof value === 'string' ? value : value.usage;
+        return usage === 'post-lcp';
+      })
+      .slice(0, 10);
+
+    if (postLcpSegments.length > 0) {
+      const segments = postLcpSegments.map(([segment]) => segment.split(':')[0]).join(', ').replaceAll('\n', '');
+      output += `\n    - Defer: ${segments}`;
+      if (stats.postLcp > 10) {
+        output += ` +${stats.postLcp - 10} more`;
+      }
+    }
+
+    // Show top 10 unused segments (increased from 5 to avoid data loss)
+    const unusedSegments = Object.entries(data)
+      .filter(([key, value]) => {
+        if (key.startsWith('_')) return false;  // Skip metadata
+        const usage = typeof value === 'string' ? value : value.usage;
+        return usage === 'not-used';
+      })
+      .slice(0, 10);
+
+    if (unusedSegments.length > 0) {
+      const segments = unusedSegments.map(([segment]) => segment.split(':')[0]).join(', ').replaceAll('\n', '');
+      output += `\n    - Remove: ${segments}`;
+      if (stats.unused > 10) {
+        output += ` +${stats.unused - 10} more`;
+      }
+    }
+
+    // Critical Gap Fix: Show hot paths if available (frequently executed functions)
+    if (stats.hotPaths && stats.hotPaths.length > 0 && fileType === 'JavaScript') {
+      output += `\n    - Hot paths (high execution): `;
+      const hotPathList = stats.hotPaths
+        .map(hp => {
+          const funcName = Object.keys(data).find(key => {
+            const value = data[key];
+            return (typeof value === 'object' && value.executionCount === hp.executionCount);
+          });
+          return funcName ? `${funcName.split(':')[0]} (${hp.executionCount}x)` : null;
+        })
+        .filter(Boolean)
+        .join(', ');
+      output += hotPathList;
+    }
+
+    output += `\n`;
+    return output;
+  }
+
+  generateOptimizationRecommendations(stats, jsFiles, cssFiles) {
+    const recommendations = [];
+
+    // Critical Gap Fix: Add byte-level summary if available
+    let bytesSummary = '';
+    if (stats.bytes) {
+      const totalKB = this.formatBytes(stats.bytes.total, 0).replace(' ', '');
+      const unusedKB = this.formatBytes(stats.bytes.unused, 0).replace(' ', '');
+      const preLcpKB = this.formatBytes(stats.bytes.preLcp, 0).replace(' ', '');
+      const postLcpKB = this.formatBytes(stats.bytes.postLcp, 0).replace(' ', '');
+      bytesSummary = `\n**Total Code Size**: ${totalKB} (${unusedKB} unused, ${preLcpKB} pre-LCP, ${postLcpKB} post-LCP)\n`;
+    }
+
+    // Critical unused code
+    if (stats.unusedPercent > 30) {
+      const wasteKB = stats.bytes ? `(${this.formatBytes(stats.bytes.unused, 0).replace(' ', '')} wasted)` : '';
+      recommendations.push(`**Critical**: ${stats.unusedPercent}% unused code ${wasteKB} - implement tree-shaking and code splitting`);
+    } else if (stats.unusedPercent > COVERAGE_THRESHOLDS.WARNING_UNUSED) {
+      const wasteKB = stats.bytes ? `(${this.formatBytes(stats.bytes.unused, 0).replace(' ', '')} wasted)` : '';
+      recommendations.push(`**Optimize**: ${stats.unusedPercent}% unused code ${wasteKB} - review and remove dead code`);
+    }
+
+    // LCP optimization
+    if (stats.preLcpPercent < 40) {
+      recommendations.push(`**LCP**: Only ${stats.preLcpPercent}% pre-LCP code - defer non-critical resources`);
+    }
+
+    // File-specific actions
+    const heavilyUnusedFiles = [...jsFiles, ...cssFiles].filter(file => file.stats.unusedPercent > COVERAGE_THRESHOLDS.ACCEPTABLE_UNUSED);
+    if (heavilyUnusedFiles.length > 0) {
+      const fileNames = heavilyUnusedFiles.slice(0, 3).map(file => file.path.split('/').pop()).join(', ');
+      recommendations.push(`**Files**: ${fileNames} have >${COVERAGE_THRESHOLDS.ACCEPTABLE_UNUSED}% unused code - consider removal`);
+    }
+
+    if (recommendations.length === 0) {
+      return bytesSummary + '**Good**: Code coverage is well optimized\n';
+    }
+
+    return bytesSummary + recommendations.map(rec => `${rec}\n`).join('');
+  }
+}
+
+// Code Coverage Collection Functions (backward compatible exports)
 export async function setupCodeCoverage(page) {
-  return Promise.all([
-    page.coverage.startJSCoverage({
-      includeRawScriptCoverage: true,
-      useBlockCoverage: false,
-    }),
-    page.coverage.startCSSCoverage(),
-  ]);
+  const collector = new CoverageCollector();
+  return collector.setup(page);
 }
 
 export async function collectCodeCoverage(page) {
-  const [jsCoverage, cssCoverage] = await Promise.all([
-    page.coverage.stopJSCoverage(),
-    page.coverage.stopCSSCoverage(),
-  ]);
-  return [...jsCoverage, ...cssCoverage];
+  const collector = new CoverageCollector();
+  return collector.collect(page, null);
 }
 
 export async function collectLcpCoverage(page, pageUrl, deviceType) {
@@ -53,36 +377,8 @@ export async function collectPageCoverage(page, pageUrl, deviceType, lcpCoverage
  * @returns {string} Markdown formatted coverage summary
  */
 export function summarizeCoverageData(coverageUsageAnalysis, deviceType) {
-  if (!coverageUsageAnalysis || Object.keys(coverageUsageAnalysis).length === 0) {
-    return 'No coverage data available for analysis.';
-  }
-
-  // Calculate overall statistics
-  const stats = calculateCoverageStats(coverageUsageAnalysis);
-
-  // Group files by type (JS vs CSS)
-  const { jsFiles, cssFiles } = categorizeFilesByType(coverageUsageAnalysis);
-
-  // Add optimization recommendations
-  let markdownOutput = generateOptimizationRecommendations(stats, jsFiles, cssFiles);
-
-  // Add JavaScript files section
-  if (jsFiles.length > 0) {
-    const problematicJsFiles = jsFiles.map(fileData => formatFileUsage(fileData, 'JavaScript')).filter(output => output);
-    if (problematicJsFiles.length > 0) {
-      markdownOutput += `### JavaScript Optimization Opportunities:\n\n${problematicJsFiles.join('')}\n`;
-    }
-  }
-
-  // Add CSS files section
-  if (cssFiles.length > 0) {
-    const problematicCssFiles = cssFiles.map(fileData => formatFileUsage(fileData, 'CSS')).filter(output => output);
-    if (problematicCssFiles.length > 0) {
-      markdownOutput += `### CSS Optimization Opportunities:\n\n${problematicCssFiles.join('')}\n`;
-    }
-  }
-
-  return markdownOutput;
+  const collector = new CoverageCollector(deviceType);
+  return collector.summarize(coverageUsageAnalysis);
 }
 
 /**
@@ -247,274 +543,7 @@ export function mergeCoverage(report1Entries, report2Entries) {
   return Array.from(mergedCoverageMap.values());
 }
 
-// Helper functions for coverage analysis
-function calculateCoverageStats(coverageUsageAnalysis) {
-  let totalSegments = 0;
-  let preLcp = 0;
-  let postLcp = 0;
-  let unused = 0;
-
-  // Critical Gap Fix: Track byte-level stats across all files
-  let totalBytes = 0;
-  let usedBytes = 0;
-  let preLcpBytes = 0;
-  let postLcpBytes = 0;
-
-  Object.values(coverageUsageAnalysis).forEach(fileData => {
-    // Add file-level byte stats if available
-    if (fileData._bytes) {
-      totalBytes += fileData._bytes.total;
-      usedBytes += fileData._bytes.used;
-      preLcpBytes += fileData._bytes.preLcp;
-      postLcpBytes += fileData._bytes.postLcp;
-    }
-
-    Object.entries(fileData).forEach(([key, value]) => {
-      // Skip metadata fields
-      if (key.startsWith('_')) return;
-
-      totalSegments++;
-
-      // Handle both old format (string) and new format (object)
-      const usage = typeof value === 'string' ? value : value.usage;
-
-      switch (usage) {
-        case 'pre-lcp':
-          preLcp++;
-          break;
-        case 'post-lcp':
-          postLcp++;
-          break;
-        case 'not-used':
-          unused++;
-          break;
-      }
-    });
-  });
-
-  const preLcpPercent = totalSegments > 0 ? Math.round((preLcp / totalSegments) * 100) : 0;
-  const postLcpPercent = totalSegments > 0 ? Math.round((postLcp / totalSegments) * 100) : 0;
-  const unusedPercent = totalSegments > 0 ? Math.round((unused / totalSegments) * 100) : 0;
-
-  return {
-    totalFiles: Object.keys(coverageUsageAnalysis).length,
-    totalSegments,
-    preLcp,
-    postLcp,
-    unused,
-    preLcpPercent,
-    postLcpPercent,
-    unusedPercent,
-    // Critical Gap Fix: Add byte-level totals
-    bytes: totalBytes > 0 ? {
-      total: totalBytes,
-      used: usedBytes,
-      unused: totalBytes - usedBytes,
-      preLcp: preLcpBytes,
-      postLcp: postLcpBytes,
-      unusedPercent: Math.round(((totalBytes - usedBytes) / totalBytes) * 100),
-      preLcpPercent: Math.round((preLcpBytes / totalBytes) * 100),
-      postLcpPercent: Math.round((postLcpBytes / totalBytes) * 100)
-    } : null
-  };
-}
-
-function categorizeFilesByType(coverageUsageAnalysis) {
-  const jsFiles = [];
-  const cssFiles = [];
-
-  Object.entries(coverageUsageAnalysis).forEach(([filePath, fileData]) => {
-    const fileStats = calculateFileStats(fileData);
-    const fileInfo = {
-      path: filePath,
-      data: fileData,
-      stats: fileStats
-    };
-
-    // Determine file type based on extension or content
-    if (filePath.includes('.css')) {
-      cssFiles.push(fileInfo);
-    } else {
-      jsFiles.push(fileInfo);
-    }
-  });
-
-  return { jsFiles, cssFiles };
-}
-
-function calculateFileStats(fileData) {
-  // Extract byte stats if available (added in critical gap fix)
-  const byteStats = fileData._bytes || null;
-
-  // Filter out metadata fields (start with _)
-  const segments = Object.entries(fileData)
-    .filter(([key]) => !key.startsWith('_'))
-    .map(([key, value]) => {
-      // Handle both old format (string) and new format (object)
-      if (typeof value === 'string') {
-        return { usage: value, executionCount: 0 };
-      }
-      return value;
-    });
-
-  const preLcp = segments.filter(seg => seg.usage === 'pre-lcp').length;
-  const postLcp = segments.filter(seg => seg.usage === 'post-lcp').length;
-  const unused = segments.filter(seg => seg.usage === 'not-used').length;
-  const total = segments.length;
-
-  // Find hot paths (frequently executed functions)
-  const hotPaths = segments
-    .filter(seg => seg.executionCount > 10)  // Executed more than 10 times
-    .sort((a, b) => b.executionCount - a.executionCount)
-    .slice(0, 5);  // Top 5
-
-  return {
-    total,
-    preLcp,
-    preLcpPercent: total > 0 ? Math.round((preLcp / total) * 100) : 0,
-    postLcp,
-    postLcpPercent: total > 0 ? Math.round((postLcp / total) * 100) : 0,
-    unused,
-    unusedPercent: total > 0 ? Math.round((unused / total) * 100) : 0,
-    // Critical Gap Fix: Add byte-level stats
-    bytes: byteStats,
-    hotPaths: hotPaths.length > 0 ? hotPaths : null
-  };
-}
-
-function formatFileUsage(fileInfo, fileType) {
-  const { path, data, stats } = fileInfo;
-
-  // REMOVED: No longer exclude minified files - they're production code and need analysis
-  // Old code: if (path.includes('.min.')) { return ''; }
-
-  // Skip files with good efficiency (< 50% unused and good LCP balance)
-  if (stats.unusedPercent < 50 && (stats.preLcp >= stats.postLcp || !fileInfo._isLoadedPreLcp)) {
-    return '';
-  }
-
-  let output;
-  try {
-    const pathname = new URL(path).pathname;
-    const isMinified = path.includes('.min.');
-
-    // Critical Gap Fix: Show file size in KB and byte-level breakdown
-    let sizeInfo = '';
-    if (stats.bytes) {
-      const totalKB = Math.round(stats.bytes.total / 1024);
-      const unusedKB = Math.round(stats.bytes.unused / 1024);
-      const preLcpKB = Math.round(stats.bytes.preLcp / 1024);
-      const postLcpKB = Math.round(stats.bytes.postLcp / 1024);
-      sizeInfo = ` (${totalKB}KB): ${stats.bytes.unusedPercent}% unused (${unusedKB}KB), ${stats.bytes.preLcpPercent}% pre-LCP (${preLcpKB}KB), ${stats.bytes.postLcpPercent}% post-LCP (${postLcpKB}KB)`;
-    } else {
-      // Fallback to old format if byte stats not available
-      sizeInfo = `: ${stats.postLcpPercent}% post LCP / ${stats.unusedPercent}% unused`;
-    }
-
-    output = `- \`${pathname}\`${isMinified ? ' (minified)' : ''}${sizeInfo}`;
-  } catch (err) {
-    return '';
-  }
-
-  if (stats.postLcp > stats.preLcp) {
-    output += ` (consider code splitting to defer post-LCP code)`;
-  }
-
-  // Show top 10 post-LCP segments (increased from 5 to avoid data loss)
-  // Handle both old format (string) and new format (object with {usage, executionCount})
-  const postLcpSegments = Object.entries(data)
-    .filter(([key, value]) => {
-      if (key.startsWith('_')) return false;  // Skip metadata
-      const usage = typeof value === 'string' ? value : value.usage;
-      return usage === 'post-lcp';
-    })
-    .slice(0, 10);
-
-  if (postLcpSegments.length > 0) {
-    const segments = postLcpSegments.map(([segment]) => segment.split(':')[0]).join(', ').replaceAll('\n', '');
-    output += `\n    - Defer: ${segments}`;
-    if (stats.postLcp > 10) {
-      output += ` +${stats.postLcp - 10} more`;
-    }
-  }
-
-  // Show top 10 unused segments (increased from 5 to avoid data loss)
-  const unusedSegments = Object.entries(data)
-    .filter(([key, value]) => {
-      if (key.startsWith('_')) return false;  // Skip metadata
-      const usage = typeof value === 'string' ? value : value.usage;
-      return usage === 'not-used';
-    })
-    .slice(0, 10);
-
-  if (unusedSegments.length > 0) {
-    const segments = unusedSegments.map(([segment]) => segment.split(':')[0]).join(', ').replaceAll('\n', '');
-    output += `\n    - Remove: ${segments}`;
-    if (stats.unused > 10) {
-      output += ` +${stats.unused - 10} more`;
-    }
-  }
-
-  // Critical Gap Fix: Show hot paths if available (frequently executed functions)
-  if (stats.hotPaths && stats.hotPaths.length > 0 && fileType === 'js') {
-    output += `\n    - Hot paths (high execution): `;
-    const hotPathList = stats.hotPaths
-      .map(hp => {
-        const funcName = Object.keys(data).find(key => {
-          const value = data[key];
-          return (typeof value === 'object' && value.executionCount === hp.executionCount);
-        });
-        return funcName ? `${funcName.split(':')[0]} (${hp.executionCount}x)` : null;
-      })
-      .filter(Boolean)
-      .join(', ');
-    output += hotPathList;
-  }
-
-  output += `\n`;
-  return output;
-}
-
-function generateOptimizationRecommendations(stats, jsFiles, cssFiles) {
-  const recommendations = [];
-
-  // Critical Gap Fix: Add byte-level summary if available
-  let bytesSummary = '';
-  if (stats.bytes) {
-    const totalKB = Math.round(stats.bytes.total / 1024);
-    const unusedKB = Math.round(stats.bytes.unused / 1024);
-    const preLcpKB = Math.round(stats.bytes.preLcp / 1024);
-    const postLcpKB = Math.round(stats.bytes.postLcp / 1024);
-    bytesSummary = `\n**Total Code Size**: ${totalKB}KB (${unusedKB}KB unused, ${preLcpKB}KB pre-LCP, ${postLcpKB}KB post-LCP)\n`;
-  }
-
-  // Critical unused code
-  if (stats.unusedPercent > 30) {
-    const wasteKB = stats.bytes ? `(${Math.round(stats.bytes.unused / 1024)}KB wasted)` : '';
-    recommendations.push(`**Critical**: ${stats.unusedPercent}% unused code ${wasteKB} - implement tree-shaking and code splitting`);
-  } else if (stats.unusedPercent > 15) {
-    const wasteKB = stats.bytes ? `(${Math.round(stats.bytes.unused / 1024)}KB wasted)` : '';
-    recommendations.push(`**Optimize**: ${stats.unusedPercent}% unused code ${wasteKB} - review and remove dead code`);
-  }
-
-  // LCP optimization
-  if (stats.preLcpPercent < 40) {
-    recommendations.push(`**LCP**: Only ${stats.preLcpPercent}% pre-LCP code - defer non-critical resources`);
-  }
-
-  // File-specific actions
-  const heavilyUnusedFiles = [...jsFiles, ...cssFiles].filter(file => file.stats.unusedPercent > 50);
-  if (heavilyUnusedFiles.length > 0) {
-    const fileNames = heavilyUnusedFiles.slice(0, 3).map(file => file.path.split('/').pop()).join(', ');
-    recommendations.push(`**Files**: ${fileNames} have >50% unused code - consider removal`);
-  }
-
-  if (recommendations.length === 0) {
-    return bytesSummary + '**Good**: Code coverage is well optimized\n';
-  }
-
-  return bytesSummary + recommendations.map(rec => `${rec}\n`).join('');
-}
+// Helper functions for coverage analysis (keep for analyzeJSCoverage and analyzeCSSCoverage)
 
 function analyzeJSCoverage(lcpEntry, pageEntry, fileResult) {
   const lcpFunctions = new Map();
@@ -606,15 +635,16 @@ function analyzeJSCoverage(lcpEntry, pageEntry, fileResult) {
   }
 
   // Store file-level byte stats
+  const collector = new CoverageCollector();
   fileResult._bytes = {
     total: totalBytes,
     used: usedBytes,
     unused: totalBytes - usedBytes,
     preLcp: preLcpBytes,
     postLcp: postLcpBytes,
-    unusedPercent: totalBytes > 0 ? Math.round(((totalBytes - usedBytes) / totalBytes) * 100) : 0,
-    preLcpPercent: totalBytes > 0 ? Math.round((preLcpBytes / totalBytes) * 100) : 0,
-    postLcpPercent: totalBytes > 0 ? Math.round((postLcpBytes / totalBytes) * 100) : 0
+    unusedPercent: collector.percentage(totalBytes - usedBytes, totalBytes),
+    preLcpPercent: collector.percentage(preLcpBytes, totalBytes),
+    postLcpPercent: collector.percentage(postLcpBytes, totalBytes)
   };
 }
 
@@ -679,15 +709,16 @@ function analyzeCSSCoverage(lcpEntry, pageEntry, fileResult) {
   });
 
   // Store file-level byte stats
+  const collector = new CoverageCollector();
   fileResult._bytes = {
     total: totalBytes,
     used: usedBytes,
     unused: totalBytes - usedBytes,
     preLcp: preLcpBytes,
     postLcp: postLcpBytes,
-    unusedPercent: totalBytes > 0 ? Math.round(((totalBytes - usedBytes) / totalBytes) * 100) : 0,
-    preLcpPercent: totalBytes > 0 ? Math.round((preLcpBytes / totalBytes) * 100) : 0,
-    postLcpPercent: totalBytes > 0 ? Math.round((postLcpBytes / totalBytes) * 100) : 0
+    unusedPercent: collector.percentage(totalBytes - usedBytes, totalBytes),
+    preLcpPercent: collector.percentage(preLcpBytes, totalBytes),
+    postLcpPercent: collector.percentage(postLcpBytes, totalBytes)
   };
 }
 

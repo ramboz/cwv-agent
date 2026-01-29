@@ -1,4 +1,5 @@
 import { cacheResults, getCachedResults } from '../utils.js';
+import { CWV_METRICS } from '../config/thresholds.js';
 
 // Helper function for consistent formatting and threshold checking
 function checkMetric(metricName, value, good, needsImprovement) {
@@ -23,18 +24,18 @@ export function summarize(cruxData) {
   let report = `**URL:** ${url}\n**Form Factor:** ${formFactor}\n\n**Bottlenecks:**\n\n`;
   let hasBottlenecks = false;
 
-  // Analyze Core Web Vitals and other metrics
-  report += checkMetric('Largest Contentful Paint (LCP)', m.largest_contentful_paint?.percentiles?.p75, 2500, 4000);
-  report += checkMetric('First Contentful Paint (FCP)', m.first_contentful_paint?.percentiles?.p75, 1800, 3000);
-  report += checkMetric('Interaction to Next Paint (INP)', m.interaction_to_next_paint?.percentiles?.p75, 200, 500);
-  report += checkMetric('Cumulative Layout Shift (CLS)', parseFloat(m.cumulative_layout_shift?.percentiles?.p75), 0.1, 0.25);
-  report += checkMetric('Time to First Byte (TTFB)', m.experimental_time_to_first_byte?.percentiles?.p75, 800, 1800);
-  report += checkMetric('Round Trip Time (RTT)', m.round_trip_time?.percentiles?.p75, 150, 600);
+  // Analyze Core Web Vitals and other metrics - Using centralized thresholds from config
+  report += checkMetric('Largest Contentful Paint (LCP)', m.largest_contentful_paint?.percentiles?.p75, CWV_METRICS.LCP.good, CWV_METRICS.LCP.needsImprovement);
+  report += checkMetric('First Contentful Paint (FCP)', m.first_contentful_paint?.percentiles?.p75, CWV_METRICS.FCP.good, CWV_METRICS.FCP.needsImprovement);
+  report += checkMetric('Interaction to Next Paint (INP)', m.interaction_to_next_paint?.percentiles?.p75, CWV_METRICS.INP.good, CWV_METRICS.INP.needsImprovement);
+  report += checkMetric('Cumulative Layout Shift (CLS)', parseFloat(m.cumulative_layout_shift?.percentiles?.p75), CWV_METRICS.CLS.good, CWV_METRICS.CLS.needsImprovement);
+  report += checkMetric('Time to First Byte (TTFB)', m.experimental_time_to_first_byte?.percentiles?.p75, CWV_METRICS.TTFB.good, CWV_METRICS.TTFB.needsImprovement);
+  report += checkMetric('Round Trip Time (RTT)', m.round_trip_time?.percentiles?.p75, 150, 600); // RTT not in CWV_METRICS, keep original
 
 
-  // LCP Image Breakdown (if applicable)
-  const lcpStatus = m.largest_contentful_paint?.percentiles?.p75 > 4000 ? 'Poor' :
-                   m.largest_contentful_paint?.percentiles?.p75 > 2500 ? 'Needs Improvement' : 'Good';
+  // LCP Image Breakdown (if applicable) - Using centralized thresholds
+  const lcpStatus = m.largest_contentful_paint?.percentiles?.p75 > CWV_METRICS.LCP.needsImprovement ? 'Poor' :
+                   m.largest_contentful_paint?.percentiles?.p75 > CWV_METRICS.LCP.good ? 'Needs Improvement' : 'Good';
   if (lcpStatus !== 'Good' && m.largest_contentful_paint_resource_type?.fractions?.image > 0.75) {
     report += `\n* **LCP Image Details:**\n`;
     report += `    *  Load Delay: ${m.largest_contentful_paint_image_resource_load_delay?.percentiles?.p75}ms\n`;

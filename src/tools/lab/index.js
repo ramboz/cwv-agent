@@ -116,15 +116,38 @@ async function extractCwvRelevantHtml(page) {
       }));
 
     // Third-party scripts (often impact CWV)
-    const thirdPartyDomains = ['googletagmanager.com', 'google-analytics.com', 'facebook.net',
-                               'doubleclick.net', 'pushengage.com', 'hotjar.com', 'gtag'];
+    // Use hostname-based detection instead of hardcoded list for completeness
+    const categorizeScript = (hostname) => {
+      if (hostname.includes('cookielaw') || hostname.includes('onetrust')) return 'consent';
+      if (hostname.includes('gtm') || hostname.includes('analytics') || hostname.includes('googletagmanager')) return 'analytics';
+      if (hostname.includes('adobedtm') || hostname.includes('launch')) return 'tag-manager';
+      if (hostname.includes('facebook') || hostname.includes('twitter') || hostname.includes('linkedin')) return 'social';
+      if (hostname.includes('hotjar') || hostname.includes('fullstory') || hostname.includes('logrocket')) return 'monitoring';
+      return 'other';
+    };
+
     const thirdPartyScripts = Array.from(document.querySelectorAll('script[src]'))
-      .filter(s => thirdPartyDomains.some(d => s.src.includes(d)))
-      .map(s => ({
-        src: s.src,
-        async: s.async,
-        defer: s.defer
-      }));
+      .map(s => {
+        try {
+          const url = new URL(s.src);
+          const isThirdParty = url.hostname !== window.location.hostname;
+          return isThirdParty ? {
+            src: s.src,
+            hostname: url.hostname,
+            async: s.async,
+            defer: s.defer,
+            type: s.type || 'text/javascript',
+            category: categorizeScript(url.hostname),
+            // Track position in document (useful for identifying render-blocking)
+            inHead: document.head.contains(s),
+            // Size info would come from network data, but we can note if it's likely large
+            isLikelyLarge: s.src.length > 100 // Long URLs often indicate query params or large scripts
+          } : null;
+        } catch (e) {
+          return null;
+        }
+      })
+      .filter(Boolean);
 
     // Recommended Improvement: Comprehensive font strategy analysis
     const fontStrategy = {

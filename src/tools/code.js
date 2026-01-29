@@ -1,10 +1,6 @@
 import { cacheResults, getCachedResults, getRequestHeaders } from '../utils.js';
 import { Agent } from 'undici';
-
-// Filter resources that match our criteria
-// Denylist for JS/CSS from common libraries, frameworks, and third-party tools
-// (Images, fonts, etc. are already filtered out by the JS/CSS check)
-const DENYLIST_REGEX = /(granite|foundation|cq|core\.|wcm|jquery|lodash|moment|bootstrap|react\.|angular|vue\.|rxjs|three\.|videojs|chart|codemirror|ace|monaco|tinymce|ckeditor|gtag|googletag|google-analytics|analytics\.js|optimizely|segment|tealium|adobe-dtm|launch-|amplitude|mixpanel|heap|hotjar|leaflet|mapbox|googlemaps|facebook|twitter|linkedin|instagram|pinterest|stripe|paypal|braintree|polyfill|shim|brightcove|youtube|vimeo)/i;
+import { RESOURCE_DENYLIST_EXTENDED_REGEX } from '../config/regex-patterns.js';
 
 /**
  * Centralized resource inclusion policy for performance analysis
@@ -35,7 +31,7 @@ function shouldIncludeResource(requestUrl, baseUrl) {
 
   // 3. Reject resources matching denylist
   // Common libraries, frameworks, analytics tools that don't need analysis
-  if (DENYLIST_REGEX.test(pathname)) {
+  if (RESOURCE_DENYLIST_EXTENDED_REGEX.test(pathname)) {
     return false;
   }
 

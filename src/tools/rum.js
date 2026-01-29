@@ -1,5 +1,6 @@
 import { fetch } from 'undici';
 import { cacheResults, getCachedResults } from '../utils.js';
+import { CWV_METRICS } from '../config/thresholds.js';
 
 /**
  * Collects Real User Monitoring (RUM) data from Helix RUM Bundler
@@ -99,7 +100,7 @@ export async function collectRUMData(url, deviceType, options = {}) {
       summary.metrics.inp = {
         p75: p75INP,
         sampleSize: cwvMetrics.inp.length,
-        status: p75INP <= 200 ? 'good' : p75INP <= 500 ? 'needs-improvement' : 'poor',
+        status: p75INP <= CWV_METRICS.INP.good ? 'good' : p75INP <= CWV_METRICS.INP.needsImprovement ? 'needs-improvement' : 'poor',
         topSlow: cwvMetrics.inp
           .sort((a, b) => b.value - a.value)
           .slice(0, 10),
@@ -119,7 +120,7 @@ export async function collectRUMData(url, deviceType, options = {}) {
       summary.metrics.lcp = {
         p75: p75LCP,
         sampleSize: cwvMetrics.lcp.length,
-        status: p75LCP <= 2500 ? 'good' : p75LCP <= 4000 ? 'needs-improvement' : 'poor',
+        status: p75LCP <= CWV_METRICS.LCP.good ? 'good' : p75LCP <= CWV_METRICS.LCP.needsImprovement ? 'needs-improvement' : 'poor',
         topSlow: cwvMetrics.lcp
           .sort((a, b) => b.value - a.value)
           .slice(0, 10)
@@ -134,7 +135,7 @@ export async function collectRUMData(url, deviceType, options = {}) {
       summary.metrics.cls = {
         p75: p75CLS,
         sampleSize: cwvMetrics.cls.length,
-        status: p75CLS <= 0.1 ? 'good' : p75CLS <= 0.25 ? 'needs-improvement' : 'poor',
+        status: p75CLS <= CWV_METRICS.CLS.good ? 'good' : p75CLS <= CWV_METRICS.CLS.needsImprovement ? 'needs-improvement' : 'poor',
         topWorst: cwvMetrics.cls
           .sort((a, b) => b.value - a.value)
           .slice(0, 10)
@@ -149,7 +150,7 @@ export async function collectRUMData(url, deviceType, options = {}) {
       summary.metrics.ttfb = {
         p75: p75TTFB,
         sampleSize: cwvMetrics.ttfb.length,
-        status: p75TTFB <= 800 ? 'good' : p75TTFB <= 1800 ? 'needs-improvement' : 'poor',
+        status: p75TTFB <= CWV_METRICS.TTFB.good ? 'good' : p75TTFB <= CWV_METRICS.TTFB.needsImprovement ? 'needs-improvement' : 'poor',
         topSlow: cwvMetrics.ttfb
           .sort((a, b) => b.value - a.value)
           .slice(0, 10)
@@ -336,10 +337,10 @@ function analyzeByUrl(rumBundles, cwvMetrics) {
     .map(u => ({
       ...u,
       score: (
-        (u.inp ? u.inp / 200 : 0) +
-        (u.lcp ? u.lcp / 2500 : 0) +
-        (u.cls ? u.cls / 0.1 : 0) +
-        (u.ttfb ? u.ttfb / 800 : 0)
+        (u.inp ? u.inp / CWV_METRICS.INP.good : 0) +
+        (u.lcp ? u.lcp / CWV_METRICS.LCP.good : 0) +
+        (u.cls ? u.cls / CWV_METRICS.CLS.good : 0) +
+        (u.ttfb ? u.ttfb / CWV_METRICS.TTFB.good : 0)
       )
     }))
     .sort((a, b) => b.score - a.score)
@@ -442,7 +443,7 @@ export function summarizeRUM(rumData) {
     const statusIcon = metrics.cls.status === 'good' ? '✅' : metrics.cls.status === 'needs-improvement' ? '⚠️' : '❌';
     report += `* **CLS (Cumulative Layout Shift):** ${metrics.cls.p75.toFixed(3)} ${statusIcon} ${metrics.cls.status.toUpperCase()}\n`;
     report += `  * Sample size: ${metrics.cls.sampleSize} measurements\n`;
-    report += `  * Threshold: ≤0.1 (Good), ≤0.25 (Needs Improvement), >0.25 (Poor)\n`;
+    report += `  * Threshold: ≤${CWV_METRICS.CLS.good} (Good), ≤${CWV_METRICS.CLS.needsImprovement} (Needs Improvement), >${CWV_METRICS.CLS.needsImprovement} (Poor)\n`;
 
     if (metrics.cls.topWorst && metrics.cls.topWorst.length > 0) {
       report += `  * **Top 3 Worst:**\n`;
@@ -501,21 +502,21 @@ export function extractCrUXINP(cruxData) {
   const p75Value = inp.percentiles?.p75 || 0;
 
   let inpStatus = '✅ GOOD';
-  if (p75Value > 500) {
+  if (p75Value > CWV_METRICS.INP.needsImprovement) {
     inpStatus = '❌ POOR';
-  } else if (p75Value > 200) {
+  } else if (p75Value > CWV_METRICS.INP.good) {
     inpStatus = '⚠️ NEEDS IMPROVEMENT';
   }
 
   let report = `**INP Data (from CrUX - Field Data):**\n\n`;
   report += `* **p75 INP:** ${p75Value}ms ${inpStatus}\n`;
-  report += `  * Threshold: ≤200ms (Good), ≤500ms (Needs Improvement), >500ms (Poor)\n`;
+  report += `  * Threshold: ≤${CWV_METRICS.INP.good}ms (Good), ≤${CWV_METRICS.INP.needsImprovement}ms (Needs Improvement), >${CWV_METRICS.INP.needsImprovement}ms (Poor)\n`;
 
   // Distribution if available
   if (inp.histogram) {
     const good = inp.histogram.find(h => h.start === 0)?.density || 0;
-    const needsImprovement = inp.histogram.find(h => h.start === 200)?.density || 0;
-    const poor = inp.histogram.find(h => h.start === 500)?.density || 0;
+    const needsImprovement = inp.histogram.find(h => h.start === CWV_METRICS.INP.good)?.density || 0;
+    const poor = inp.histogram.find(h => h.start === CWV_METRICS.INP.needsImprovement)?.density || 0;
 
     report += `* **Distribution:** ${Math.round(good * 100)}% good, ${Math.round(needsImprovement * 100)}% needs improvement, ${Math.round(poor * 100)}% poor\n`;
   }

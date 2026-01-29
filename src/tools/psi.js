@@ -1,5 +1,6 @@
 import psi from 'psi';
 import { cacheResults, getCachedResults } from '../utils.js';
+import { CWV_METRICS } from '../config/thresholds.js';
 
 function cleanup(psiAudit) {
   // removing all base 64 encoded images from the json
@@ -50,12 +51,12 @@ export function summarize(psiData) {
 
   // Helper function for Core Web Vitals and other key metrics (no URL/form factor)
 
-  // Core Web Vitals
-  report += checkMetric(audits['largest-contentful-paint'], 2500, 4000, 'Largest Contentful Paint (LCP)');
-  report += checkMetric(audits['first-contentful-paint'], 1800, 3000, 'First Contentful Paint (FCP)');
-  report += checkMetric(audits['total-blocking-time'], 200, 600, 'Total Blocking Time (TBT)'); // Use TBT, not INP
-  report += checkMetric(audits['cumulative-layout-shift'], 0.1, 0.25, 'Cumulative Layout Shift (CLS)');
-  report += checkMetric(audits['speed-index'], 3400, 5800, 'Speed Index'); // Add Speed Index
+  // Core Web Vitals - Using centralized thresholds from config
+  report += checkMetric(audits['largest-contentful-paint'], CWV_METRICS.LCP.good, CWV_METRICS.LCP.needsImprovement, 'Largest Contentful Paint (LCP)');
+  report += checkMetric(audits['first-contentful-paint'], CWV_METRICS.FCP.good, CWV_METRICS.FCP.needsImprovement, 'First Contentful Paint (FCP)');
+  report += checkMetric(audits['total-blocking-time'], CWV_METRICS.TBT.good, CWV_METRICS.TBT.needsImprovement, 'Total Blocking Time (TBT)');
+  report += checkMetric(audits['cumulative-layout-shift'], CWV_METRICS.CLS.good, CWV_METRICS.CLS.needsImprovement, 'Cumulative Layout Shift (CLS)');
+  report += checkMetric(audits['speed-index'], CWV_METRICS.SPEED_INDEX.good, CWV_METRICS.SPEED_INDEX.needsImprovement, 'Speed Index');
   if (report.length > length) {
     hasBottlenecks = true;
   }
