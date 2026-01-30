@@ -62,9 +62,7 @@ You must return a JSON object matching this exact schema:
 
 \`\`\`json
 {
-  "url": "string - tested URL",
   "deviceType": "string - mobile or desktop",
-  "timestamp": "string - ISO timestamp of analysis (use new Date().toISOString())",
   "suggestions": [
     {
       "title": "string - short, actionable title (required)",

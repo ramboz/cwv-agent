@@ -285,6 +285,258 @@ export function sanitizeUrlForFilename(url) {
     .replace(TRIM_DASHES_PATTERN, '');
 }
 
+/**
+ * AEM Detection Patterns
+ * Used to identify Adobe Experience Manager architecture type
+ *
+ * Categories:
+ * - SPA: React/Angular/Vue single-page applications
+ * - EDS: Edge Delivery Services (Franklin)
+ * - CS: AEM Cloud Service
+ * - AMS: AEM Managed Services
+ * - HEADLESS: AEM Headless CMS
+ */
+export const AEM_DETECTION = {
+  SPA: [
+    /cq:pagemodel_root_url/i,
+    /<div[^>]+id=["']spa-root["']/i,
+    /<div[^>]+id=["']root["'][^>]*><\/div>/i,
+    /clientlib-react/i,
+    /clientlib-angular/i,
+    /clientlib-vue/i,
+  ],
+  EDS: [
+    /lib-franklin\.js/i,
+    /aem\.js/i,
+    /data-block-status/i,
+    /scripts\.js/i,
+    /<div class="[^"]*block[^"]*"[^>]*>/i,
+    /data-routing="[^"]*eds=([^,"]*)/i,
+    /"dataRouting":"[^"]*eds=([^,"]*)/i,
+  ],
+  CS: [
+    /<div class="[^"]*cmp-[^"]*"[^>]*>/i,
+    /\/etc\.clientlibs\/[^"']+\.lc-[a-f0-9]+-lc\.min\.(js|css)/i,
+    /\/libs\.clientlibs\//i,
+    /data-cmp-/i,
+    /data-sly-/i,
+    /content\/experience-fragments\//i,
+    /data-cq-/i,
+    /data-routing="[^"]*cs=([^,"]*)/i,
+    /"dataRouting":"[^"]*cs=([^,"]*)/i,
+  ],
+  AMS: [
+    /\/etc\/clientlibs\//i,
+    /\/etc\/designs\//i,
+    /\/etc\.clientlibs\/[^"']+\.min\.[a-f0-9]{32}\.(js|css)/i,
+    /foundation-/i,
+    /cq:template/i,
+    /cq-commons/i,
+    /parsys/i,
+    /\/CQ\//i,
+    /\/apps\//i,
+    /data-routing="[^"]*ams=([^,"]*)/i,
+    /"dataRouting":"[^"]*ams=([^,"]*)/i,
+  ],
+  HEADLESS: [
+    /aem-headless/i,
+    /\/content\/dam\//i,
+  ],
+};
+
+/**
+ * CSS Parsing Patterns
+ * Used for extracting and analyzing CSS rules
+ */
+export const CSS_PARSING = {
+  /** Remove CSS comments */
+  COMMENT_REMOVAL: /\/\*[\s\S]*?\*\//g,
+
+  /** Normalize whitespace to single space */
+  WHITESPACE_NORMALIZE: /\s+/g,
+
+  /** Extract CSS rules (handles nested braces) */
+  RULE_EXTRACTION: /([^{}]+)\s*\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}/g,
+};
+
+/**
+ * URL Normalization Patterns
+ * Used for URL comparison, file naming, and cache keys
+ */
+export const URL_PATTERNS = {
+  /** Replace forward slashes */
+  SLASH_TO_DASH: /\//g,
+
+  /** Trim leading/trailing dashes */
+  TRIM_DASHES: /(^-+|-+$)/g,
+
+  /** Remove trailing slash */
+  TRAILING_SLASH: /\/$/,
+
+  /** Match www prefix for removal */
+  WWW_REMOVAL: /(:\/\/)www\./,
+
+  /** Extract URL from url() CSS function */
+  URL_EXTRACTION: /url\(\s*['"]?([^'"()]+?)['"]?\s*\)/gi,
+};
+
+/**
+ * File Patterns
+ * Used for file type detection and extraction
+ */
+export const FILE_PATTERNS = {
+  /** Extract filename with extension */
+  EXTENSION_EXTRACT: /([a-zA-Z0-9_-]+\.(js|css|woff2?|jpg|png|webp|svg|gif|avif))/,
+
+  /** List of supported file extensions */
+  SUPPORTED_EXTENSIONS: ['js', 'css', 'woff', 'woff2', 'jpg', 'png', 'webp', 'svg', 'gif', 'avif'],
+};
+
+/**
+ * LLM Output Patterns
+ * Used for parsing LLM-generated responses
+ */
+export const LLM_PATTERNS = {
+  /** Extract JSON blocks from markdown code fences */
+  JSON_BLOCK: /```json\s*(\{[\s\S]*?\})\s*```/g,
+};
+
+/**
+ * Helper: Count pattern matches in text
+ * @param {string} text - Text to search
+ * @param {RegExp[]} patterns - Array of regex patterns
+ * @returns {number} Number of patterns that matched
+ */
+function countMatches(text, patterns) {
+  if (!text || !patterns) return 0;
+  return patterns.reduce((count, pattern) => {
+    return count + (pattern.test(text) ? 1 : 0);
+  }, 0);
+}
+
+/**
+ * Helper: Detect AEM architecture type
+ * @param {string} html - HTML source
+ * @param {Object} headers - HTTP headers (optional)
+ * @returns {string|null} Architecture type ('cs-spa', 'eds', 'cs', 'ams', 'aem-headless') or null
+ *
+ * Priority order:
+ * 1. CS-SPA (if both CS and SPA patterns match)
+ * 2. EDS (if EDS patterns match)
+ * 3. CS (if CS patterns match)
+ * 4. AMS (if AMS patterns match)
+ * 5. Headless (if headless patterns match)
+ */
+export function detectAemArchitecture(html, headers = {}) {
+  if (!html || typeof html !== 'string') return null;
+
+  const results = {
+    spa: countMatches(html, AEM_DETECTION.SPA),
+    eds: countMatches(html, AEM_DETECTION.EDS),
+    cs: countMatches(html, AEM_DETECTION.CS),
+    ams: countMatches(html, AEM_DETECTION.AMS),
+    headless: countMatches(html, AEM_DETECTION.HEADLESS),
+  };
+
+  // Priority: CS-SPA > EDS > CS > AMS > Headless
+  if (results.cs > 0 && results.spa > 0) return 'cs-spa';
+  if (results.eds > 1) return 'eds'; // Require 2+ EDS patterns
+  if (results.cs > 1) return 'cs';   // Require 2+ CS patterns
+  if (results.ams > 1) return 'ams'; // Require 2+ AMS patterns
+  if (results.headless > 0) return 'aem-headless';
+
+  return null;
+}
+
+/**
+ * Helper: Normalize URL for comparison
+ * @param {string} url - URL to normalize
+ * @returns {string} Normalized URL
+ *
+ * @example
+ * normalizeUrl('https://www.example.com/')
+ * // Returns: 'https://example.com'
+ */
+export function normalizeUrl(url) {
+  if (!url || typeof url !== 'string') return '';
+
+  let normalized = url.toString().replace(URL_PATTERNS.TRAILING_SLASH, '');
+  normalized = normalized.replace(URL_PATTERNS.WWW_REMOVAL, '$1');
+  return normalized;
+}
+
+/**
+ * Helper: Convert URL pathname to filename
+ * @param {string} pathname - URL pathname
+ * @returns {string} Filesystem-safe filename
+ *
+ * @example
+ * urlToFilename('/products/photoshop.html')
+ * // Returns: 'products--photoshop-html'
+ */
+export function urlToFilename(pathname) {
+  if (!pathname || typeof pathname !== 'string') return '';
+
+  return pathname
+    .replace(URL_PATTERNS.SLASH_TO_DASH, '--')
+    .replace(/^--/, '') // Remove leading dashes
+    .replace(URL_PATTERNS.TRIM_DASHES, '');
+}
+
+/**
+ * Helper: Remove CSS comments and normalize whitespace
+ * @param {string} cssText - CSS text
+ * @returns {string} Cleaned CSS
+ */
+export function cleanCssComments(cssText) {
+  if (!cssText || typeof cssText !== 'string') return '';
+
+  return cssText
+    .replace(CSS_PARSING.COMMENT_REMOVAL, '')
+    .replace(CSS_PARSING.WHITESPACE_NORMALIZE, ' ');
+}
+
+/**
+ * Helper: Extract CSS rules from text
+ * @param {string} cssText - CSS text
+ * @returns {Array<{selector: string, body: string}>} Parsed CSS rules
+ */
+export function extractCssRules(cssText) {
+  if (!cssText || typeof cssText !== 'string') return [];
+
+  const cleaned = cleanCssComments(cssText);
+  const rules = [];
+  let match;
+
+  // Reset regex lastIndex for global regex
+  CSS_PARSING.RULE_EXTRACTION.lastIndex = 0;
+
+  while ((match = CSS_PARSING.RULE_EXTRACTION.exec(cleaned)) !== null) {
+    rules.push({
+      selector: match[1].trim(),
+      body: match[2].trim()
+    });
+  }
+
+  return rules;
+}
+
+/**
+ * Helper: Extract filename from resource reference
+ * @param {string} reference - Resource reference (URL, path, etc.)
+ * @returns {string|null} Extracted filename or null
+ *
+ * @example
+ * extractFileName('https://example.com/assets/main.js?v=123')
+ * // Returns: 'main.js'
+ */
+export function extractFileName(reference) {
+  if (!reference || typeof reference !== 'string') return null;
+
+  const match = reference.match(FILE_PATTERNS.EXTENSION_EXTRACT);
+  return match ? match[1] : null;
+}
+
 // Export all patterns and helpers
 export default {
   // Regex patterns
@@ -298,11 +550,24 @@ export default {
   TRIM_DASHES_PATTERN,
   ALPHANUMERIC_ONLY_PATTERN,
 
+  // New pattern categories
+  AEM_DETECTION,
+  CSS_PARSING,
+  URL_PATTERNS,
+  FILE_PATTERNS,
+  LLM_PATTERNS,
+
   // Helper functions
   isDenylisted,
   extractFontUrls,
   parseModelName,
   sanitizeUrlForFilename,
+  detectAemArchitecture,
+  normalizeUrl,
+  urlToFilename,
+  cleanCssComments,
+  extractCssRules,
+  extractFileName,
 
   // Pattern arrays (for testing/inspection)
   BASE_DENYLIST_PATTERNS,

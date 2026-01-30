@@ -1,3 +1,5 @@
+import { AEM_DETECTION } from '../config/regex-patterns.js';
+
 /**
  * Detects the AEM implementation type from HTML source code and optionally HAR data
  * @param {object|Array} headers - HTTP headers or HAR entries
@@ -40,18 +42,9 @@ export function detectAEMVersion(headers, htmlSource, options = {}) {
     }
   }
 
-  // Check for SPA Editor patterns in HTML (static indicators)
-  const spaPatterns = [
-    /cq:pagemodel_root_url/i,       // Meta tag declaring model endpoint
-    /<div[^>]+id=["']spa-root["']/i, // SPA root element
-    /<div[^>]+id=["']root["'][^>]*><\/div>/i, // Generic root element (common in React)
-    /clientlib-react/i,              // React framework
-    /clientlib-angular/i,            // Angular framework
-    /clientlib-vue/i,                // Vue framework
-  ];
-
+  // Count SPA pattern matches using centralized patterns
   let spaMatches = 0;
-  for (const pattern of spaPatterns) {
+  for (const pattern of AEM_DETECTION.SPA) {
     if (pattern.test(normalizedHtml)) {
       spaMatches++;
     }
@@ -64,68 +57,6 @@ export function detectAEMVersion(headers, htmlSource, options = {}) {
 
   // Combined SPA detection: static HTML hints OR runtime network requests
   const isSpa = (hasSpaRootUrl || hasModelJsonInHtml || hasSpaRoot || hasModelJsonRequest || spaMatches >= 2);
-
-  // EDS Indicators
-  const edsPatterns = [
-    // Core library references
-    /lib-franklin\.js/i,
-    /aem\.js/i,
-    // Block structure
-    /data-block-status/i,
-    // Franklin-specific markup patterns
-    /scripts\.js/i,
-    // Block HTML patterns
-    /<div class="[^"]*block[^"]*"[^>]*>/i,
-    // RUM data-routing for EDS (both HTML attribute and JSON property formats)
-    /data-routing="[^"]*eds=([^,"]*)/i,
-    /"dataRouting":"[^"]*eds=([^,"]*)/i
-  ];
-
-  // CS Indicators (Cloud Service)
-  const csPatterns = [
-    // Core Components patterns
-    /<div class="[^"]*cmp-[^"]*"[^>]*>/i,
-    // CS-specific clientlib pattern with lc- prefix/suffix (more specific than general etc.clientlibs)
-    /\/etc\.clientlibs\/[^"']+\.lc-[a-f0-9]+-lc\.min\.(js|css)/i,
-    // Modern libs clientlib paths
-    /\/libs\.clientlibs\//i,
-    // Core components comments or data attributes
-    /data-cmp-/i,
-    /data-sly-/i,
-    // Cloud Manager references
-    /content\/experience-fragments\//i,
-    // SPA editor references
-    /data-cq-/i,
-    // RUM data-routing for CS (both HTML attribute and JSON property formats)
-    /data-routing="[^"]*cs=([^,"]*)/i,
-    /"dataRouting":"[^"]*cs=([^,"]*)/i
-  ];
-
-  // AMS Indicators (Managed Services) - typically older AEM patterns
-  const amsPatterns = [
-    // Legacy clientlib paths
-    /\/etc\/clientlibs\//i,
-    /\/etc\/designs\//i,
-    // AMS-specific clientlib pattern with fingerprinted hashes (both JS and CSS)
-    /\/etc\.clientlibs\/[^"']+\.min\.[a-f0-9]{32}\.(js|css)/i,
-    // Classic UI patterns
-    /foundation-/i,
-    /cq:template/i,
-    /cq-commons/i,
-    // Legacy component patterns
-    /parsys/i,
-    // Legacy CQ references
-    /\/CQ\//i,
-    /\/apps\//i,
-    // RUM data-routing for AMS (both HTML attribute and JSON property formats)
-    /data-routing="[^"]*ams=([^,"]*)/i,
-    /"dataRouting":"[^"]*ams=([^,"]*)/i
-  ];
-
-  const aemHeadlessPatterns = [
-    /aem-headless/i,
-    /\/content\/dam\//i
-  ];
 
   // Count matches for each type
   let edsMatches = 0;
@@ -152,28 +83,29 @@ export function detectAEMVersion(headers, htmlSource, options = {}) {
     }
   }
 
-  // Check EDS patterns
-  for (const pattern of edsPatterns) {
+  // Check EDS patterns using centralized patterns
+  for (const pattern of AEM_DETECTION.EDS) {
     if (pattern.test(normalizedHtml)) {
       edsMatches++;
     }
   }
 
-  // Check CS patterns
-  for (const pattern of csPatterns) {
+  // Check CS patterns using centralized patterns
+  for (const pattern of AEM_DETECTION.CS) {
     if (pattern.test(normalizedHtml)) {
       csMatches++;
     }
   }
 
-  // Check AMS patterns
-  for (const pattern of amsPatterns) {
+  // Check AMS patterns using centralized patterns
+  for (const pattern of AEM_DETECTION.AMS) {
     if (pattern.test(normalizedHtml)) {
       amsMatches++;
     }
   }
 
-  for (const pattern of aemHeadlessPatterns) {
+  // Check headless patterns using centralized patterns
+  for (const pattern of AEM_DETECTION.HEADLESS) {
     if (pattern.test(normalizedHtml)) {
       aemHeadlessMatches++;
     }

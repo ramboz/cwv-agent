@@ -185,6 +185,98 @@ export const HAR_THRESHOLDS = {
 };
 
 /**
+ * Critical Path Thresholds
+ * Used for detecting blocking resources in the critical rendering path
+ */
+export const CRITICAL_PATH_THRESHOLDS = {
+  // Pre-LCP asset size limits (from kb100.js)
+  PRE_LCP_ASSET: {
+    mobile: 100 * 1024,  // 100KB
+    desktop: 200 * 1024, // 200KB
+  },
+
+  // Resource size limits in critical path (from size.js)
+  RESOURCE_SIZE: {
+    javascript: 20 * 1024, // 20KB
+    css: 10 * 1024,        // 10KB
+  },
+
+  // Third-party resource duration threshold (from thirdparty.js)
+  THIRD_PARTY_DURATION: 60, // milliseconds
+};
+
+/**
+ * Rule Detection Thresholds
+ * Used by various rule analyzers
+ */
+export const RULE_THRESHOLDS = {
+  // CLS shift detection (from cls.js)
+  CLS_SHIFT_MIN: 0.01,
+
+  // Long animation frame threshold (from loaf.js)
+  LAF_DURATION: 90, // milliseconds
+};
+
+/**
+ * Shift Detection Thresholds
+ * Used for attributing CLS causes by pixel movement patterns
+ */
+export const SHIFT_DETECTION_THRESHOLDS = {
+  // Font swap indicators (from cls-attributor.js)
+  FONT_SWAP: {
+    minHeight: 5,  // pixels
+    maxWidth: 2,   // pixels
+  },
+
+  // Content insertion indicators
+  CONTENT_INSERTION: {
+    minTop: 10,      // pixels
+    maxHeight: 5,    // pixels
+  },
+
+  // Unsized media indicators
+  UNSIZED_MEDIA: {
+    minWidth: 10,   // pixels
+    minHeight: 10,  // pixels
+  },
+
+  // Animation/transition indicators
+  ANIMATION: {
+    minLeft: 5,      // pixels
+    minTop: 5,       // pixels
+    maxTop: 10,      // pixels
+  },
+};
+
+/**
+ * Display Limits
+ * Controls how many items to show in reports and summaries
+ */
+export const DISPLAY_LIMITS = {
+  // RUM data display limits
+  RUM: {
+    MAX_SAMPLES: 10,         // Max samples per metric
+    MAX_WORST_URLS: 10,      // Max worst performing URLs
+    MAX_SLOW_INTERACTIONS: 5, // Max slow interactions
+    MAX_DISPLAY_SAMPLES: 3,   // Max samples to display inline
+    MAX_WORST_PAGES: 5,       // Max worst pages
+  },
+
+  // Lab data display limits
+  LAB: {
+    MAX_CLS_SOURCES: 5,        // Max CLS attribution sources
+    MAX_LCP_CANDIDATES: 10,     // Max LCP candidates
+    MAX_CLASS_NAMES: 2,         // Max class names per element
+    SAMPLE_SIZE: 20,            // Sample size for analysis
+    MAX_ITEMS_DISPLAY: 10,      // Generic display limit
+    MAX_RESOURCES: 5,           // Max resources per category
+    MAX_CLS_ISSUES: 8,          // Max CLS issues to display
+    MAX_ABOVE_FOLD_IMAGES: 5,   // Max above-fold images
+    MAX_DIMENSION_ISSUES: 5,    // Max dimension issues
+  },
+};
+
+/**
  * Helper function to get threshold based on metric and status
  * @param {string} metric - Metric name (LCP, FCP, TBT, etc.)
  * @param {string} status - Status level (good, needsImprovement)
@@ -231,6 +323,10 @@ export default {
   LAYOUT_SHIFT_THRESHOLDS,
   DATA_LIMITS,
   HAR_THRESHOLDS,
+  CRITICAL_PATH_THRESHOLDS,
+  RULE_THRESHOLDS,
+  SHIFT_DETECTION_THRESHOLDS,
+  DISPLAY_LIMITS,
   getCWVThreshold,
   getDeviceThreshold,
   getMetricStatus,

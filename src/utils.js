@@ -6,7 +6,7 @@ import { Tiktoken } from 'js-tiktoken/lite';
 import cl100k_base from 'js-tiktoken/ranks/cl100k_base';
 import { DEFAULT_MODEL } from './models/config.js';
 import { createHash } from 'crypto';
-import { sanitizeUrlForFilename } from './config/regex-patterns.js';
+import { sanitizeUrlForFilename, urlToFilename } from './config/regex-patterns.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -81,7 +81,7 @@ export function getFilePrefix(urlString, deviceType, type) {
 
 function getFilename(url) {
   let filename = url.pathname !== '/'
-    ? url.pathname.replace(/\//g, '--').replace(/(^-+|-+$)/, '')
+    ? urlToFilename(url.pathname)
     : 'index';
   const [, ext] = filename.split('/').pop().split('.');
   if (!ext) {

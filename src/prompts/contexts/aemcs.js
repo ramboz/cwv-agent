@@ -95,12 +95,18 @@ You know the following about AEM CS.
 - Example: Use @font-face with font-display: swap and size-adjust property for fallback
 
 **CSS Loading Recommendations:**
-- RECOMMENDED: Inline critical CSS (<14KB) in <style> tag for above-the-fold content
+- RECOMMENDED: Split clientlibs into critical (sync) and non-critical (async) categories
+  - Example: Create separate clientlib categories per template/component
+  - Load critical clientlibs synchronously in <head>
+  - Load non-critical clientlibs asynchronously using JavaScript
+- AVOID: Inlining critical CSS in <style> tag (requires build system, not maintainable across AEM sites)
 - RECOMMENDED: Load non-critical CSS asynchronously using JavaScript with requestIdleCallback
   - Example: Use createElement('link') in requestIdleCallback to load non-critical clientlibs
-- RECOMMENDED: Split clientlibs into critical (sync) and non-critical (async) categories
 - AVOID: Using media="print" hack for async CSS (violates HTML spec, accessibility issues)
   - Example of anti-pattern: <link rel="stylesheet" href="..." media="print" onload="this.media='all'">
+- AVOID: Using <link rel="preload" as="style" onload="..."> hack for async CSS (equally problematic)
+  - Example of anti-pattern: <link rel="preload" href="..." as="style" onload="this.onload=null;this.rel='stylesheet'">
+  - Issues: Violates preload semantics, accessibility problems, harder to debug than JavaScript approach
 - AVOID: Loading 15+ render-blocking CSS files synchronously
 - AVOID: Including 100% unused CSS clientlibs (audit with Coverage DevTools)
 - AVOID: Cross-origin render-blocking CSS without preconnect

@@ -8,6 +8,7 @@
 
 // Import transformFindingsToSuggestions from sibling module
 import { transformFindingsToSuggestions } from './transformers.js';
+import { LLM_PATTERNS } from '../../../config/regex-patterns.js';
 // Import suggestionSchema from parent module (will be moved to schemas.js in Issue 5)
 import { suggestionSchema } from '../../multi-agents.js';
 
@@ -62,7 +63,8 @@ function aggregateAgentFindings(content, pageUrl, deviceType) {
     const allFindings = [];
 
     // Find all JSON blocks in the content
-    const jsonBlockRegex = /```json\s*(\{[\s\S]*?\})\s*```/g;
+    // Use centralized LLM pattern for JSON block extraction
+  const jsonBlockRegex = LLM_PATTERNS.JSON_BLOCK;
     let match;
 
     while ((match = jsonBlockRegex.exec(content)) !== null) {
@@ -131,6 +133,7 @@ function validateAndNormalize(parsed, pageUrl, deviceType) {
         summary = buildSummaryFromFindings(parsed.findings);
     }
 
+    // Inject known metadata (url/timestamp are not in schema - they're code-injected to avoid LLM typos)
     const normalized = {
         ...parsed,
         url: parsed.url || pageUrl,
@@ -141,6 +144,7 @@ function validateAndNormalize(parsed, pageUrl, deviceType) {
     };
 
     // Validate with Zod schema (logs warnings but doesn't block)
+    // Note: url/timestamp are not in schema but are in normalized - Zod ignores extra props
     try {
         suggestionSchema.parse(normalized);
     } catch (zodError) {

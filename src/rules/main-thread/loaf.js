@@ -1,4 +1,6 @@
-const THRESHOLD = 90;
+import { RULE_THRESHOLDS } from '../../config/thresholds.js';
+
+const THRESHOLD = RULE_THRESHOLDS.LAF_DURATION;
 
 export default function evaluate({ report }) {
   const { data } = report;

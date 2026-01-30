@@ -1,6 +1,7 @@
 import { getSequence, getInitiator } from '../shared.js';
+import { CRITICAL_PATH_THRESHOLDS } from '../../config/thresholds.js';
 
-const THRESHOLD = 60;
+const THRESHOLD = CRITICAL_PATH_THRESHOLDS.THIRD_PARTY_DURATION;
 
 export default function evaluate({ summary, report, har }) {
   const { sequence } = getSequence(report);

@@ -1,9 +1,10 @@
 import { getSequence, getInitiator } from '../shared.js';
+import { CRITICAL_PATH_THRESHOLDS } from '../../config/thresholds.js';
 
 const THRESHOLDS = {
-  'text/javascript': 20,
-  'application/javascript': 20,
-  'text/css': 10,
+  'text/javascript': CRITICAL_PATH_THRESHOLDS.RESOURCE_SIZE.javascript / 1024, // Convert bytes to KB
+  'application/javascript': CRITICAL_PATH_THRESHOLDS.RESOURCE_SIZE.javascript / 1024,
+  'text/css': CRITICAL_PATH_THRESHOLDS.RESOURCE_SIZE.css / 1024,
 };
 
 export default function evaluate({ report, har }) {

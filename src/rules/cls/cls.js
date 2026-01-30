@@ -1,4 +1,6 @@
-const THRESHOLD = 0.01;
+import { RULE_THRESHOLDS } from '../../config/thresholds.js';
+
+const THRESHOLD = RULE_THRESHOLDS.CLS_SHIFT_MIN;
 
 export default function evaluate({ report }) {
   // use dataSortedByEnd to get the previous entries by end time

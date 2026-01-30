@@ -5,6 +5,7 @@ import { readFile } from 'fs/promises'
 import dotenv from 'dotenv';
 import { z } from "zod";
 import { initializeSystem } from '../prompts/index.js';
+import { urlToFilename } from '../config/regex-patterns.js';
 
 dotenv.config();
 
@@ -46,7 +47,7 @@ const tools = {
   code: tool(
     async ({ path }) => {
       console.log('CODE CALLED', path);
-      let file = path.replace(/\//g, '--').replace(/(^-+|-+$)/, '');
+      let file = urlToFilename(path);
       const code = await readFile(`./.cache/www.wilson.com/${file}`, { encoding: 'utf8' });
       return code;
     },

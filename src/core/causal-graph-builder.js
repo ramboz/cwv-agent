@@ -5,6 +5,8 @@
  * distinguish symptoms, and find duplicate/compound issues.
  */
 
+import { extractFileName } from '../config/regex-patterns.js';
+
 import {
   createEmptyGraph,
   createNodeFromFinding,
@@ -18,6 +20,58 @@ import {
   findCriticalPaths,
   exportToDot,
 } from '../models/causal-graph.js';
+
+/**
+ * Classifies a finding into a semantic type for better relationship detection
+ * @param {Object} finding - The finding to classify
+ * @returns {string} Finding type
+ */
+function classifyFindingType(finding) {
+  const desc = (finding.finding || finding.description || '').toLowerCase();
+  const evidence = (finding.evidence?.[0]?.reference || '').toLowerCase();
+
+  // Image-related issues
+  if (desc.includes('missing width') || desc.includes('missing height') ||
+      desc.includes('unsized image') || desc.includes('image dimension')) {
+    return 'image-sizing';
+  }
+
+  // Code/resource waste
+  if (desc.includes('unused') && (desc.includes('css') || desc.includes('code') || desc.includes('javascript'))) {
+    return 'unused-code';
+  }
+
+  // Font-specific issues
+  if (desc.includes('font') && (desc.includes('format') || desc.includes('woff2') || desc.includes('ttf'))) {
+    return 'font-format';
+  }
+  if (desc.includes('font') && desc.includes('preload')) {
+    return 'font-preload';
+  }
+
+  // Resource loading issues
+  if (desc.includes('preload') && !desc.includes('font')) {
+    return 'resource-preload';
+  }
+  if (desc.includes('preconnect') || desc.includes('dns-prefetch')) {
+    return 'resource-hints';
+  }
+
+  // Rendering issues
+  if (desc.includes('render-blocking') || desc.includes('blocking resource')) {
+    return 'blocking-resource';
+  }
+  if (desc.includes('inline') && desc.includes('css')) {
+    return 'inline-css';
+  }
+
+  // Layout issues
+  if (desc.includes('layout shift') || desc.includes('cumulative layout')) {
+    return 'layout-shift';
+  }
+
+  return 'unknown';
+}
 
 /**
  * Builds a causal graph from all agent findings
@@ -186,15 +240,29 @@ function areDuplicates(findingA, findingB) {
   // Same metric and very similar descriptions
   if (findingA.metric !== findingB.metric) return false;
 
+  // First check: must be same semantic type
+  const typeA = classifyFindingType(findingA);
+  const typeB = classifyFindingType(findingB);
+  if (typeA !== typeB) return false; // Different types → not duplicates
+
   const descA = findingA.description.toLowerCase();
   const descB = findingB.description.toLowerCase();
 
-  // Check for common keywords
+  // Second check: keyword overlap (stricter threshold)
   const keywords = ['hero', 'image', 'font', 'script', 'css', 'render-blocking', 'unused', 'preload'];
   const commonKeywords = keywords.filter(kw => descA.includes(kw) && descB.includes(kw));
 
-  // If they share 2+ keywords and affect same metric, likely duplicates
-  return commonKeywords.length >= 2;
+  // Require 3+ keywords for duplicates (not just 2)
+  if (commonKeywords.length < 3) return false;
+
+  // Third check: similar evidence references (same file)
+  const refA = findingA.evidence?.[0]?.reference || '';
+  const refB = findingB.evidence?.[0]?.reference || '';
+  const fileA = refA.match(/([a-zA-Z0-9_-]+\.(js|css|woff2?|jpg|png|webp))/)?.[1];
+  const fileB = refB.match(/([a-zA-Z0-9_-]+\.(js|css|woff2?|jpg|png|webp))/)?.[1];
+
+  // If both reference same file with same type, likely duplicate
+  return fileA && fileB && fileA === fileB;
 }
 
 /**
@@ -207,12 +275,37 @@ function detectFileRelationship(findingA, findingB) {
   const refA = findingA.evidence?.reference || '';
   const refB = findingB.evidence?.reference || '';
 
-  // Extract file names from references
-  const filePatternA = refA.match(/([a-zA-Z0-9_-]+\.(js|css|woff2?|jpg|png|webp))/);
-  const filePatternB = refB.match(/([a-zA-Z0-9_-]+\.(js|css|woff2?|jpg|png|webp))/);
+  // Extract file names from references using centralized pattern
+  const fileA = extractFileName(refA);
+  const fileB = extractFileName(refB);
+  const filePatternA = fileA ? [fileA, fileA] : null; // Preserve array format for compatibility
+  const filePatternB = fileB ? [fileB, fileB] : null;
 
   if (filePatternA && filePatternB && filePatternA[1] === filePatternB[1]) {
     const filename = filePatternA[1];
+
+    // Get semantic types of both findings
+    const typeA = classifyFindingType(findingA);
+    const typeB = classifyFindingType(findingB);
+
+    // Define compatible type pairs that can be grouped
+    // Only group if same file AND compatible operation types
+    const compatiblePairs = [
+      ['unused-code', 'blocking-resource'],  // Unused code causes bloat in blocking resource
+      ['font-format', 'font-preload'],       // Font format and font preload are related
+      ['unused-code', 'font-format'],        // Unused code in font files relates to format issues
+      ['resource-preload', 'blocking-resource'], // Preload issues relate to blocking
+    ];
+
+    const isCompatible = compatiblePairs.some(([t1, t2]) =>
+      (typeA === t1 && typeB === t2) || (typeA === t2 && typeB === t1)
+    );
+
+    // Skip relationship if types are incompatible
+    // (e.g., don't group image-sizing + unused-code even if same CSS file)
+    if (!isCompatible) {
+      return null;
+    }
 
     // Determine direction based on finding types
     // Coverage finding (waste) often causes PSI finding (bottleneck)
@@ -222,7 +315,7 @@ function detectFileRelationship(findingA, findingB) {
         to: findingB.id,
         type: 'contributes',
         strength: 0.8,
-        mechanism: `Unused code in ${filename} increases file size and parse time, contributing to render blocking`
+        mechanism: `${typeA} in ${filename} contributes to ${typeB}`
       };
     } else if (findingB.type === 'waste' && findingA.type === 'bottleneck') {
       return {
@@ -230,17 +323,17 @@ function detectFileRelationship(findingA, findingB) {
         to: findingA.id,
         type: 'contributes',
         strength: 0.8,
-        mechanism: `Unused code in ${filename} increases file size and parse time, contributing to render blocking`
+        mechanism: `${typeB} in ${filename} contributes to ${typeA}`
       };
     }
 
-    // Otherwise just mark as related
+    // Compatible types - create relationship
     return {
       from: findingA.id,
       to: findingB.id,
       type: 'contributes',
       strength: 0.6,
-      mechanism: `Both findings relate to ${filename}`
+      mechanism: `Both ${typeA} and ${typeB} relate to ${filename}`
     };
   }
 
@@ -300,12 +393,25 @@ function detectTimingRelationship(findingA, findingB) {
   const isPreLcpB = descB.includes('pre-lcp') || descB.includes('render-blocking');
 
   if (isPreLcpA && isPreLcpB && findingA.metric === 'LCP' && findingB.metric === 'LCP') {
+    // Get semantic types
+    const typeA = classifyFindingType(findingA);
+    const typeB = classifyFindingType(findingB);
+
+    // Only compound if both are rendering-related issues
+    // Don't compound unrelated issues like image-sizing + unused-code
+    const renderingTypes = ['blocking-resource', 'font-preload', 'resource-preload', 'inline-css', 'resource-hints'];
+    const bothRendering = renderingTypes.includes(typeA) && renderingTypes.includes(typeB);
+
+    if (!bothRendering) {
+      return null; // Skip incompatible timing relationship
+    }
+
     return {
       from: findingA.id,
       to: findingB.id,
       type: 'compounds',
       strength: 0.65,
-      mechanism: 'Multiple pre-LCP issues compound to delay LCP'
+      mechanism: `Multiple pre-LCP rendering issues (${typeA} + ${typeB}) compound to delay LCP`
     };
   }
 

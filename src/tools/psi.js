@@ -1,6 +1,7 @@
 import psi from 'psi';
 import { cacheResults, getCachedResults } from '../utils.js';
 import { CWV_METRICS } from '../config/thresholds.js';
+import { URL_PATTERNS } from '../config/regex-patterns.js';
 
 function cleanup(psiAudit) {
   // removing all base 64 encoded images from the json
@@ -171,8 +172,8 @@ export function summarize(psiData) {
 
       // Extract image URL if present
       if (node.nodeLabel && node.nodeLabel.includes('url(')) {
-        const urlRegex = /url\(['']?(.*?)['']?\)/;
-        const match = node.nodeLabel.match(urlRegex);
+        // Use centralized URL extraction pattern
+        const match = node.nodeLabel.match(URL_PATTERNS.URL_EXTRACTION);
         if (match && match[1]) {
           report += `    * Image URL: \`${match[1]}\`\n`;
         }

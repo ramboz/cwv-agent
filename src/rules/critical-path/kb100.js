@@ -1,6 +1,8 @@
+import { CRITICAL_PATH_THRESHOLDS } from '../../config/thresholds.js';
+
 const THRESHOLDS = {
-  mobile: 100,
-  desktop: 200,
+  mobile: CRITICAL_PATH_THRESHOLDS.PRE_LCP_ASSET.mobile / 1024, // Convert bytes to KB
+  desktop: CRITICAL_PATH_THRESHOLDS.PRE_LCP_ASSET.desktop / 1024,
 };
 
 export default function evaluate({ summary, report }) {

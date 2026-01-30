@@ -1,4 +1,6 @@
-const THRESHOLD = 800;
+import { CWV_METRICS } from '../../config/thresholds.js';
+
+const THRESHOLD = CWV_METRICS.TTFB.good;
 export default function evaluate({ report }) {
   const entry = report.data.find(d => d.entryType === 'navigation' && d.ttfb);
   if (entry?.ttfb > THRESHOLD) {

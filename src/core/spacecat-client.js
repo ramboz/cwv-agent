@@ -1,4 +1,5 @@
 import { createRequire } from 'module';
+import { normalizeUrl } from '../config/regex-patterns.js';
 
 const require = createRequire(import.meta.url);
 
@@ -130,18 +131,7 @@ export class SpaceCatClient {
    * @returns {string} The normalized URL.
    */
   normalizeBaseUrl(url) {
-    try {
-      const urlObj = new URL(url);
-      let hostname = urlObj.hostname;
-      if (hostname.startsWith('www.')) {
-        hostname = hostname.substring(4);
-      }
-      return `${urlObj.protocol}//${hostname}`.replace(/\/$/, '');
-    } catch (error) {
-      let normalized = url.trim().replace(/\/$/, '');
-      normalized = normalized.replace('://www.', '://');
-      return normalized;
-    }
+    return normalizeUrl(url);
   }
 
   /**

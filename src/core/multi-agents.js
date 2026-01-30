@@ -92,11 +92,12 @@ export {
 // Conditional Agent Configuration (from ./multi-agents/suggestions-engine.js)
 export { generateConditionalAgentConfig };
 
-/** Zod Schema for Structured Suggestions Output (Final synthesis) */
+/** Zod Schema for Structured Suggestions Output (Final synthesis)
+ * Note: url and timestamp are NOT included - they are injected from known input values
+ * to prevent LLM typos (e.g., "https.www.example.com" instead of "https://www.example.com")
+ */
 const suggestionSchema = z.object({
-    url: z.string().url(),
     deviceType: z.enum(['mobile', 'desktop']),
-    timestamp: z.string(),
     suggestions: z.array(z.object({
         title: z.string().min(1),
         description: z.string().min(1),

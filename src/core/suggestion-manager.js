@@ -4,6 +4,7 @@ import fs from 'fs';
 import { randomUUID } from 'crypto';
 import { SpaceCatClient } from './spacecat-client.js';
 import { normalizePath } from '../utils.js';
+import { URL_PATTERNS } from '../config/regex-patterns.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -62,7 +63,7 @@ export class CWVSuggestionManager {
       const urlObj = new URL(url);
       const { hostname, pathname } = urlObj;
       const fileBase = hostname.replace(/\./g, '-');
-      let pathPart = pathname.replace(/^\//, '').replace(/\//g, '-');
+      let pathPart = pathname.replace(/^\//, '').replace(URL_PATTERNS.SLASH_TO_DASH, '-');
       if (pathPart) {
         pathPart = '-' + pathPart;
       }

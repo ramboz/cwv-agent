@@ -4,6 +4,7 @@ import PTI from 'puppeteer-to-istanbul/lib/puppeteer-to-istanbul.js';
 import { getFilePrefix } from '../../utils.js';
 import { LabDataCollector } from './base-collector.js';
 import { COVERAGE_THRESHOLDS } from '../../config/thresholds.js';
+import { cleanCssComments, extractCssRules } from '../../config/regex-patterns.js';
 
 // CoverageCollector Class
 export class CoverageCollector extends LabDataCollector {
@@ -796,20 +797,16 @@ function isRangeCovered(start, end, coverageMap) {
 function extractCSSRules(cssText) {
   const rules = [];
 
-  // Clean up the CSS text first - remove comments and normalize whitespace
-  const cleanCss = cssText
-    .replace(/\/\*[\s\S]*?\*\//g, '') // Remove CSS comments
-    .replace(/\s+/g, ' ') // Normalize whitespace
-    .trim();
+  // Use centralized CSS parsing helper
+  const cleanCss = cleanCssComments(cssText).trim();
+  const parsedRules = extractCssRules(cssText);
 
-  // More robust regex that handles nested structures better
-  const ruleRegex = /([^{}]+)\s*\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}/g;
-  let match;
-
-  while ((match = ruleRegex.exec(cleanCss)) !== null) {
-    const selector = match[1].trim();
-    const start = match.index;
-    const end = match.index + match[0].length;
+  // Convert to old format with position tracking for compatibility
+  parsedRules.forEach((rule, index) => {
+    // Find position in cleaned CSS (approximate since we don't track positions in helper)
+    const selector = rule.selector;
+    const start = cleanCss.indexOf(selector);
+    const end = start + selector.length;
 
     // Filter out invalid selectors and at-rules
     if (isValidCSSSelector(selector)) {
@@ -819,7 +816,7 @@ function extractCSSRules(cssText) {
         end: end
       });
     }
-  }
+  });
 
   return rules;
 }
