@@ -8,18 +8,18 @@ CWV Agent is a Node.js CLI tool that analyzes web pages for Core Web Vitals (CWV
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                              CWV Agent                                       │
+│                              CWV Agent                                      │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│  ┌───────────┐   ┌──────────────────┐   ┌────────────────┐   ┌───────────┐ │
-│  │    CLI    │──▶│  Data Collection │──▶│  Multi-Agent   │──▶│  Output   │ │
-│  │  (yargs)  │   │     Layer        │   │    Analysis    │   │  Layer    │ │
-│  └───────────┘   └──────────────────┘   └────────────────┘   └───────────┘ │
-│                           │                      │                  │       │
-│                           ▼                      ▼                  ▼       │
-│                  ┌──────────────┐      ┌──────────────┐    ┌────────────┐  │
-│                  │ .cache/      │      │ LLM Factory  │    │ Markdown   │  │
-│                  │ (persistent) │      │ (Gemini/GPT) │    │ + JSON     │  │
-│                  └──────────────┘      └──────────────┘    └────────────┘  │
+│  ┌───────────┐   ┌──────────────────┐   ┌────────────────┐   ┌───────────┐  │
+│  │    CLI    │──▶│  Data Collection │──▶│  Multi-Agent   │──▶│  Output   │  │
+│  │  (yargs)  │   │     Layer        │   │    Analysis    │   │  Layer    │  │
+│  └───────────┘   └──────────────────┘   └────────────────┘   └───────────┘  │
+│                            │                    │                  │        │
+│                            ▼                    ▼                  ▼        │
+│                    ┌──────────────┐     ┌──────────────┐    ┌────────────┐  │
+│                    │ .cache/      │     │ LLM Factory  │    │ Markdown   │  │
+│                    │ (persistent) │     │ (Gemini/GPT) │    │ + JSON     │  │
+│                    └──────────────┘     └──────────────┘    └────────────┘  │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -449,14 +449,3 @@ To prevent LLM context overflow:
 3. **Validation Failures**: Block or adjust findings; never crash
 4. **Cache Misses**: Auto-collect fresh data
 5. **API Rate Limits**: Exponential backoff with retry
-
-## Future Enhancements
-
-Planned improvements from the roadmap:
-
-- [ ] INP Interaction Agent (simulated click/tap analysis)
-- [ ] Enhanced Server-Timing parsing
-- [ ] WebPageTest API integration
-- [ ] Lighthouse CI integration
-- [ ] SpaceCat bidirectional sync
-- [ ] Real-time monitoring alerts

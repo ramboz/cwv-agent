@@ -1,15 +1,18 @@
-# Web Page Performance Analysis Agent
+# CWV Agent - Core Web Vitals Performance Analysis
 
-A comprehensive tool for analyzing Core Web Vitals (CWV) performance and generating actionable optimization suggestions with AI-powered insights.
+A multi-agent AI system for analyzing Core Web Vitals (CWV) performance and generating actionable optimization suggestions.
 
 ## ✨ Features
 
-- 🔍 **Performance Data Collection**: Automated CrUX data, PSI audits, and HAR file generation
-- 🤖 **AI-Powered Analysis**: Generate detailed optimization recommendations using advanced LLM models
+- 🔍 **Comprehensive Data Collection**: CrUX field data, PSI lab audits, RUM metrics, HAR network analysis, code coverage, and more
+- 🤖 **Multi-Agent AI Analysis**: 9 specialized agents analyze different aspects of performance in parallel
+- 🧠 **Causal Graph Analysis**: Automatically identifies root causes vs symptoms and deduplicates findings
+- ✅ **Validation System**: Evidence-based confidence calibration and impact validation
 - 📱 **Multi-Device Support**: Analyze both mobile and desktop performance
-- 🎯 **Interactive Review**: Built-in MCP reviewer for Cursor IDE integration
-- ☁️ **SpaceCat Integration**: Direct upload of approved suggestions to SpaceCat platform
-- 📊 **Flexible Caching**: Smart caching to avoid redundant API calls
+- 🎯 **AEM-Aware**: Specialized contexts for EDS, AEM Cloud Service, and AMS
+- 🎮 **Interactive Review**: Built-in MCP reviewer for Cursor IDE integration
+- ☁️ **SpaceCat Integration**: Direct upload of approved suggestions
+- 📊 **Smart Caching**: Intelligent caching to avoid redundant API calls
 
 ## 🚀 Quick Start
 
@@ -24,43 +27,51 @@ npm install
 Create a `.env` file with your API keys:
 
 ```env
-# Core APIs
-GOOGLE_CRUX_API_KEY=your_crux_api_key
+# Google APIs (required for CrUX and PSI)
+CRUX_API_KEY=your_crux_api_key
 GOOGLE_PAGESPEED_INSIGHTS_API_KEY=your_psi_api_key
 
-# For Gemini
-GOOGLE_APPLICATION_CREDENTIALS=path/to/credentials.json
+# For Gemini models (recommended)
+GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
 
-# OpenAI Models
-AZURE_OPENAI_API_DEPLOYMENT_NAME=...
-AZURE_OPENAI_API_INSTANCE_NAME=...
-AZURE_OPENAI_API_KEY=...
-AZURE_OPENAI_API_VERSION=...
+# For Azure OpenAI models
+AZURE_OPENAI_API_INSTANCE_NAME=your-instance
+AZURE_OPENAI_API_DEPLOYMENT_NAME=your-deployment
+AZURE_OPENAI_API_KEY=your-key
+AZURE_OPENAI_API_VERSION=2024-02-15-preview
+
+# For AWS Bedrock (Claude models)
+AWS_ACCESS_KEY_ID=your-key
+AWS_SECRET_ACCESS_KEY=your-secret
+AWS_REGION=us-east-1
+
+# Optional: RUM data collection
+RUM_DOMAIN_KEY=your-rum-domain-key
 ```
 
 ### Basic Usage
 
 ```bash
-# AI-powered analysis with multi-agent system (default)
+# Full AI-powered analysis (default action)
 node index.js --url "https://example.com"
 
-# Or explicitly specify the agent action
-node index.js --action agent --url "https://example.com"
+# With RUM data (requires domain key)
+node index.js --url "https://example.com" --rum-domain-key your-key
 
-# Collect raw performance data only
-node index.js --action collect --url "https://example.com" --device mobile
+# Desktop analysis
+node index.js --url "https://example.com" --device desktop
 
-# Start interactive MCP reviewer (Cursor IDE integration)
-node index.js --action mcp-reviewer
+# Use a specific model
+node index.js --url "https://example.com" --model gpt-4o
 ```
 
 ## 📋 Available Actions
 
 | Action | Description | Example |
 |--------|-------------|---------|
-| `agent` | **[DEFAULT]** Run multi-agent AI analysis workflow | `--action agent --url example.com` |
-| `collect` | Collect raw performance data (CrUX, PSI, HAR) | `--action collect --url example.com` |
-| `rules` | Apply predefined performance rules | `--action rules --url example.com` |
+| `agent` | **[DEFAULT]** Multi-agent AI analysis with causal graph | `--action agent --url example.com` |
+| `collect` | Collect raw performance data only (no LLM) | `--action collect --url example.com` |
+| `rules` | Apply deterministic performance rules | `--action rules --url example.com` |
 | `mcp-reviewer` | Start interactive suggestion reviewer | `--action mcp-reviewer` |
 
 ## 🎛️ Command Line Options
@@ -69,53 +80,95 @@ node index.js --action mcp-reviewer
 node index.js [options]
 
 Options:
-  --action, -a     Action to perform [agent|collect|rules|mcp-reviewer] (default: agent)
-  --url, -u        URL to analyze
-  --urls           Path to JSON file with multiple URLs
-  --device, -d     Device type [mobile|desktop] (default: mobile)
-  --skip-cache, -s Skip cached data and force new collection
-  --model, -m      LLM model to use (default: gemini-2.5-pro)
-  --output-suffix  Suffix for output files
-  --block-requests Block specific requests (comma-separated)
-  --help           Show help
+  --action, -a         Action to perform [agent|collect|rules|mcp-reviewer] (default: agent)
+  --url, -u            URL to analyze
+  --urls               Path to JSON file with multiple URLs
+  --device, -d         Device type [mobile|desktop] (default: mobile)
+  --skip-cache, -s     Skip cached data and force new collection
+  --model, -m          LLM model to use (default: gemini-2.5-pro)
+  --output-suffix, -o  Suffix for output files
+  --block-requests, -b Block specific requests (comma-separated patterns)
+  --rum-domain-key, -r RUM domain key for Helix RUM Bundler authentication
+  --help               Show help
 ```
+
+## 🤖 Multi-Agent System
+
+The `agent` action runs 9 specialized agents in parallel:
+
+| Agent | Data Source | Focus |
+|-------|-------------|-------|
+| **CrUX Agent** | Chrome UX Report | Real user p75 metrics (LCP, CLS, INP, TTFB) |
+| **RUM Agent** | Helix RUM Bundler | Recent real user trends and comparisons |
+| **PSI Agent** | PageSpeed Insights | Lab metrics + 100+ Lighthouse audits |
+| **HAR Agent** | Puppeteer HAR | Network waterfall, timing breakdown, caching |
+| **Coverage Agent** | Puppeteer Coverage | Unused JS/CSS, pre-LCP vs post-LCP code |
+| **Code Review Agent** | First-party source | Anti-patterns, blocking resources |
+| **Perf Observer Agent** | Performance API | LCP element, CLS sources, Long Tasks |
+| **HTML Agent** | DOM Analysis | Resource hints, script loading, fonts |
+| **Rules Agent** | Heuristic rules | 18 predefined CWV best practices |
+
+### Conditional Gating
+
+Expensive agents (HAR, Coverage, Code) run conditionally based on PSI signals to optimize analysis time.
+
+### Causal Graph Analysis
+
+Findings are processed through a causal graph that:
+- **Deduplicates** cross-agent findings (e.g., 3 agents reporting same hero image issue → 1 suggestion)
+- **Identifies root causes** vs symptoms
+- **Boosts confidence** for cross-validated findings
+- **Traces critical paths** from metrics to actionable fixes
 
 ## 🤖 Supported AI Models
 
 ### Gemini Models (via Vertex AI) - Recommended
-- `gemini-2.5-pro` (default, 2M context, native JSON mode)
-- `gemini-2.5-flash` (faster, 1M context)
-- `gemini-exp-1206` (experimental 2.0 Flash with thinking)
-- `gemini-1.5-flash` (legacy, still supported)
+| Model | Context | Notes |
+|-------|---------|-------|
+| `gemini-2.5-pro` | 2M input | **Default** - best balance |
+| `gemini-2.5-flash` | 1M input | Faster, good quality |
+| `gemini-exp-1206` | 2M input | Experimental 2.0 Flash Thinking |
+| `gemini-1.5-flash` | 1M input | Legacy, still supported |
 
 ### OpenAI Models (via Azure)
-- `o1` (latest reasoning model, 200K context)
-- `o1-mini` (faster reasoning, 128K context)
-- `gpt-4o` (128K context, 16K output)
-- `gpt-4o-mini` (faster, smaller)
-- `o3-mini` (if available in your region)
+| Model | Context | Notes |
+|-------|---------|-------|
+| `o1` | 200K input | Latest reasoning model |
+| `o1-mini` | 128K input | Faster reasoning |
+| `gpt-4o` | 128K input | Good general purpose |
+| `gpt-4o-mini` | 128K input | Faster, smaller |
+| `o3-mini` | 200K input | If available in your region |
 
 ### Claude Models (via AWS Bedrock)
-- `claude-sonnet-4-5-20250929` (Claude Sonnet 4.5 - latest)
-- `claude-opus-4-5-20251101` (Claude Opus 4.5 - most capable)
-- `claude-haiku-4-0-20250514` (Claude Haiku 4.0 - fastest)
-- `claude-3-7-sonnet-20250219` (previous version)
+| Model | Context | Notes |
+|-------|---------|-------|
+| `claude-sonnet-4-5-20250929` | 200K input | Claude Sonnet 4.5 - recommended |
+| `claude-opus-4-5-20251101` | 200K input | Claude Opus 4.5 - most capable |
+| `claude-haiku-4-0-20250514` | 200K input | Claude Haiku 4.0 - fastest |
 
 ## 🎯 Interactive MCP Reviewer
 
-The CWV Agent includes a powerful MCP (Model Context Protocol) reviewer for interactive suggestion management within Cursor IDE.
+The CWV Agent includes a Model Context Protocol (MCP) server for interactive suggestion management in Cursor IDE.
 
-**📖 For complete setup instructions, see: [MCP-REVIEWER-GUIDE.md](./MCP-REVIEWER-GUIDE.md)**
+**📖 See: [MCP-REVIEWER-GUIDE.md](./MCP-REVIEWER-GUIDE.md)**
+
+Available MCP tools:
+- `load_cwv_suggestions` - Load from local JSON file
+- `load_multi_device_suggestions` - Merge mobile + desktop
+- `load_suggestions_by_url` - Auto-discover from cache
+- `get_suggestions_by_url_and_type` - Query SpaceCat API
+- `create_category_editor` - Edit suggestion categories
+- `submit_suggestions` - Push to SpaceCat
 
 ## 📁 Workflow Examples
 
 ### Single URL Analysis
 ```bash
-# Complete AI-powered analysis (default: multi-agent workflow)
-node index.js --url "https://www.qualcomm.com" --device mobile
+# Complete AI-powered analysis
+node index.js --url "https://www.example.com" --device mobile
 
-# Or explicitly specify agent action
-node index.js --action agent --url "https://www.qualcomm.com" --device mobile
+# With RUM data for better field metrics
+node index.js --url "https://www.example.com" --rum-domain-key YOUR_KEY
 ```
 
 ### Batch Processing
@@ -139,33 +192,110 @@ node index.js --urls urls.json --device mobile
 node index.js --url "https://example.com" --skip-cache
 ```
 
+### Block Third-Party Scripts
+```bash
+# Test performance without analytics/ads
+node index.js --url "https://example.com" --block-requests "google-analytics,facebook,doubleclick"
+```
+
 ## 📊 Output Files
 
-The tool generates files in the `.cache/` directory:
+Generated in `.cache/` directory:
 
-| File Type | Description | Example |
-|-----------|-------------|---------|
-| `*.performance.json` | Raw performance data | `example-com.mobile.performance.json` |
-| `*.suggestions.*.json` | AI-generated suggestions | `example-com.mobile.suggestions.gemini25pro.json` |
-| `*.report.*.summary.md` | AI-generated markdown report | `example-com.mobile.report.agent.gpt5.summary.md` |
-| `*.har` | HTTP Archive files | `example-com.mobile.har` |
-| `*.report.json` | Complete analysis reports | `example-com.mobile.report.json` |
+| Pattern | Description |
+|---------|-------------|
+| `*.crux.json` | CrUX API field data |
+| `*.psi.json` | PageSpeed Insights lab data |
+| `*.rum.json` | RUM metrics (if domain key provided) |
+| `*.har.json` | HTTP Archive + summary |
+| `*.perf.json` | Performance entries |
+| `*.html.json` | CWV-relevant HTML extract |
+| `*.coverage.json` | Code coverage data |
+| `*.third-party.json` | Third-party script analysis |
+| `*.cls-attribution.json` | CLS-to-CSS attribution |
+| `*.suggestions.json` | Final structured suggestions |
+| `*.report.*.summary.md` | Markdown report |
+| `*.quality-metrics.json` | Analysis quality metrics |
 
-## 🔧 Advanced Features
+## 🔍 Data Collection Details
 
-### Custom Models
+### What Gets Collected
+
+| Data Source | Description | Always/Conditional |
+|-------------|-------------|-------------------|
+| **CrUX** | Real user p75 metrics (28-day aggregate) | Always |
+| **PSI** | Lab Lighthouse audit (100+ checks) | Always |
+| **RUM** | Recent real user metrics | If domain key provided |
+| **HAR** | Network waterfall, timing breakdown | Conditional |
+| **Performance Entries** | LCP, CLS sources, Long Tasks, LoAF | Always |
+| **HTML Structure** | Resource hints, scripts, fonts | Always |
+| **Code Coverage** | Unused JS/CSS per segment | Conditional |
+| **Third-Party Analysis** | Script categorization & impact | With HAR |
+| **CLS Attribution** | CSS-to-shift mapping | With perf entries |
+| **First-Party Code** | Source code for review | Conditional |
+
+### Early Exit
+
+If all Core Web Vitals pass "good" thresholds, the agent skips deep analysis and returns quickly with a positive report.
+
+### AEM Detection
+
+Automatically detects CMS type and applies specialized context:
+- **EDS** (Edge Delivery Services) - Block-based architecture
+- **AEM CS** (Cloud Service) - Sling Models, Dispatcher
+- **AMS** (Managed Services) - Legacy components
+
+## ⚙️ Environment Variables
+
+### Required (per provider)
+
+**Gemini (Google Cloud)**
 ```bash
-# Use different AI model
-node index.js --url example.com --model gpt-4o
+GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
 ```
 
-### Request Blocking
+**Azure OpenAI**
 ```bash
-# Block analytics and ads during collection
-node index.js --action collect --url example.com --block-requests "google-analytics,facebook"
+AZURE_OPENAI_API_INSTANCE_NAME=your-instance
+AZURE_OPENAI_API_DEPLOYMENT_NAME=your-deployment
+AZURE_OPENAI_API_KEY=your-key
+AZURE_OPENAI_API_VERSION=2024-02-15-preview
 ```
 
-### Visualization
+**AWS Bedrock**
+```bash
+AWS_ACCESS_KEY_ID=your-key
+AWS_SECRET_ACCESS_KEY=your-secret
+AWS_REGION=us-east-1
+```
+
+### Optional
+```bash
+# API Keys
+CRUX_API_KEY=your-crux-key
+GOOGLE_PAGESPEED_INSIGHTS_API_KEY=your-psi-key
+RUM_DOMAIN_KEY=your-rum-key
+
+# Skip specific data collection (for debugging)
+SKIP_HAR_ANALYSIS=true
+SKIP_COVERAGE_ANALYSIS=true
+SKIP_CODE_ANALYSIS=true
+SKIP_PERFORMANCE_ENTRIES=true
+SKIP_FULL_HTML=true
+```
+
+## 📐 Architecture
+
+For detailed architecture documentation, see: [ARCHITECTURE.md](./ARCHITECTURE.md)
+
+### High-Level Flow
+
+```
+URL Input → Data Collection → Multi-Agent Analysis → Causal Graph → Validation → Synthesis → Report
+```
+
+## 🎨 Visualization
+
 ```bash
 # Start local server for report visualization
 npx live-server --mount=/.cache:./.cache
@@ -173,21 +303,6 @@ npx live-server --mount=/.cache:./.cache
 # Open visualization UI
 open http://127.0.0.1:8080/ui/index.html?report=/.cache/example-com.mobile.report.json
 ```
-
-
-## 🔍 Data Collection Details
-
-### What Gets Collected
-- **CrUX Data**: Real user experience metrics from Chrome UX Report
-- **PSI Audit**: PageSpeed Insights performance audit
-- **HAR Files**: Complete HTTP archive of page load
-- **Performance Entries**: Browser performance API data
-- **First-Party Code**: JavaScript and CSS files for analysis
-
-### Cache Strategy
-- Results cached by URL and device type
-- Use `--skip-cache` to force fresh data collection
-- Cache files stored in `.cache/` directory
 
 ## 🤝 Contributing
 
