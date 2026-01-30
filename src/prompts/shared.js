@@ -294,6 +294,29 @@ export const PHASE_FOCUS = {
 - Include distribution data when relevant: "75% of users experience CLS > 0.25"
 - Reference histogram bins for severity context: "good: 15%, needs-improvement: 20%, poor: 65%"`,
 
+  RUM: (n) => `### Step ${n}: Real User Monitoring (RUM) Analysis
+- Analyze recent RUM data (last 7 days) for the specific page being analyzed
+- Compare RUM metrics to CrUX aggregate data to identify page-specific issues
+- Identify temporal trends: Is performance improving or degrading over the 7-day period?
+- Analyze device/connection breakdown if available (mobile vs desktop, connection types)
+- Look for outliers: Are there specific user sessions with extremely poor metrics?
+- Identify interaction patterns: Which elements trigger poor INP?
+- Correlate LCP targets with actual LCP elements observed in RUM
+
+**Key Differences from CrUX**:
+- RUM is page-specific, CrUX is origin-level or URL-level aggregate
+- RUM is recent (7 days), CrUX is 28-day rolling average
+- RUM may have more granular attribution data (targets, interaction types)
+- Use RUM to validate or contradict CrUX findings
+
+**Evidence Requirements for RUM Data**:
+- RUM evidence must include metric name, value, sample size, and time context
+- ✅ GOOD: "RUM INP p75: 450ms (n=1,234 samples over 7 days), worst: 1200ms on /checkout"
+- ✅ GOOD: "RUM LCP trending worse: 2.1s → 2.8s over past week"
+- ❌ BAD: "INP is slow" (no specifics)
+- Include comparison to CrUX when relevant: "RUM INP (450ms) worse than CrUX (380ms) - recent regression?"
+- Reference specific pages/URLs if performance varies across the site`,
+
   PSI: (n) => `### Step ${n}: PageSpeed Assessment
 - Evaluate PSI/Lighthouse mobile results
 - Identify key bottlenecks for each metric

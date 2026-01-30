@@ -28,49 +28,103 @@ import {
  */
 function classifyFindingType(finding) {
   const desc = (finding.finding || finding.description || '').toLowerCase();
-  const evidence = (finding.evidence?.[0]?.reference || '').toLowerCase();
+  const evidence = (finding.evidence?.[0]?.reference || finding.evidence?.reference || '').toLowerCase();
+  const combined = `${desc} ${evidence}`;
 
   // Image-related issues
-  if (desc.includes('missing width') || desc.includes('missing height') ||
-      desc.includes('unsized image') || desc.includes('image dimension')) {
+  if (combined.includes('missing width') || combined.includes('missing height') ||
+      combined.includes('unsized image') || combined.includes('image dimension') ||
+      combined.includes('explicit dimensions')) {
     return 'image-sizing';
   }
 
+  // LCP image issues
+  if ((combined.includes('lcp') || combined.includes('largest contentful')) &&
+      (combined.includes('image') || combined.includes('hero'))) {
+    return 'lcp-image';
+  }
+
   // Code/resource waste
-  if (desc.includes('unused') && (desc.includes('css') || desc.includes('code') || desc.includes('javascript'))) {
+  if (combined.includes('unused') && (combined.includes('css') || combined.includes('code') ||
+      combined.includes('javascript') || combined.includes('js'))) {
     return 'unused-code';
   }
 
   // Font-specific issues
-  if (desc.includes('font') && (desc.includes('format') || desc.includes('woff2') || desc.includes('ttf'))) {
+  if (combined.includes('font') && (combined.includes('format') || combined.includes('woff2') ||
+      combined.includes('ttf') || combined.includes('font-display'))) {
     return 'font-format';
   }
-  if (desc.includes('font') && desc.includes('preload')) {
+  if (combined.includes('font') && combined.includes('preload')) {
     return 'font-preload';
   }
 
   // Resource loading issues
-  if (desc.includes('preload') && !desc.includes('font')) {
+  if (combined.includes('preload') && !combined.includes('font')) {
     return 'resource-preload';
   }
-  if (desc.includes('preconnect') || desc.includes('dns-prefetch')) {
+  if (combined.includes('preconnect') || combined.includes('dns-prefetch')) {
     return 'resource-hints';
   }
 
   // Rendering issues
-  if (desc.includes('render-blocking') || desc.includes('blocking resource')) {
+  if (combined.includes('render-blocking') || combined.includes('blocking resource') ||
+      combined.includes('parser-blocking')) {
     return 'blocking-resource';
   }
-  if (desc.includes('inline') && desc.includes('css')) {
+  if (combined.includes('inline') && combined.includes('css')) {
     return 'inline-css';
   }
 
   // Layout issues
-  if (desc.includes('layout shift') || desc.includes('cumulative layout')) {
+  if (combined.includes('layout shift') || combined.includes('cumulative layout') ||
+      combined.includes('cls')) {
     return 'layout-shift';
   }
 
-  return 'unknown';
+  // Server/TTFB issues
+  if (combined.includes('ttfb') || combined.includes('server response') ||
+      combined.includes('time to first byte') || combined.includes('cache miss')) {
+    return 'ttfb';
+  }
+
+  // Third-party issues
+  if (combined.includes('third-party') || combined.includes('third party') ||
+      combined.includes('3rd party') || combined.includes('external script')) {
+    return 'third-party';
+  }
+
+  // JavaScript execution issues
+  if (combined.includes('long task') || combined.includes('main thread') ||
+      combined.includes('blocking time') || combined.includes('tbt')) {
+    return 'js-execution';
+  }
+
+  // INP/interaction issues
+  if (combined.includes('inp') || combined.includes('interaction') ||
+      combined.includes('event handler') || combined.includes('click handler')) {
+    return 'interaction';
+  }
+
+  // Bundle/code splitting issues
+  if (combined.includes('bundle') || combined.includes('code split') ||
+      combined.includes('chunk')) {
+    return 'bundling';
+  }
+
+  // Compression issues
+  if (combined.includes('compress') || combined.includes('gzip') ||
+      combined.includes('brotli') || combined.includes('minif')) {
+    return 'compression';
+  }
+
+  // If we still can't classify, use the metric as a fallback type
+  const metric = finding.metric?.toLowerCase();
+  if (metric && metric !== 'unknown') {
+    return `${metric}-issue`;
+  }
+
+  return 'general';
 }
 
 /**
@@ -437,6 +491,194 @@ export function exportGraph(graph) {
         .filter(n => n.depth !== null)
         .reduce((sum, n) => sum + n.depth, 0) / Object.keys(graph.nodes).length
     }
+  };
+}
+
+/**
+ * Deterministic deduplication of findings before synthesis
+ * Groups findings by file + metric combination and merges duplicates
+ *
+ * @param {Object[]} findings - Array of findings from all agents
+ * @return {Object} Deduplication result with unique findings and merge info
+ */
+export function deduplicateFindings(findings) {
+  if (!findings || findings.length === 0) {
+    return { findings: [], mergedCount: 0, mergeGroups: [] };
+  }
+
+  // Group findings by deterministic key: file + metric + type
+  const groups = new Map();
+
+  findings.forEach(finding => {
+    const key = generateDeduplicationKey(finding);
+    if (!groups.has(key)) {
+      groups.set(key, []);
+    }
+    groups.get(key).push(finding);
+  });
+
+  const uniqueFindings = [];
+  const mergeGroups = [];
+  let mergedCount = 0;
+
+  groups.forEach((groupFindings, key) => {
+    if (groupFindings.length === 1) {
+      // No duplicates, keep as-is
+      uniqueFindings.push(groupFindings[0]);
+    } else {
+      // Merge duplicates into single finding
+      const merged = mergeFindingGroup(groupFindings);
+      uniqueFindings.push(merged);
+      mergedCount += groupFindings.length - 1;
+      mergeGroups.push({
+        key,
+        originalCount: groupFindings.length,
+        mergedFinding: merged.id,
+        sources: groupFindings.map(f => f.agentName || 'unknown'),
+      });
+    }
+  });
+
+  // Log deduplication summary
+  if (mergedCount > 0) {
+    console.log(`🔄 Deduplication: ${findings.length} → ${uniqueFindings.length} findings (${mergedCount} merged)`);
+  } else {
+    console.log(`🔄 Deduplication: ${findings.length} findings (no duplicates found)`);
+  }
+
+  return {
+    findings: uniqueFindings,
+    mergedCount,
+    mergeGroups,
+    originalCount: findings.length,
+  };
+}
+
+/**
+ * Generate deterministic key for deduplication
+ * @param {Object} finding - Finding to generate key for
+ * @return {string} Deduplication key
+ */
+function generateDeduplicationKey(finding) {
+  // Extract file reference from multiple possible locations
+  const file = extractFileFromFinding(finding) || 'no-file';
+
+  // Get metric
+  const metric = finding.metric || 'unknown';
+
+  // Get semantic type
+  const type = classifyFindingType(finding);
+
+  return `${metric}:${type}:${file}`;
+}
+
+/**
+ * Extract file reference from finding, checking multiple possible locations
+ * @param {Object} finding - Finding to extract file from
+ * @return {string|null} File name or null
+ */
+function extractFileFromFinding(finding) {
+  // Check multiple sources for file references
+  const sources = [];
+
+  // 1. Check evidence.reference (string)
+  if (finding.evidence?.reference) {
+    sources.push(finding.evidence.reference);
+  }
+
+  // 2. Check evidence array (some agents use array format)
+  if (Array.isArray(finding.evidence)) {
+    finding.evidence.forEach(e => {
+      if (e?.reference) sources.push(e.reference);
+      if (e?.source) sources.push(e.source);
+    });
+  }
+
+  // 3. Check evidence[0].reference (nested array access)
+  if (finding.evidence?.[0]?.reference) {
+    sources.push(finding.evidence[0].reference);
+  }
+
+  // 4. Check description
+  if (finding.description) {
+    sources.push(finding.description);
+  }
+
+  // 5. Check finding.finding (some formats use this)
+  if (finding.finding) {
+    sources.push(finding.finding);
+  }
+
+  // 6. Check affectedResources array
+  if (Array.isArray(finding.affectedResources)) {
+    finding.affectedResources.forEach(r => {
+      if (typeof r === 'string') sources.push(r);
+      if (r?.url) sources.push(r.url);
+      if (r?.file) sources.push(r.file);
+    });
+  }
+
+  // Try to extract file from each source
+  for (const source of sources) {
+    if (!source || typeof source !== 'string') continue;
+    const file = extractFileName(source);
+    if (file) return file;
+  }
+
+  return null;
+}
+
+/**
+ * Merge a group of duplicate findings into one
+ * @param {Object[]} groupFindings - Array of duplicate findings
+ * @return {Object} Merged finding
+ */
+function mergeFindingGroup(groupFindings) {
+  // Sort by confidence (highest first)
+  const sorted = [...groupFindings].sort((a, b) => {
+    const confA = a.evidence?.confidence || 0;
+    const confB = b.evidence?.confidence || 0;
+    return confB - confA;
+  });
+
+  // Use highest confidence finding as base
+  const base = sorted[0];
+
+  // Merge impact estimates (take maximum)
+  const mergedImpact = groupFindings.reduce((max, f) => {
+    const impact = f.estimatedImpact?.reduction || 0;
+    return impact > max ? impact : max;
+  }, 0);
+
+  // Merge confidence (weighted average based on source reliability)
+  const totalConfidence = groupFindings.reduce((sum, f) => {
+    const conf = f.evidence?.confidence || 0.5;
+    return sum + conf;
+  }, 0);
+  const avgConfidence = totalConfidence / groupFindings.length;
+
+  // Collect all agent sources
+  const sources = groupFindings.map(f => f.agentName || 'unknown').filter((v, i, a) => a.indexOf(v) === i);
+
+  return {
+    ...base,
+    id: base.id, // Keep original ID
+    description: base.description,
+    evidence: {
+      ...base.evidence,
+      confidence: Math.min(avgConfidence * 1.1, 0.95), // Boost confidence for cross-validated findings
+      mergedFrom: sources,
+    },
+    estimatedImpact: {
+      ...base.estimatedImpact,
+      reduction: mergedImpact,
+    },
+    validation: {
+      ...base.validation,
+      crossValidated: true,
+      sourceCount: groupFindings.length,
+      sources,
+    },
   };
 }
 

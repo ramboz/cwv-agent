@@ -67,6 +67,7 @@ export class HARCollector extends LabDataCollector {
       () => this.findHTTP1Resources(entries),
       () => this.findRedirects(entries),
       () => this.analyzeServerHeaders(entries),
+      () => this.analyzeCacheHeaders(entries),
       () => this.generatePerDomainSummary(entries)
     ];
 
@@ -233,20 +234,188 @@ export class HARCollector extends LabDataCollector {
     const headers = mainDocument.response.headers;
     const getHeader = (name) => headers.find(h => h.name.toLowerCase() === name.toLowerCase())?.value;
 
+    // Parse Server-Timing header for detailed TTFB attribution
+    const serverTimingParsed = this.parseServerTiming(getHeader('server-timing'));
+
+    // Determine cache status
+    const cacheStatus = this.determineCacheStatus(headers);
+
     const insights = [
       { key: 'Cache-Control', value: getHeader('cache-control') },
-      { key: 'Server-Timing', value: getHeader('server-timing') },
-      { key: 'CDN Cache Status', value: getHeader('x-cache') || getHeader('cf-cache-status') || getHeader('x-fastly-cache') },
+      { key: 'Cache Status', value: cacheStatus.summary },
       { key: 'Server', value: getHeader('server') },
       { key: 'Age', value: getHeader('age') ? `${getHeader('age')}s (cached response)` : null }
     ].filter(insight => insight.value);
 
-    if (insights.length === 0) return null;
+    if (insights.length === 0 && !serverTimingParsed) return null;
 
     let report = '* **Server Headers (Main Document):**\n';
     insights.forEach(insight => {
       report += `    * ${insight.key}: ${insight.value}\n`;
     });
+
+    // Add parsed Server-Timing breakdown
+    if (serverTimingParsed && serverTimingParsed.length > 0) {
+      report += '    * **Server-Timing Breakdown:**\n';
+      serverTimingParsed.forEach(timing => {
+        report += `        * ${timing.name}`;
+        if (timing.desc) report += ` (${timing.desc})`;
+        if (timing.dur != null) report += `: ${timing.dur}ms`;
+        report += '\n';
+      });
+    }
+
+    // Add cache analysis insights
+    if (cacheStatus.isCacheMiss) {
+      report += `    * ⚠️ **Cache Miss Detected**: Response was not served from cache\n`;
+      if (cacheStatus.reason) {
+        report += `        * Reason: ${cacheStatus.reason}\n`;
+      }
+    }
+
+    return report;
+  }
+
+  /**
+   * Parse Server-Timing header into structured data
+   * @param {string} serverTimingHeader - Raw Server-Timing header value
+   * @returns {Array|null} Parsed timing entries or null
+   */
+  parseServerTiming(serverTimingHeader) {
+    if (!serverTimingHeader) return null;
+
+    try {
+      // Server-Timing format: name;desc="description";dur=123, name2;dur=456
+      return serverTimingHeader.split(',').map(entry => {
+        const parts = entry.trim().split(';');
+        const result = { name: parts[0].trim() };
+
+        parts.slice(1).forEach(part => {
+          const [key, value] = part.split('=');
+          if (key.trim() === 'desc') {
+            result.desc = value?.replace(/"/g, '').trim();
+          } else if (key.trim() === 'dur') {
+            result.dur = parseFloat(value);
+          }
+        });
+
+        return result;
+      }).filter(t => t.name);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /**
+   * Determine cache status from various cache-related headers
+   * @param {Array} headers - Response headers array
+   * @returns {Object} Cache status analysis
+   */
+  determineCacheStatus(headers) {
+    const getHeader = (name) => headers.find(h => h.name.toLowerCase() === name.toLowerCase())?.value;
+
+    const xCache = getHeader('x-cache');
+    const cfCacheStatus = getHeader('cf-cache-status');
+    const xFastlyCache = getHeader('x-fastly-cache');
+    const xDispatcherCache = getHeader('x-dispatcher-cache');
+    const xAkamaiCache = getHeader('x-akamai-cache');
+    const age = getHeader('age');
+    const cacheControl = getHeader('cache-control');
+
+    let summary = '';
+    let isCacheMiss = false;
+    let reason = null;
+
+    // Check various CDN cache headers
+    if (cfCacheStatus) {
+      summary = `Cloudflare: ${cfCacheStatus}`;
+      isCacheMiss = ['MISS', 'EXPIRED', 'BYPASS', 'DYNAMIC'].includes(cfCacheStatus.toUpperCase());
+      if (isCacheMiss) reason = `Cloudflare returned ${cfCacheStatus}`;
+    } else if (xFastlyCache) {
+      summary = `Fastly: ${xFastlyCache}`;
+      isCacheMiss = xFastlyCache.toUpperCase().includes('MISS');
+      if (isCacheMiss) reason = `Fastly cache miss`;
+    } else if (xDispatcherCache) {
+      summary = `AEM Dispatcher: ${xDispatcherCache}`;
+      isCacheMiss = xDispatcherCache.toUpperCase().includes('MISS');
+      if (isCacheMiss) reason = `AEM Dispatcher cache miss - check dispatcher.any rules`;
+    } else if (xAkamaiCache) {
+      summary = `Akamai: ${xAkamaiCache}`;
+      isCacheMiss = xAkamaiCache.toUpperCase().includes('MISS');
+      if (isCacheMiss) reason = `Akamai cache miss`;
+    } else if (xCache) {
+      summary = `X-Cache: ${xCache}`;
+      isCacheMiss = xCache.toUpperCase().includes('MISS');
+      if (isCacheMiss) reason = `CDN cache miss`;
+    }
+
+    // Check Age header - presence indicates cached response
+    if (age && parseInt(age) > 0) {
+      summary += summary ? `, Age: ${age}s` : `Age: ${age}s (cached)`;
+      isCacheMiss = false; // Age > 0 means it was cached
+    }
+
+    // Check Cache-Control for no-cache/no-store
+    if (cacheControl) {
+      if (cacheControl.includes('no-store') || cacheControl.includes('no-cache')) {
+        if (!summary) summary = 'Not cacheable';
+        isCacheMiss = true;
+        reason = `Cache-Control: ${cacheControl}`;
+      }
+    }
+
+    return { summary: summary || null, isCacheMiss, reason };
+  }
+
+  /**
+   * Analyze cache headers across all resources
+   * @param {Array} entries - HAR entries
+   * @returns {string|null} Cache analysis report
+   */
+  analyzeCacheHeaders(entries) {
+    const cacheIssues = [];
+
+    entries.forEach(entry => {
+      if (!entry.response?.headers) return;
+
+      const url = entry.request.url;
+      const headers = entry.response.headers;
+      const cacheStatus = this.determineCacheStatus(headers);
+      const getHeader = (name) => headers.find(h => h.name.toLowerCase() === name.toLowerCase())?.value;
+      const cacheControl = getHeader('cache-control');
+
+      // Flag cache misses for critical resources
+      const contentType = entry.response?.content?.mimeType || '';
+      const isCritical = contentType.includes('html') ||
+                        contentType.includes('javascript') ||
+                        contentType.includes('css') ||
+                        contentType.includes('font');
+
+      if (isCritical && cacheStatus.isCacheMiss) {
+        cacheIssues.push({
+          url: this.truncate(url),
+          type: contentType.split('/').pop(),
+          reason: cacheStatus.reason || 'Cache miss',
+          cacheControl
+        });
+      }
+    });
+
+    if (cacheIssues.length === 0) return null;
+
+    let report = '* **Cache Issues (Critical Resources):**\n';
+    cacheIssues.slice(0, 10).forEach(issue => {
+      report += `    * ${issue.url} (${issue.type})\n`;
+      report += `        * Issue: ${issue.reason}\n`;
+      if (issue.cacheControl) {
+        report += `        * Cache-Control: ${issue.cacheControl}\n`;
+      }
+    });
+
+    if (cacheIssues.length > 10) {
+      report += `    * ... +${cacheIssues.length - 10} more cache issues\n`;
+    }
+
     return report;
   }
 

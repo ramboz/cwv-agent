@@ -26,6 +26,27 @@ export const ValidationRules = {
     overall: 0.6,         // Overall finding confidence (avg of above)
   },
 
+  // Evidence source reliability tiers for confidence calibration
+  // Field data (real users) > Lab data (controlled) > Code review (speculative)
+  EVIDENCE_RELIABILITY: {
+    // Tier 1: Field data - highly reliable (real user measurements)
+    crux: { maxConfidence: 0.95, tier: 'field', description: 'CrUX field data - 28-day real user aggregate' },
+    rum: { maxConfidence: 0.95, tier: 'field', description: 'RUM field data - recent real user measurements' },
+
+    // Tier 2: Lab data - reliable (controlled measurements)
+    psi: { maxConfidence: 0.85, tier: 'lab', description: 'PSI/Lighthouse - controlled lab environment' },
+    har: { maxConfidence: 0.85, tier: 'lab', description: 'HAR network data - controlled capture' },
+    perfEntries: { maxConfidence: 0.85, tier: 'lab', description: 'Performance entries - controlled capture' },
+    coverage: { maxConfidence: 0.80, tier: 'lab', description: 'Code coverage - controlled execution' },
+
+    // Tier 3: Static analysis - moderate reliability (no runtime verification)
+    html: { maxConfidence: 0.75, tier: 'static', description: 'HTML analysis - static markup inspection' },
+    rules: { maxConfidence: 0.75, tier: 'static', description: 'Rules engine - heuristic pattern matching' },
+
+    // Tier 4: Code review - speculative (requires human judgment)
+    code: { maxConfidence: 0.65, tier: 'speculative', description: 'Code review - speculative analysis' },
+  },
+
   // Evidence quality checks
   EVIDENCE: {
     minReferenceLength: 10,           // "PSI audit" is too vague
@@ -96,6 +117,54 @@ export const ValidationRules = {
 };
 
 /**
+ * Get the reliability tier for an evidence source
+ * @param {string} source - Evidence source name
+ * @returns {string} Tier name (field, lab, static, speculative)
+ */
+function getSourceTier(source) {
+  if (!source) return 'speculative';
+
+  // Handle prefixed sources like 'psi.audits'
+  const baseSource = source.split('.')[0];
+  const reliability = ValidationRules.EVIDENCE_RELIABILITY[baseSource];
+
+  return reliability?.tier || 'speculative';
+}
+
+/**
+ * Calibrate confidence based on evidence source reliability
+ * Field data is highly reliable, code review is speculative
+ *
+ * @param {number} rawConfidence - Original confidence (0-1)
+ * @param {string} source - Evidence source name
+ * @returns {number} Calibrated confidence (0-1)
+ */
+function calibrateConfidenceBySource(rawConfidence, source) {
+  if (!source) return rawConfidence;
+
+  // Handle prefixed sources like 'psi.audits'
+  const baseSource = source.split('.')[0];
+  const reliability = ValidationRules.EVIDENCE_RELIABILITY[baseSource];
+
+  if (!reliability) {
+    // Unknown source - apply conservative cap
+    return Math.min(rawConfidence, 0.6);
+  }
+
+  // Cap confidence at the source's maximum reliability
+  // This prevents code review findings from claiming 0.95 confidence
+  const cappedConfidence = Math.min(rawConfidence, reliability.maxConfidence);
+
+  // For speculative sources, apply additional penalty for high claims
+  if (reliability.tier === 'speculative' && rawConfidence > 0.8) {
+    // LLM claiming high confidence on speculative data - reduce by 15%
+    return cappedConfidence * 0.85;
+  }
+
+  return cappedConfidence;
+}
+
+/**
  * Validates a single finding
  * @param {Object} finding - Agent finding to validate
  * @param {Object} graph - Causal graph (for depth/relationship checks)
@@ -133,13 +202,19 @@ export function validateFinding(finding, graph = null) {
     errors.push(...rootCauseValidation.errors);
   }
 
-  // 5. Calculate overall confidence
+  // 5. Calculate overall confidence with evidence-based calibration
   const evidenceConfidence = finding.evidence?.confidence || 0.5;
   const impactConfidence = finding.estimatedImpact?.confidence || 0.5;
   const overallConfidence = (evidenceConfidence + impactConfidence) / 2;
 
+  // Apply evidence source calibration
+  const calibratedConfidence = calibrateConfidenceBySource(
+    overallConfidence,
+    finding.evidence?.source
+  );
+
   // Adjust confidence based on warnings/errors
-  let adjustedConfidence = overallConfidence;
+  let adjustedConfidence = calibratedConfidence;
   if (warnings.length > 0) {
     adjustedConfidence *= 0.9; // 10% penalty per warning
   }
@@ -155,6 +230,12 @@ export function validateFinding(finding, graph = null) {
     warnings,
     errors,
     adjustments,
+    calibration: {
+      originalConfidence: overallConfidence,
+      sourceCalibrated: calibratedConfidence,
+      source: finding.evidence?.source,
+      tier: getSourceTier(finding.evidence?.source),
+    },
   };
 }
 

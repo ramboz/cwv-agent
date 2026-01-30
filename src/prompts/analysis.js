@@ -207,6 +207,17 @@ ${stepVerbose()} here is the Real User Monitoring (RUM) data from the last 7 day
 ${rumSummary}
 `;
 
+/**
+ * Prompt for INP interaction testing summary analysis
+ * @param {string} interactionSummary - Interaction testing summary text
+ * @return {string} Interaction testing analysis prompt
+ */
+export const inpInteractionStep = (interactionSummary) => `
+${stepVerbose()} here are the interaction testing results for INP analysis:
+
+${interactionSummary}
+`;
+
 
 function getBasePrompt(cms, role) {
   return `You are ${role} for Core Web Vitals optimization.
@@ -290,12 +301,91 @@ For EVERY finding, you MUST provide structured reasoning using this 4-step chain
 export function cruxAgentPrompt(cms = 'eds') {
   return `${getBasePrompt(cms, 'analyzing Chrome User Experience Report (CrUX) field data')}
 
+${getChainOfThoughtGuidance()}
+
+## Few-Shot Examples
+
+**Example 1: Field vs Lab Gap Analysis**
+Input: CrUX LCP p75 = 4.2s (poor), PSI Lab LCP = 2.1s (good)
+Output:
+- Finding: Significant field-lab gap indicates real-world conditions differ from lab
+- Evidence: CrUX LCP p75 (4.2s) is 2x worse than PSI lab (2.1s)
+- Impact: Real users on slower connections/devices experience much worse LCP
+- Confidence: 0.9 (field data is ground truth)
+- Root Cause: Lab tests on fast connection don't reflect typical user conditions
+- Recommendation: Focus on reducing payload size and improving server response for slow connections
+
+**Example 2: Histogram Distribution Analysis**
+Input: CrUX CLS histogram: good=15%, needs-improvement=20%, poor=65%
+Output:
+- Finding: 65% of users experience poor CLS (>0.25)
+- Evidence: CrUX histogram shows only 15% of users have good CLS experience
+- Impact: Majority of users see significant layout shifts during page load
+- Confidence: 0.95 (histogram data is highly reliable)
+- Recommendation: Prioritize CLS fixes - this affects most users
+
+**Example 3: Origin vs URL-Level Comparison**
+Input: Origin CrUX INP p75 = 180ms (good), URL CrUX INP p75 = 450ms (poor)
+Output:
+- Finding: This specific page has INP issues not representative of the site overall
+- Evidence: URL INP (450ms) is 2.5x worse than origin average (180ms)
+- Impact: Page-specific JavaScript or interactions are causing delays
+- Confidence: 0.85 (URL-level data available and reliable)
+- Recommendation: Investigate page-specific event handlers and heavy JavaScript
+
+**Example 4: No CrUX Data Available**
+Input: No CrUX data for URL (insufficient traffic)
+Output:
+- Finding: Insufficient traffic for CrUX data - rely on lab data and RUM
+- Evidence: CrUX API returned no data for this URL
+- Impact: Cannot validate lab findings with field data
+- Confidence: N/A
+- Recommendation: Use PSI lab data as primary source, consider enabling RUM for field insights
+
 ## Your Analysis Focus
 ${PHASE_FOCUS.CRUX(step())}
 
+${getStructuredOutputFormat('CrUX Agent')}
+`;
+}
+
+export function rumAgentPrompt(cms = 'eds') {
+  return `${getBasePrompt(cms, 'analyzing Real User Monitoring (RUM) field data')}
+
 ${getChainOfThoughtGuidance()}
 
-${getStructuredOutputFormat('CrUX Agent')}
+## Few-Shot Examples
+
+**Example 1: RUM Shows Recent Regression**
+Input: RUM LCP p75 = 3.2s (7-day), CrUX LCP p75 = 2.4s (28-day)
+Output:
+- Finding: LCP has regressed significantly in the past week
+- Evidence: RUM LCP p75 (3.2s) is 33% worse than CrUX 28-day average (2.4s)
+- Impact: Recent deployment or content change likely caused regression
+- Confidence: 0.85 (field data comparison is reliable)
+- Recommendation: Investigate recent changes, compare to previous week's RUM data
+
+**Example 2: Page-Specific INP Issue**
+Input: RUM INP p75 = 580ms for /checkout, site average = 180ms
+Output:
+- Finding: Checkout page has severe INP issues compared to site average
+- Evidence: RUM INP for /checkout (580ms) is 3x worse than site average (180ms)
+- Impact: Checkout interactions are frustrating users, potential conversion impact
+- Confidence: 0.9 (page-specific data is concrete)
+- Recommendation: Focus INP optimization on checkout page event handlers
+
+**Example 3: RUM Validates CrUX Finding**
+Input: CrUX CLS = 0.25, RUM CLS = 0.28 with attribution to hero image
+Output:
+- Finding: CLS issue confirmed by both CrUX and RUM, attributed to hero image
+- Evidence: RUM CLS (0.28) aligns with CrUX (0.25), RUM shows hero image as top shifter
+- Impact: Hero image without dimensions is consistent root cause
+- Confidence: 0.95 (cross-validated by two field data sources)
+
+## Your Analysis Focus
+${PHASE_FOCUS.RUM(step())}
+
+${getStructuredOutputFormat('RUM Agent')}
 `;
 }
 
@@ -339,10 +429,57 @@ ${getStructuredOutputFormat('PSI Agent')}
 export function perfObserverAgentPrompt(cms = 'eds') {
   return `${getBasePrompt(cms, 'analyzing Performance Observer data captured during page load simulation')}
 
+${getChainOfThoughtGuidance()}
+
+## Few-Shot Examples
+
+**Example 1: Long Tasks Blocking Main Thread**
+Input: 5 long tasks detected, total 850ms, largest at 320ms attributed to "app.bundle.js"
+Output:
+- Finding: Main thread blocked by long tasks totaling 850ms, largest from app.bundle.js
+- Evidence: PerformanceObserver shows 5 longtask entries, 320ms max duration attributed to app.bundle.js
+- Impact: Breaking up long tasks could reduce TBT by ~650ms (tasks over 50ms threshold)
+- Confidence: 0.85 (long task attribution is reliable)
+- Fix: Split app.bundle.js into smaller chunks, use requestIdleCallback for non-critical work
+
+**Example 2: LCP Element Identification**
+Input: LCP entry shows element = <img class="hero-image">, startTime = 3200ms, size = 450000
+Output:
+- Finding: LCP element is hero image, rendered at 3200ms
+- Evidence: PerformanceObserver LCP entry identifies img.hero-image as LCP element
+- Impact: Optimizing hero image load could improve LCP by 700-1200ms
+- Confidence: 0.9 (LCP element identification is definitive)
+- Recommendation: Preload hero image, optimize format/size, ensure fetchpriority="high"
+
+**Example 3: CLS Attribution to Font Swap**
+Input: CLS entry shows value=0.15, sources include text elements with height changes of 8px, width changes of 1px
+Output:
+- Finding: Layout shift attributed to font swap (text reflow)
+- Evidence: CLS sources show text elements with height change (8px) but minimal width change (1px) - font swap pattern
+- Impact: Using font-display: optional or size-adjust could eliminate this shift
+- Confidence: 0.8 (shift pattern consistent with font swap)
+- Fix: Add size-adjust to fallback font, or use font-display: optional
+
+**Example 4: CLS from Dynamic Content Insertion**
+Input: CLS entry shows value=0.22, sources include container element pushed down by 150px
+Output:
+- Finding: Layout shift caused by dynamic content insertion above fold
+- Evidence: CLS sources show container shifted down 150px, indicating content inserted above
+- Impact: Reserving space for dynamic content could eliminate this shift
+- Confidence: 0.85 (insertion pattern is clear)
+- Fix: Reserve space with min-height or skeleton placeholder before content loads
+
+**Example 5: Pre-LCP Long Tasks**
+Input: 3 long tasks before LCP (total 400ms), LCP at 2800ms
+Output:
+- Finding: Long tasks before LCP delay rendering by 400ms
+- Evidence: PerformanceObserver shows 400ms of long tasks completed before LCP at 2800ms
+- Impact: Deferring non-critical JavaScript could reduce LCP by ~300-400ms
+- Confidence: 0.8 (pre-LCP tasks directly impact LCP timing)
+- Recommendation: Defer non-critical scripts, prioritize LCP-critical resources
+
 ## Your Analysis Focus
 ${PHASE_FOCUS.PERF_OBSERVER(step())}
-
-${getChainOfThoughtGuidance()}
 
 ${getStructuredOutputFormat('Performance Observer Agent')}
 `;
@@ -389,10 +526,57 @@ ${getStructuredOutputFormat('HAR Agent')}
 export function htmlAgentPrompt(cms = 'eds') {
   return `${getBasePrompt(cms, 'analyzing HTML markup for Core Web Vitals optimization opportunities')}
 
+${getChainOfThoughtGuidance()}
+
+## Few-Shot Examples
+
+**Example 1: Missing LCP Image Preload**
+Input: LCP element is <img src="hero.jpg">, no preload hint in <head>
+Output:
+- Finding: LCP image lacks preload hint, discovered late by parser
+- Evidence: HTML <head> has no <link rel="preload" as="image" href="hero.jpg">
+- Impact: Adding preload could improve LCP by 200-500ms by starting fetch earlier
+- Confidence: 0.85 (preload effectiveness depends on server/CDN)
+- Fix: Add <link rel="preload" as="image" href="hero.jpg" fetchpriority="high">
+
+**Example 2: Render-Blocking Third-Party Scripts**
+Input: <script src="https://analytics.example.com/tracker.js"> in <head> without async/defer
+Output:
+- Finding: Third-party analytics script blocks rendering
+- Evidence: HTML shows synchronous script tag in <head> for external domain
+- Impact: Adding async attribute could reduce FCP by 100-300ms
+- Confidence: 0.9 (async is safe for analytics scripts)
+- Fix: Add async attribute: <script async src="...">
+
+**Example 3: Images Missing Dimensions**
+Input: Multiple <img> tags without width/height attributes
+Output:
+- Finding: Images lack explicit dimensions, causing layout shifts during load
+- Evidence: HTML shows <img src="product.jpg" alt="..."> without width/height
+- Impact: Adding dimensions prevents CLS from image loading
+- Confidence: 0.95 (dimensions fix is direct cause-effect)
+- Fix: Add width and height attributes matching intrinsic dimensions
+
+**Example 4: Excessive Preconnect Hints**
+Input: 12 <link rel="preconnect"> hints in <head>
+Output:
+- Finding: Too many preconnect hints may waste browser resources
+- Evidence: HTML <head> contains 12 preconnect hints to different origins
+- Impact: Browser connection limits mean not all preconnects are useful
+- Confidence: 0.75 (depends on actual resource usage)
+- Recommendation: Keep only 2-4 preconnects for critical origins, remove others
+
+**Example 5: Font Loading Without font-display**
+Input: @font-face rules without font-display property
+Output:
+- Finding: Custom fonts may cause invisible text (FOIT) during load
+- Evidence: CSS @font-face lacks font-display property
+- Impact: Adding font-display: swap prevents invisible text, may cause minor CLS
+- Confidence: 0.85 (swap is generally safe)
+- Fix: Add font-display: swap to @font-face rules, consider size-adjust for fallback
+
 ## Your Analysis Focus
 ${PHASE_FOCUS.HTML(step())}
-
-${getChainOfThoughtGuidance()}
 
 ${getStructuredOutputFormat('HTML Agent')}
 `;
@@ -457,6 +641,80 @@ ${PHASE_FOCUS.CODE_REVIEW(step())}
 ${getChainOfThoughtGuidance()}
 
 ${getStructuredOutputFormat('Code Review Agent')}
+`;
+}
+
+/**
+ * INP Interaction Agent
+ * Analyzes interaction testing results to identify INP optimization opportunities
+ */
+export function inpInteractionAgentPrompt(cms = 'eds') {
+  return `${getBasePrompt(cms, 'analyzing interaction testing results to identify INP (Interaction to Next Paint) optimization opportunities')}
+
+${getChainOfThoughtGuidance()}
+
+## Few-Shot Examples
+
+**Example 1: Slow Click Handler**
+Input: Button click INP = 450ms, processing time = 380ms, target = button.submit-form
+Output:
+- Finding: Form submit button has slow click handler (450ms INP)
+- Evidence: Interaction test shows 380ms processing time for button.submit-form click
+- Impact: Optimizing click handler could reduce INP by ~300ms
+- Confidence: 0.85 (interaction data is direct measurement)
+- Fix: Break up form validation into smaller tasks, use requestIdleCallback for non-critical work
+
+**Example 2: Heavy Input Handler**
+Input: Text input INP = 280ms, processing time = 220ms, target = input.search-box
+Output:
+- Finding: Search input has heavy keystroke handler causing 280ms INP
+- Evidence: Interaction test shows 220ms processing per keystroke on input.search-box
+- Impact: Debouncing input handler could reduce INP to <100ms
+- Confidence: 0.9 (input handlers are common INP culprits)
+- Fix: Add debounce (300ms) to search input handler, show loading state
+
+**Example 3: Multiple Slow Interactions**
+Input: P75 INP = 520ms, 5 interactions >200ms, worst = 780ms on accordion.toggle
+Output:
+- Finding: Multiple interactive elements have poor INP, worst is accordion toggle
+- Evidence: Interaction test shows P75 INP of 520ms with 5 slow interactions
+- Impact: Site-wide INP optimization needed, prioritize accordion component
+- Confidence: 0.85 (multiple data points increase reliability)
+- Recommendation: Profile accordion.toggle in DevTools, likely heavy DOM manipulation
+
+**Example 4: Good INP Performance**
+Input: P75 INP = 85ms, no interactions >200ms
+Output:
+- Finding: INP performance is good, all tested interactions respond quickly
+- Evidence: Interaction test shows P75 INP of 85ms, well under 200ms threshold
+- Impact: No INP optimization needed
+- Confidence: 0.9 (comprehensive interaction testing)
+
+## Your Analysis Focus
+
+### Step: Interaction Testing Analysis
+- Analyze P75 INP from interaction testing results
+- Identify specific elements with slow interaction response
+- Correlate processing time with total INP duration
+- Distinguish between input delay, processing time, and presentation delay
+- Identify patterns in slow interactions (same component type, same handler)
+- Connect INP issues to specific JavaScript files or event handlers
+- Prioritize fixes based on interaction frequency and severity
+
+**Key Metrics to Analyze**:
+- P75 INP: Overall interaction responsiveness
+- Worst INP: Maximum delay experienced
+- Processing time: Time spent in event handlers
+- Slow interactions: Elements exceeding 200ms threshold
+
+**Common INP Causes**:
+- Heavy event handlers (form validation, DOM manipulation)
+- Synchronous API calls in handlers
+- Large DOM updates during interactions
+- Third-party script interference
+- Layout thrashing in event handlers
+
+${getStructuredOutputFormat('INP Interaction Agent')}
 `;
 }
 

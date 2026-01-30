@@ -143,4 +143,79 @@ You know the following about AEM CS.
 - Show actual file locations: /apps/myproject/components/content/hero/hero.html
 - Include Dispatcher configuration snippets when suggesting caching changes
 - Reference Core Components version-specific APIs when applicable
-`; 
+
+### TTFB Optimization and Caching
+
+**Dispatcher Cache Detection:**
+- X-Dispatcher-Cache header indicates cache status: "HIT" (cached) or "MISS" (origin fetch)
+- Cache misses indicate content served from publish instance (slow)
+- High cache miss rate suggests dispatcher.any rules need tuning
+
+**Cache Invalidation Patterns:**
+- Stat file invalidation: Content changes invalidate entire cache tree
+- Auto-invalidation: Configured via /invalidate rules in dispatcher.any
+- Manual invalidation: Flush agents or API calls
+- TTL-based: Cache-Control headers for time-based expiry
+
+**Common TTFB Issues:**
+1. **Dispatcher Cache Miss**: Check X-Dispatcher-Cache header
+   - Fix: Review /cache rules in dispatcher.any, ensure content paths are cached
+   - Example: Add /cache { /rules { /0001 { /glob "*.html" /type "allow" } } }
+
+2. **Sling Model Performance**: N+1 queries in components
+   - Fix: Use lazy loading, batch queries, or cache Sling Model results
+   - Example: @Model(adaptables = Resource.class, cache = true)
+
+3. **CDN Cache Miss**: Check cf-cache-status or x-fastly-cache headers
+   - Fix: Ensure proper Cache-Control headers, check CDN rules
+   - Example: Set Cache-Control: max-age=3600 for static content
+
+**Dispatcher Configuration Snippets:**
+
+Cache HTML pages:
+\`\`\`
+/cache {
+  /rules {
+    /0001 { /glob "*.html" /type "allow" }
+  }
+  /headers {
+    "Cache-Control"
+    "Content-Type"
+    "Expires"
+  }
+}
+\`\`\`
+
+Set Cache-Control headers:
+\`\`\`
+/headers {
+  # Add Cache-Control for static assets
+  <LocationMatch "^/content/dam/.*\\.(jpg|jpeg|png|gif|svg|webp)$">
+    Header set Cache-Control "max-age=86400, public"
+  </LocationMatch>
+  # Add Cache-Control for clientlibs
+  <LocationMatch "^/etc\\.clientlibs/.*\\.(js|css)$">
+    Header set Cache-Control "max-age=31536000, public, immutable"
+  </LocationMatch>
+}
+\`\`\`
+
+**Server-Timing Header Analysis:**
+- AEM CS may include Server-Timing headers showing processing breakdown
+- Look for: cdn (CDN processing), origin (publish processing), dispatcher (cache lookup)
+- Example: Server-Timing: cdn;dur=5, dispatcher;dur=10, origin;dur=1200
+- High "origin" time indicates slow publish instance or Sling Model issues
+
+**CDN Configuration (Fastly):**
+- Adobe CDN is Fastly by default
+- Custom CDN rules via Cloud Manager configuration
+- VCL snippets for advanced caching logic
+- Edge-side includes (ESI) for partial page caching
+
+**Caching Best Practices:**
+- Static assets (JS/CSS/images): max-age=31536000 (1 year) with versioned URLs
+- HTML pages: max-age=300-3600 depending on content freshness needs
+- API responses: Cache-Control: no-store for personalized content
+- Use stale-while-revalidate for improved perceived performance
+`;
+ 

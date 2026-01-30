@@ -22,11 +22,11 @@ import {
 } from '../../prompts/index.js';
 import {
     codeReviewAgentPrompt, coverageAgentPrompt,
-    cruxAgentPrompt, harAgentPrompt, htmlAgentPrompt,
+    cruxAgentPrompt, rumAgentPrompt, harAgentPrompt, htmlAgentPrompt,
     perfObserverAgentPrompt, psiAgentPrompt, rulesAgentPrompt,
     initializeSystemAgents,
 } from '../../prompts/index.js';
-import { buildCausalGraph, generateGraphSummary } from '../causal-graph-builder.js';
+import { buildCausalGraph, generateGraphSummary, deduplicateFindings } from '../causal-graph-builder.js';
 import { AgentGating } from '../gating.js';
 import { validateFindings, saveValidationResults } from '../validator.js';
 import { MultiAgentSystem } from './agent-system.js';
@@ -131,9 +131,9 @@ function generateConditionalAgentConfig(pageData, cms) {
     // Always-on lightweight agents (use summaries where possible)
     steps.push({ name: 'CrUX Agent', sys: cruxAgentPrompt(cms), hum: cruxSummaryStep(pageData.cruxSummary) });
 
-    // RUM Agent (only if RUM data is available)
+    // RUM Agent (only if RUM data is available) - uses dedicated RUM prompt
     if (pageData.rumSummary) {
-        steps.push({ name: 'RUM Agent', sys: cruxAgentPrompt(cms), hum: rumSummaryStep(pageData.rumSummary) });
+        steps.push({ name: 'RUM Agent', sys: rumAgentPrompt(cms), hum: rumSummaryStep(pageData.rumSummary) });
     }
 
     steps.push({ name: 'PSI Agent', sys: psiAgentPrompt(cms), hum: psiSummaryStep(pageData.psiSummary) });
@@ -169,6 +169,110 @@ function generateConditionalAgentConfig(pageData, cms) {
 }
 
 /**
+ * Check if all Core Web Vitals pass "good" thresholds
+ * Returns early exit info if site performs well, null otherwise
+ *
+ * @param {Object} pageData - All collected page data
+ * @returns {Object|null} Early exit result or null to continue
+ */
+function checkEarlyExit(pageData) {
+    // Use CWV "good" thresholds
+    const GOOD_THRESHOLDS = {
+        LCP: 2500,  // ms
+        CLS: 0.1,   // score
+        INP: 200,   // ms
+        TBT: 200,   // ms (lab proxy for INP)
+    };
+
+    // Extract CrUX field metrics (preferred - real user data)
+    const crux = pageData.crux?.record?.metrics;
+    const cruxLcp = crux?.largest_contentful_paint?.percentiles?.p75;
+    const cruxCls = parseFloat(crux?.cumulative_layout_shift?.percentiles?.p75);
+    const cruxInp = crux?.interaction_to_next_paint?.percentiles?.p75;
+
+    // Extract PSI lab metrics (fallback)
+    const psi = pageData.psi?.data?.lighthouseResult?.audits;
+    const psiLcp = psi?.['largest-contentful-paint']?.numericValue;
+    const psiCls = psi?.['cumulative-layout-shift']?.numericValue;
+    const psiTbt = psi?.['total-blocking-time']?.numericValue;
+
+    // Use field data if available, otherwise lab data
+    const lcp = cruxLcp ?? psiLcp;
+    const cls = !isNaN(cruxCls) ? cruxCls : psiCls;
+    const inp = cruxInp ?? null;
+    const tbt = psiTbt ?? null;
+
+    // Check if we have enough data to make a decision
+    if (lcp == null && cls == null) {
+        return null; // Not enough data, continue with full analysis
+    }
+
+    // Check if all available metrics pass "good" thresholds
+    const lcpGood = lcp == null || lcp <= GOOD_THRESHOLDS.LCP;
+    const clsGood = cls == null || cls <= GOOD_THRESHOLDS.CLS;
+    const inpGood = inp == null || inp <= GOOD_THRESHOLDS.INP;
+    const tbtGood = tbt == null || tbt <= GOOD_THRESHOLDS.TBT;
+
+    // All core CWV must pass (LCP + CLS + INP/TBT)
+    const allMetricsPass = lcpGood && clsGood && (inpGood || tbtGood);
+
+    if (!allMetricsPass) {
+        return null; // At least one metric fails, continue with full analysis
+    }
+
+    // Site performs well - prepare early exit
+    const dataSource = cruxLcp != null ? 'CrUX field data' : 'PSI lab data';
+    const metricsReport = [
+        lcp != null ? `LCP: ${Math.round(lcp)}ms ✅` : null,
+        cls != null ? `CLS: ${cls.toFixed(3)} ✅` : null,
+        inp != null ? `INP: ${Math.round(inp)}ms ✅` : (tbt != null ? `TBT: ${Math.round(tbt)}ms ✅` : null),
+    ].filter(Boolean).join(', ');
+
+    console.log(`✅ All Core Web Vitals pass "good" thresholds (${dataSource}): ${metricsReport}`);
+    console.log('   Skipping deep analysis - site performs well!');
+
+    return {
+        markdown: `# Core Web Vitals Analysis Report
+
+**URL**: ${pageData.pageUrl}
+**Device**: ${pageData.deviceType}
+**Date**: ${new Date().toISOString()}
+
+---
+
+## Summary: Site Performs Well! ✅
+
+All Core Web Vitals meet Google's "good" thresholds based on ${dataSource}:
+
+| Metric | Value | Threshold | Status |
+|--------|-------|-----------|--------|
+${lcp != null ? `| LCP | ${Math.round(lcp)}ms | ≤2500ms | ✅ Good |\n` : ''}${cls != null ? `| CLS | ${cls.toFixed(3)} | ≤0.1 | ✅ Good |\n` : ''}${inp != null ? `| INP | ${Math.round(inp)}ms | ≤200ms | ✅ Good |\n` : ''}${tbt != null && inp == null ? `| TBT | ${Math.round(tbt)}ms | ≤200ms | ✅ Good |\n` : ''}
+
+**No critical optimization suggestions at this time.**
+
+Consider monitoring these metrics over time to catch any regressions.
+`,
+        structuredData: {
+            url: pageData.pageUrl,
+            deviceType: pageData.deviceType,
+            timestamp: new Date().toISOString(),
+            suggestions: [],
+            summary: {
+                earlyExit: true,
+                reason: 'All Core Web Vitals pass good thresholds',
+                dataSource,
+                metrics: {
+                    lcp: lcp != null ? { value: Math.round(lcp), status: 'good' } : null,
+                    cls: cls != null ? { value: cls, status: 'good' } : null,
+                    inp: inp != null ? { value: Math.round(inp), status: 'good' } : null,
+                    tbt: tbt != null ? { value: Math.round(tbt), status: 'good' } : null,
+                },
+            },
+        },
+    };
+}
+
+/**
  * Main Multi-Agent Runner
  * Executes conditional agents in parallel, builds causal graph, validates findings, and synthesizes suggestions
  *
@@ -183,6 +287,13 @@ export async function runMultiAgents(pageData, tokenLimits, llm, model) {
     if (!pageData || !tokenLimits || !llm) {
         console.warn('runMultiAgents: invalid arguments');
         return null;
+    }
+
+    // Early exit check: Skip expensive analysis if all CWV metrics pass
+    const earlyExitResult = checkEarlyExit(pageData);
+    if (earlyExitResult) {
+        console.groupEnd();
+        return earlyExitResult;
     }
 
     let agentsConfig = generateConditionalAgentConfig(pageData, pageData.cms);
@@ -224,12 +335,47 @@ export async function runMultiAgents(pageData, tokenLimits, llm, model) {
     });
 
     // Phase 3: Build causal graph from all findings
-    const allFindings = agentOutputs.flatMap(output => {
+    // Attach agentName to each finding for better tracking
+    const rawFindings = agentOutputs.flatMap(output => {
         if (output.findings && Array.isArray(output.findings)) {
-            return output.findings;
+            const agentName = output.agentName || 'unknown';
+            return output.findings.map(finding => ({
+                ...finding,
+                agentName: finding.agentName || agentName, // Preserve if already set
+            }));
         }
         return [];
     });
+
+    // Phase 3.5: Deterministic deduplication before synthesis
+    // Groups findings by file + metric + type to eliminate cross-agent duplicates
+    let allFindings = rawFindings;
+    let deduplicationResult = null;
+    if (rawFindings.length > 0) {
+        try {
+            deduplicationResult = deduplicateFindings(rawFindings);
+            allFindings = deduplicationResult.findings;
+
+            // Log merge groups for debugging (limit to 5 most significant)
+            if (deduplicationResult.mergeGroups.length > 0) {
+                const sortedGroups = [...deduplicationResult.mergeGroups]
+                    .sort((a, b) => b.originalCount - a.originalCount)
+                    .slice(0, 5);
+                console.log('   Top merged groups:');
+                sortedGroups.forEach(g => {
+                    const uniqueSources = [...new Set(g.sources)].filter(s => s !== 'unknown');
+                    const sourceStr = uniqueSources.length > 0 ? uniqueSources.join(', ') : `${g.sources.length} agents`;
+                    console.log(`   - ${g.key}: ${g.originalCount} findings → 1 (from ${sourceStr})`);
+                });
+                if (deduplicationResult.mergeGroups.length > 5) {
+                    console.log(`   ... and ${deduplicationResult.mergeGroups.length - 5} more merge groups`);
+                }
+            }
+        } catch (error) {
+            console.warn('Deduplication failed, using raw findings:', error.message);
+            allFindings = rawFindings;
+        }
+    }
 
     let causalGraph = null;
     let graphSummary = '';
