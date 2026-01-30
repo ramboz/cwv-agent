@@ -15,7 +15,6 @@ import {
   coverageStep,
   coverageSummaryStep,
   rumSummaryStep,
-  inpInteractionStep,
   // Agent prompts
   cruxAgentPrompt,
   rumAgentPrompt,
@@ -26,7 +25,6 @@ import {
   rulesAgentPrompt,
   coverageAgentPrompt,
   codeReviewAgentPrompt,
-  inpInteractionAgentPrompt,
   causalGraphBuilderPrompt,
   validationAgentPrompt,
 } from './analysis.js';
@@ -51,7 +49,6 @@ export {
   coverageStep,
   coverageSummaryStep,
   rumSummaryStep,
-  inpInteractionStep,
   cruxAgentPrompt,
   rumAgentPrompt,
   psiAgentPrompt,
@@ -61,7 +58,6 @@ export {
   rulesAgentPrompt,
   coverageAgentPrompt,
   codeReviewAgentPrompt,
-  inpInteractionAgentPrompt,
   causalGraphBuilderPrompt,
   validationAgentPrompt,
 }

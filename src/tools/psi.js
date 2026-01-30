@@ -2,6 +2,8 @@ import psi from 'psi';
 import { cacheResults, getCachedResults } from '../utils.js';
 import { CWV_METRICS } from '../config/thresholds.js';
 import { URL_PATTERNS } from '../config/regex-patterns.js';
+import { Result } from '../core/result.js';
+import { ErrorCodes } from '../core/error-codes.js';
 
 function cleanup(psiAudit) {
   // removing all base 64 encoded images from the json
@@ -211,12 +213,16 @@ export function summarize(psiData) {
 }
 
 export async function collect(pageUrl, deviceType, options = {}) {
+  const startTime = Date.now();
   const { skipCache = false } = options;
 
   if (!skipCache) {
     const cache = getCachedResults(pageUrl, deviceType, 'psi');
     if (cache) {
-      return { full: cache, summary: summarize(cache), fromCache: true };
+      return Result.ok(
+        { full: cache, summary: summarize(cache) },
+        { source: 'cache' }
+      );
     }
   }
 
@@ -230,8 +236,16 @@ export async function collect(pageUrl, deviceType, options = {}) {
     const summary = summarize(psiAudit);
     cacheResults(pageUrl, deviceType, 'psi', summary);
 
-    return { full: psiAudit, summary };
+    return Result.ok(
+      { full: psiAudit, summary },
+      { source: 'fresh', duration: Date.now() - startTime }
+    );
   } catch (error) {
-    return { full: 'Could not collect PSI data.', summary: 'Could not collect PSI data.' };
+    return Result.err(
+      ErrorCodes.NETWORK_ERROR,
+      `PSI data collection failed: ${error.message}`,
+      { url: pageUrl, deviceType },
+      true // Network errors are retryable
+    );
   }
 }

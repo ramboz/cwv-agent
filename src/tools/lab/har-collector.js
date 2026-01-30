@@ -1,6 +1,6 @@
 import PuppeteerHar from 'puppeteer-har';
 import { LabDataCollector } from './base-collector.js';
-import { RESOURCE_THRESHOLDS, DATA_LIMITS } from '../../config/thresholds.js';
+import { RESOURCE_THRESHOLDS, DATA_LIMITS, DISPLAY_LIMITS } from '../../config/thresholds.js';
 
 /**
  * HAR (HTTP Archive) Data Collector
@@ -109,7 +109,7 @@ export class HARCollector extends LabDataCollector {
         const priority = entry.request?._priority || entry.request?.priority;
         return isCriticalType && priority && (priority === 'Low' || priority === 'Medium');
       })
-      .slice(0, 10);
+      .slice(0, DISPLAY_LIMITS.LAB.MAX_ITEMS_DISPLAY);
 
     if (deprioritized.length === 0) return null;
 
@@ -172,7 +172,7 @@ export class HARCollector extends LabDataCollector {
         return totalTime > 200;
       })
       .sort((a, b) => this.getTotalTime(b) - this.getTotalTime(a))
-      .slice(0, 10);
+      .slice(0, DISPLAY_LIMITS.LAB.MAX_ITEMS_DISPLAY);
 
     if (criticalResources.length === 0) return null;
 
@@ -404,7 +404,7 @@ export class HARCollector extends LabDataCollector {
     if (cacheIssues.length === 0) return null;
 
     let report = '* **Cache Issues (Critical Resources):**\n';
-    cacheIssues.slice(0, 10).forEach(issue => {
+    cacheIssues.slice(0, DISPLAY_LIMITS.LAB.MAX_ITEMS_DISPLAY).forEach(issue => {
       report += `    * ${issue.url} (${issue.type})\n`;
       report += `        * Issue: ${issue.reason}\n`;
       if (issue.cacheControl) {
@@ -497,7 +497,7 @@ export class HARCollector extends LabDataCollector {
     if (thirdPartyAnalysis.scripts?.length > 0) {
       const topScripts = [...thirdPartyAnalysis.scripts]
         .sort((a, b) => (b.execution?.totalTime || 0) - (a.execution?.totalTime || 0))
-        .slice(0, 5);
+        .slice(0, DISPLAY_LIMITS.LAB.MAX_RESOURCES);
 
       if (topScripts.some(s => s.execution?.totalTime > 0)) {
         report += '\n**Top Scripts by Execution Time:**\n';

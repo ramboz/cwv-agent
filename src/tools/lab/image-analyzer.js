@@ -1,4 +1,5 @@
 import { parse as parseHTML } from 'node-html-parser';
+import { DISPLAY_LIMITS } from '../../config/thresholds.js';
 
 /**
  * Analyzes image attributes from HTML to identify optimization opportunities
@@ -103,7 +104,7 @@ function summarizeImageAnalysis(images, preloadHints) {
   // Check for lazy-loaded images that should be eager
   const aboveFoldLazy = images.filter(img =>
     img.loading === 'lazy' && !img.isLCP
-  ).slice(0, 5); // First 5 are likely above fold
+  ).slice(0, DISPLAY_LIMITS.LAB.MAX_ABOVE_FOLD_IMAGES);
 
   if (aboveFoldLazy.length > 0) {
     report += `* **Potentially Mis-Lazy-Loaded Images (above fold):**\n`;
@@ -117,11 +118,11 @@ function summarizeImageAnalysis(images, preloadHints) {
   const missingDimensions = images.filter(img => !img.width || !img.height);
   if (missingDimensions.length > 0) {
     report += `* **Images Missing Width/Height (${missingDimensions.length} total, causes CLS):**\n`;
-    missingDimensions.slice(0, 5).forEach(img => {
+    missingDimensions.slice(0, DISPLAY_LIMITS.LAB.MAX_DIMENSION_ISSUES).forEach(img => {
       report += `  * \`${img.src}\`\n`;
     });
-    if (missingDimensions.length > 5) {
-      report += `  * ...and ${missingDimensions.length - 5} more\n`;
+    if (missingDimensions.length > DISPLAY_LIMITS.LAB.MAX_DIMENSION_ISSUES) {
+      report += `  * ...and ${missingDimensions.length - DISPLAY_LIMITS.LAB.MAX_DIMENSION_ISSUES} more\n`;
     }
     report += `\n`;
   }

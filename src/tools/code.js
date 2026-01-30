@@ -1,6 +1,8 @@
 import { cacheResults, getCachedResults, getRequestHeaders } from '../utils.js';
 import { Agent } from 'undici';
 import { RESOURCE_DENYLIST_EXTENDED_REGEX } from '../config/regex-patterns.js';
+import { Result } from '../core/result.js';
+import { ErrorCodes } from '../core/error-codes.js';
 
 /**
  * Centralized resource inclusion policy for performance analysis
@@ -147,11 +149,13 @@ async function fetchResource(url, deviceType, fetchOptions, skipCache) {
  * @param {Object} options - Additional options
  * @param {boolean} options.skipCache - Whether to skip cache lookup
  * @param {boolean} options.skipTlsCheck - Whether to skip TLS certificate validation
- * @returns {Promise<Object>} - Object containing fetched resources and cache statistics
+ * @returns {Promise<Result>} - Result containing fetched resources and cache statistics
  */
 export async function collect(pageUrl, deviceType, resources, { skipCache, skipTlsCheck }) {
+  const startTime = Date.now();
+
   // Add overall timeout for the entire code collection process
-  const overallTimeout = new Promise((_, reject) => 
+  const overallTimeout = new Promise((_, reject) =>
     setTimeout(() => reject(new Error('Code collection timeout (2 minutes)')), 120000)
   );
 
@@ -175,44 +179,59 @@ export async function collect(pageUrl, deviceType, resources, { skipCache, skipT
     const totalResources = urlsToProcess.length;
     const fetchOptions = createFetchOptions(deviceType, skipTlsCheck);
 
-  // Process each resource sequentially to avoid overwhelming the server
-  for (const url of urlsToProcess) {
-    try {
-      // Add timeout for each resource (30 seconds)
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Resource fetch timeout')), 30000)
-      );
+    // Process each resource sequentially to avoid overwhelming the server
+    for (const url of urlsToProcess) {
+      try {
+        // Add timeout for each resource (30 seconds)
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Resource fetch timeout')), 30000)
+        );
 
-      const result = await Promise.race([
-        fetchResource(url, deviceType, fetchOptions, skipCache),
-        timeoutPromise
-      ]);
+        const result = await Promise.race([
+          fetchResource(url, deviceType, fetchOptions, skipCache),
+          timeoutPromise
+        ]);
 
-      if (result.fromCache) {
-        cachedResources++;
-      }
-      
-      if (result.failed) {
+        if (result.fromCache) {
+          cachedResources++;
+        }
+
+        if (result.failed) {
+          failedResources++;
+        } else if (result.content) {
+          codeFiles[url] = result.content;
+        }
+      } catch (error) {
         failedResources++;
-      } else if (result.content) {
-        codeFiles[url] = result.content;
       }
-    } catch (error) {
-      failedResources++;
     }
-  }
 
-      return {
-      codeFiles,
-      stats: {
-        total: totalResources,
-        fromCache: cachedResources,
-        failed: failedResources,
-        successful: totalResources - failedResources
+    return Result.ok(
+      {
+        codeFiles,
+        stats: {
+          total: totalResources,
+          fromCache: cachedResources,
+          failed: failedResources,
+          successful: totalResources - failedResources
+        }
+      },
+      {
+        source: cachedResources === totalResources ? 'cache' : cachedResources > 0 ? 'partial-cache' : 'fresh',
+        duration: Date.now() - startTime
       }
-    };
+    );
   };
 
-  // Race between the collection and the timeout
-  return Promise.race([collectWithTimeout(), overallTimeout]);
+  try {
+    // Race between the collection and the timeout
+    return await Promise.race([collectWithTimeout(), overallTimeout]);
+  } catch (error) {
+    return Result.err(
+      ErrorCodes.TIMEOUT,
+      `Code collection failed: ${error.message}`,
+      { url: pageUrl, deviceType },
+      true // Timeout is retryable
+    );
+  }
 }

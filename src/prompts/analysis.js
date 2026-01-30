@@ -207,18 +207,6 @@ ${stepVerbose()} here is the Real User Monitoring (RUM) data from the last 7 day
 ${rumSummary}
 `;
 
-/**
- * Prompt for INP interaction testing summary analysis
- * @param {string} interactionSummary - Interaction testing summary text
- * @return {string} Interaction testing analysis prompt
- */
-export const inpInteractionStep = (interactionSummary) => `
-${stepVerbose()} here are the interaction testing results for INP analysis:
-
-${interactionSummary}
-`;
-
-
 function getBasePrompt(cms, role) {
   return `You are ${role} for Core Web Vitals optimization.
 
@@ -658,80 +646,6 @@ ${PHASE_FOCUS.CODE_REVIEW(step())}
 ${getChainOfThoughtGuidance()}
 
 ${getStructuredOutputFormat('Code Review Agent')}
-`;
-}
-
-/**
- * INP Interaction Agent
- * Analyzes interaction testing results to identify INP optimization opportunities
- */
-export function inpInteractionAgentPrompt(cms = 'eds') {
-  return `${getBasePrompt(cms, 'analyzing interaction testing results to identify INP (Interaction to Next Paint) optimization opportunities')}
-
-${getChainOfThoughtGuidance()}
-
-## Few-Shot Examples
-
-**Example 1: Slow Click Handler**
-Input: Button click INP = 450ms, processing time = 380ms, target = button.submit-form
-Output:
-- Finding: Form submit button has slow click handler (450ms INP)
-- Evidence: Interaction test shows 380ms processing time for button.submit-form click
-- Impact: Optimizing click handler could reduce INP by ~300ms
-- Confidence: 0.85 (interaction data is direct measurement)
-- Fix: Break up form validation into smaller tasks, use requestIdleCallback for non-critical work
-
-**Example 2: Heavy Input Handler**
-Input: Text input INP = 280ms, processing time = 220ms, target = input.search-box
-Output:
-- Finding: Search input has heavy keystroke handler causing 280ms INP
-- Evidence: Interaction test shows 220ms processing per keystroke on input.search-box
-- Impact: Debouncing input handler could reduce INP to <100ms
-- Confidence: 0.9 (input handlers are common INP culprits)
-- Fix: Add debounce (300ms) to search input handler, show loading state
-
-**Example 3: Multiple Slow Interactions**
-Input: P75 INP = 520ms, 5 interactions >200ms, worst = 780ms on accordion.toggle
-Output:
-- Finding: Multiple interactive elements have poor INP, worst is accordion toggle
-- Evidence: Interaction test shows P75 INP of 520ms with 5 slow interactions
-- Impact: Site-wide INP optimization needed, prioritize accordion component
-- Confidence: 0.85 (multiple data points increase reliability)
-- Recommendation: Profile accordion.toggle in DevTools, likely heavy DOM manipulation
-
-**Example 4: Good INP Performance**
-Input: P75 INP = 85ms, no interactions >200ms
-Output:
-- Finding: INP performance is good, all tested interactions respond quickly
-- Evidence: Interaction test shows P75 INP of 85ms, well under 200ms threshold
-- Impact: No INP optimization needed
-- Confidence: 0.9 (comprehensive interaction testing)
-
-## Your Analysis Focus
-
-### Step: Interaction Testing Analysis
-- Analyze P75 INP from interaction testing results
-- Identify specific elements with slow interaction response
-- Correlate processing time with total INP duration
-- Distinguish between input delay, processing time, and presentation delay
-- Identify patterns in slow interactions (same component type, same handler)
-- Connect INP issues to specific JavaScript files or event handlers
-- Prioritize fixes based on interaction frequency and severity
-
-**Key Metrics to Analyze**:
-- P75 INP: Overall interaction responsiveness
-- Worst INP: Maximum delay experienced
-- Processing time: Time spent in event handlers
-- Slow interactions: Elements exceeding 200ms threshold
-
-**Common INP Causes**:
-- Heavy event handlers (form validation, DOM manipulation)
-- Synchronous API calls in handlers
-- Large DOM updates during interactions
-- Third-party script interference
-- Layout thrashing in event handlers
-
-${getStructuredOutputFormat('INP Interaction Agent')}
 `;
 }
 

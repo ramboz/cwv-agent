@@ -123,12 +123,26 @@ function selectCodeResources(pageUrl, resources) {
  * @returns {Promise<string>} Markdown report
  */
 export async function runAgentFlow(pageUrl, deviceType, options = {}) {
+    // Data quality tracking
+    const dataQualityIssues = [];
+
     // Phase 1: Collect CrUX, PSI, and RUM (parallel), derive gates from PSI
     const [{ full: crux, summary: cruxSummary }, { full: psi, summary: psiSummary }, { data: rum, summary: rumSummary }] = await Promise.all([
         getCrux(pageUrl, deviceType, options),
         getPsi(pageUrl, deviceType, options),
         getRUM(pageUrl, deviceType, options),
     ]);
+
+    // Track data quality issues
+    if (!crux) {
+        dataQualityIssues.push({ source: 'CrUX', impact: 'Field data unavailable', severity: 'info' });
+    }
+    if (!psi) {
+        dataQualityIssues.push({ source: 'PSI', impact: 'Lab audit data unavailable', severity: 'error' });
+    }
+    if (!rum) {
+        dataQualityIssues.push({ source: 'RUM', impact: 'Real User Monitoring data unavailable', severity: 'info' });
+    }
 
     // Derive gates using PSI only (single lab run later)
     const signals = extractPsiSignals(psi);
@@ -188,6 +202,15 @@ export async function runAgentFlow(pageUrl, deviceType, options = {}) {
     const llm = LLMFactory.createLLM(options.model, options.llmOptions || {});
     const tokenLimits = getTokenLimits(options.model);
 
+    // Create data quality summary
+    const dataQuality = {
+        complete: dataQualityIssues.length === 0,
+        issues: dataQualityIssues,
+        summary: dataQualityIssues.length === 0
+            ? 'All data sources available'
+            : `${dataQualityIssues.length} data source(s) unavailable: ${dataQualityIssues.map(i => i.source).join(', ')}`
+    };
+
     // Assemble page data for prompts/agents
     const pageData = {
         pageUrl,
@@ -210,6 +233,7 @@ export async function runAgentFlow(pageUrl, deviceType, options = {}) {
         fullHtml,
         thirdPartyAnalysis,
         clsAttribution,
+        dataQuality, // Include data quality information
     };
 
     // Execute agent flow (force conditional multi-agent mode)

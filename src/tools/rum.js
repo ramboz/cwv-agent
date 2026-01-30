@@ -1,6 +1,8 @@
 import { fetch } from 'undici';
 import { cacheResults, getCachedResults } from '../utils.js';
-import { CWV_METRICS } from '../config/thresholds.js';
+import { CWV_METRICS, DISPLAY_LIMITS } from '../config/thresholds.js';
+import { Result } from '../core/result.js';
+import { ErrorCodes } from '../core/error-codes.js';
 
 /**
  * Collects Real User Monitoring (RUM) data from Helix RUM Bundler
@@ -14,6 +16,7 @@ import { CWV_METRICS } from '../config/thresholds.js';
  */
 export async function collectRUMData(url, deviceType, options = {}) {
   const { skipCache = false, rumDomainKey = null, daysBack = 7 } = options;
+  const startTime = Date.now();
 
   // Check for RUM domain key (per-domain, not per-URL)
   // Priority: 1. Passed in options, 2. Environment variable
@@ -21,13 +24,18 @@ export async function collectRUMData(url, deviceType, options = {}) {
 
   if (!domainKey) {
     // Gracefully skip RUM data collection - no warning, just debug info
-    return { data: null, error: 'No RUM domain key configured', fromCache: false };
+    return Result.err(
+      ErrorCodes.MISSING_CONFIG,
+      'No RUM domain key configured',
+      { url, deviceType },
+      false // Not retryable - requires configuration
+    );
   }
 
   if (!skipCache) {
     const cached = getCachedResults(url, deviceType, 'rum');
     if (cached) {
-      return { data: cached, fromCache: true };
+      return Result.ok(cached, { source: 'cache' });
     }
   }
 
@@ -103,7 +111,7 @@ export async function collectRUMData(url, deviceType, options = {}) {
         status: p75INP <= CWV_METRICS.INP.good ? 'good' : p75INP <= CWV_METRICS.INP.needsImprovement ? 'needs-improvement' : 'poor',
         topSlow: cwvMetrics.inp
           .sort((a, b) => b.value - a.value)
-          .slice(0, 10),
+          .slice(0, DISPLAY_LIMITS.RUM.MAX_SAMPLES),
         byInteractionType: Object.entries(byInteractionType).map(([type, events]) => ({
           type,
           count: events.length,
@@ -123,7 +131,7 @@ export async function collectRUMData(url, deviceType, options = {}) {
         status: p75LCP <= CWV_METRICS.LCP.good ? 'good' : p75LCP <= CWV_METRICS.LCP.needsImprovement ? 'needs-improvement' : 'poor',
         topSlow: cwvMetrics.lcp
           .sort((a, b) => b.value - a.value)
-          .slice(0, 10)
+          .slice(0, DISPLAY_LIMITS.RUM.MAX_SAMPLES)
       };
     }
 
@@ -138,7 +146,7 @@ export async function collectRUMData(url, deviceType, options = {}) {
         status: p75CLS <= CWV_METRICS.CLS.good ? 'good' : p75CLS <= CWV_METRICS.CLS.needsImprovement ? 'needs-improvement' : 'poor',
         topWorst: cwvMetrics.cls
           .sort((a, b) => b.value - a.value)
-          .slice(0, 10)
+          .slice(0, DISPLAY_LIMITS.RUM.MAX_SAMPLES)
       };
     }
 
@@ -153,7 +161,7 @@ export async function collectRUMData(url, deviceType, options = {}) {
         status: p75TTFB <= CWV_METRICS.TTFB.good ? 'good' : p75TTFB <= CWV_METRICS.TTFB.needsImprovement ? 'needs-improvement' : 'poor',
         topSlow: cwvMetrics.ttfb
           .sort((a, b) => b.value - a.value)
-          .slice(0, 10)
+          .slice(0, DISPLAY_LIMITS.RUM.MAX_SAMPLES)
       };
     }
 
@@ -166,11 +174,20 @@ export async function collectRUMData(url, deviceType, options = {}) {
     };
     cacheResults(url, deviceType, 'rum', result);
 
-    return { data: result, fromCache: false };
+    return Result.ok(result, {
+      source: 'fresh',
+      duration: Date.now() - startTime,
+      bundlesProcessed: allRumData.length
+    });
 
   } catch (error) {
     console.warn('Failed to fetch RUM data:', error.message);
-    return { data: null, error: error.message, fromCache: false };
+    return Result.err(
+      ErrorCodes.NETWORK_ERROR,
+      `RUM data collection failed: ${error.message}`,
+      { url, deviceType, domain: new URL(url).hostname },
+      true // Retryable - network issue
+    );
   }
 }
 
@@ -344,7 +361,7 @@ function analyzeByUrl(rumBundles, cwvMetrics) {
       )
     }))
     .sort((a, b) => b.score - a.score)
-    .slice(0, 10); // Top 10 worst performing URLs
+    .slice(0, DISPLAY_LIMITS.RUM.MAX_WORST_URLS);
 }
 
 /**
@@ -404,8 +421,8 @@ export function summarizeRUM(rumData) {
 
     // Top slow interactions
     if (metrics.inp.topSlow && metrics.inp.topSlow.length > 0) {
-      report += `  * **Top 5 Slow Interactions:**\n`;
-      metrics.inp.topSlow.slice(0, 5).forEach((interaction, idx) => {
+      report += `  * **Top ${DISPLAY_LIMITS.RUM.MAX_SLOW_INTERACTIONS} Slow Interactions:**\n`;
+      metrics.inp.topSlow.slice(0, DISPLAY_LIMITS.RUM.MAX_SLOW_INTERACTIONS).forEach((interaction, idx) => {
         const urlPath = interaction.url ? new URL(interaction.url).pathname : 'unknown';
         report += `    ${idx + 1}. ${interaction.interactionType} on \`${interaction.target}\` (${interaction.value}ms) - ${urlPath}\n`;
       });
@@ -429,8 +446,8 @@ export function summarizeRUM(rumData) {
     report += `  * Threshold: ≤2500ms (Good), ≤4000ms (Needs Improvement), >4000ms (Poor)\n`;
 
     if (metrics.lcp.topSlow && metrics.lcp.topSlow.length > 0) {
-      report += `  * **Top 3 Slowest:**\n`;
-      metrics.lcp.topSlow.slice(0, 3).forEach((m, idx) => {
+      report += `  * **Top ${DISPLAY_LIMITS.RUM.MAX_DISPLAY_SAMPLES} Slowest:**\n`;
+      metrics.lcp.topSlow.slice(0, DISPLAY_LIMITS.RUM.MAX_DISPLAY_SAMPLES).forEach((m, idx) => {
         const urlPath = m.url ? new URL(m.url).pathname : 'unknown';
         report += `    ${idx + 1}. ${m.value}ms on ${m.target} - ${urlPath}\n`;
       });
@@ -446,8 +463,8 @@ export function summarizeRUM(rumData) {
     report += `  * Threshold: ≤${CWV_METRICS.CLS.good} (Good), ≤${CWV_METRICS.CLS.needsImprovement} (Needs Improvement), >${CWV_METRICS.CLS.needsImprovement} (Poor)\n`;
 
     if (metrics.cls.topWorst && metrics.cls.topWorst.length > 0) {
-      report += `  * **Top 3 Worst:**\n`;
-      metrics.cls.topWorst.slice(0, 3).forEach((m, idx) => {
+      report += `  * **Top ${DISPLAY_LIMITS.RUM.MAX_DISPLAY_SAMPLES} Worst:**\n`;
+      metrics.cls.topWorst.slice(0, DISPLAY_LIMITS.RUM.MAX_DISPLAY_SAMPLES).forEach((m, idx) => {
         const urlPath = m.url ? new URL(m.url).pathname : 'unknown';
         report += `    ${idx + 1}. ${m.value.toFixed(3)} - ${urlPath}\n`;
       });
@@ -463,8 +480,8 @@ export function summarizeRUM(rumData) {
     report += `  * Threshold: ≤800ms (Good), ≤1800ms (Needs Improvement), >1800ms (Poor)\n`;
 
     if (metrics.ttfb.topSlow && metrics.ttfb.topSlow.length > 0) {
-      report += `  * **Top 3 Slowest:**\n`;
-      metrics.ttfb.topSlow.slice(0, 3).forEach((m, idx) => {
+      report += `  * **Top ${DISPLAY_LIMITS.RUM.MAX_DISPLAY_SAMPLES} Slowest:**\n`;
+      metrics.ttfb.topSlow.slice(0, DISPLAY_LIMITS.RUM.MAX_DISPLAY_SAMPLES).forEach((m, idx) => {
         const urlPath = m.url ? new URL(m.url).pathname : 'unknown';
         report += `    ${idx + 1}. ${m.value}ms - ${urlPath}\n`;
       });
@@ -475,7 +492,7 @@ export function summarizeRUM(rumData) {
   // Worst performing pages (by combined score)
   if (byUrl && byUrl.length > 0) {
     report += `**Worst Performing Pages (Combined CWV Score):**\n\n`;
-    byUrl.slice(0, 5).forEach(({ url, bundleCount, inp, lcp, cls, ttfb, score }, idx) => {
+    byUrl.slice(0, DISPLAY_LIMITS.RUM.MAX_WORST_PAGES).forEach(({ url, bundleCount, inp, lcp, cls, ttfb, score }, idx) => {
       const urlPath = new URL(url).pathname;
       report += `${idx + 1}. \`${urlPath}\` (${bundleCount} bundles, score: ${score.toFixed(2)})\n`;
       if (inp !== null) report += `   * INP: ${inp}ms\n`;

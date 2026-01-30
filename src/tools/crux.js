@@ -1,5 +1,7 @@
 import { cacheResults, getCachedResults } from '../utils.js';
 import { CWV_METRICS } from '../config/thresholds.js';
+import { Result } from '../core/result.js';
+import { ErrorCodes } from '../core/error-codes.js';
 
 // Helper function for consistent formatting and threshold checking
 function checkMetric(metricName, value, good, needsImprovement) {
@@ -58,28 +60,58 @@ export function summarize(cruxData) {
 }
 
 export async function collect(pageUrl, deviceType, { skipCache }) {
+  const startTime = Date.now();
+
   if (!skipCache) {
     const cache = getCachedResults(pageUrl, deviceType, 'crux');
     if (cache) {
-      return { full: cache, summary: summarize(cache), fromCache: true };
+      return Result.ok(
+        { full: cache, summary: summarize(cache) },
+        { source: 'cache' }
+      );
     }
   }
 
-  const resp = await fetch(`https://chromeuxreport.googleapis.com/v1/records:queryRecord?key=${process.env.GOOGLE_CRUX_API_KEY}`, {
-    method: 'POST',
-    headers: {
-      'Accept': 'application/json',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      url: pageUrl,
-      formFactor: deviceType === 'mobile' ? 'PHONE' : 'DESKTOP',
-    }),
-  });
+  try {
+    const resp = await fetch(`https://chromeuxreport.googleapis.com/v1/records:queryRecord?key=${process.env.GOOGLE_CRUX_API_KEY}`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        url: pageUrl,
+        formFactor: deviceType === 'mobile' ? 'PHONE' : 'DESKTOP',
+      }),
+    });
 
-  const json = await resp.json();
-  cacheResults(pageUrl, deviceType, 'crux', json);
-  const summary = summarize(json);
-  cacheResults(pageUrl, deviceType, 'crux', summary);
-  return { full: json, summary };
+    const json = await resp.json();
+
+    // Check for API errors
+    if (json.error) {
+      const errorCode = json.error.code === 404 ? ErrorCodes.MISSING_DATA : ErrorCodes.NETWORK_ERROR;
+      return Result.err(
+        errorCode,
+        `CrUX API error: ${json.error.message || 'Unknown error'}`,
+        { url: pageUrl, deviceType, statusCode: json.error.code },
+        errorCode === ErrorCodes.NETWORK_ERROR // 404 not retryable, network errors are
+      );
+    }
+
+    cacheResults(pageUrl, deviceType, 'crux', json);
+    const summary = summarize(json);
+    cacheResults(pageUrl, deviceType, 'crux', summary);
+
+    return Result.ok(
+      { full: json, summary },
+      { source: 'fresh', duration: Date.now() - startTime }
+    );
+  } catch (error) {
+    return Result.err(
+      ErrorCodes.NETWORK_ERROR,
+      `CrUX data collection failed: ${error.message}`,
+      { url: pageUrl, deviceType },
+      true // Network errors are retryable
+    );
+  }
 }

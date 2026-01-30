@@ -6,16 +6,28 @@ import { collectRUMData, summarizeRUM } from '../tools/rum.js';
 import { estimateTokenSize } from '../utils.js';
 
 export async function getCrux(pageUrl, deviceType, options) {
-  const { full, summary, fromCache } = await collectCrux(pageUrl, deviceType, options);
-  if (full.error && full.error.code === 404) {
-    console.warn('ℹ️  No CrUX data for that page.');
-  } else if (full.error) {
-    console.error('❌ Failed to collect CrUX data.', full.error.message);
-  } else if (fromCache) {
+  const result = await collectCrux(pageUrl, deviceType, options);
+
+  // Handle Result pattern
+  if (result.isErr()) {
+    if (result.error.code === 'MISSING_DATA') {
+      console.warn('ℹ️  No CrUX data for that page.');
+    } else {
+      console.error(`❌ Failed to collect CrUX data: ${result.error.message}`);
+    }
+    return { full: null, summary: null };
+  }
+
+  // Extract data from successful Result
+  const { full, summary } = result.data;
+  const { source } = result.metadata;
+
+  if (source === 'cache') {
     console.log('✓ Loaded CrUX data from cache. Estimated token size: ~', estimateTokenSize(full, options.model));
   } else {
     console.log('✅ Processed CrUX data. Estimated token size: ~', estimateTokenSize(full, options.model));
   }
+
   return { full, summary };
 }
 
@@ -28,17 +40,22 @@ export async function getRUM(pageUrl, deviceType, options) {
     return { data: null, summary: null };
   }
 
-  const { data, fromCache, error } = await collectRUMData(pageUrl, deviceType, options);
+  const result = await collectRUMData(pageUrl, deviceType, options);
 
-  if (error) {
-    console.warn(`⚠️  RUM data collection failed: ${error}`);
+  // Handle Result pattern
+  if (result.isErr()) {
+    console.warn(`⚠️  RUM data collection failed: ${result.error.message}`);
     return { data: null, summary: null };
   }
+
+  // Extract data from successful Result
+  const data = result.data;
+  const { source } = result.metadata;
 
   // Generate markdown summary for agents
   const summary = summarizeRUM(data);
 
-  if (fromCache) {
+  if (source === 'cache') {
     console.log('✓ Loaded RUM data from cache. Estimated token size: ~', estimateTokenSize(summary, options.model));
   } else {
     console.log('✅ Processed RUM data. Estimated token size: ~', estimateTokenSize(summary, options.model));
@@ -48,12 +65,24 @@ export async function getRUM(pageUrl, deviceType, options) {
 }
 
 export async function getPsi(pageUrl, deviceType, options) {
-  const { full, summary, fromCache } = await collectPsi(pageUrl, deviceType, options);
-  if (fromCache) {
+  const result = await collectPsi(pageUrl, deviceType, options);
+
+  // Handle Result pattern
+  if (result.isErr()) {
+    console.error(`❌ PSI data collection failed: ${result.error.message}`);
+    return { full: null, summary: null };
+  }
+
+  // Extract data from successful Result
+  const { full, summary } = result.data;
+  const { source } = result.metadata;
+
+  if (source === 'cache') {
     console.log('✓ Loaded PSI data from cache. Estimated token size: ~', estimateTokenSize(full, options.model));
   } else {
     console.log('✅ Processed PSI data. Estimated token size: ~', estimateTokenSize(full, options.model));
   }
+
   return { full, summary };
 }
 
@@ -75,8 +104,31 @@ export async function getLabData(pageUrl, deviceType, options) {
     };
   }
 
-  const { har, harSummary, perfEntries, perfEntriesSummary, fullHtml, jsApi, coverageData, coverageDataSummary, fromCache } = await collectLabData(pageUrl, deviceType, options);
-  if (fromCache) {
+  const labResult = await collectLabData(pageUrl, deviceType, options);
+
+  // Handle Result pattern - LAB collector now returns Result
+  if (labResult.isErr()) {
+    console.error(`❌ LAB data collection failed: ${labResult.error.message}`);
+    return {
+      har: null, harSummary: null,
+      perfEntries: null, perfEntriesSummary: null,
+      fullHtml: null, jsApi: null,
+      coverageData: null, coverageDataSummary: null
+    };
+  }
+
+  // Extract data and metadata from successful Result
+  const { har, harSummary, perfEntries, perfEntriesSummary, fullHtml, jsApi, coverageData, coverageDataSummary, fromCache } = labResult.data;
+  const { source, warnings } = labResult.metadata;
+
+  // Log warnings if any partial failures occurred
+  if (warnings && warnings.length > 0) {
+    warnings.forEach(w => {
+      console.warn(`⚠️  ${w.source}: ${w.error} - ${w.impact}`);
+    });
+  }
+
+  if (source === 'cache' || fromCache) {
     if (!skipHar) console.log('✓ Loaded HAR data from cache. Estimated token size: ~', estimateTokenSize(har, options.model));
     if (!skipPerfEntries) console.log('✓ Loaded Performance Entries data from cache. Estimated token size: ~', estimateTokenSize(perfEntries, options.model));
     if (!skipFullHtml) console.log('✓ Loaded full rendered HTML markup from cache. Estimated token size: ~', estimateTokenSize(fullHtml, options.model));
@@ -93,17 +145,28 @@ export async function getLabData(pageUrl, deviceType, options) {
 }
 
 export async function getCode(pageUrl, deviceType, requests, options) {
-  const { codeFiles, stats } = await collectCode(pageUrl, deviceType, requests, options);
-  
-  if (stats.fromCache === stats.total) {
+  const result = await collectCode(pageUrl, deviceType, requests, options);
+
+  // Handle Result pattern
+  if (result.isErr()) {
+    console.error(`❌ Code collection failed: ${result.error.message}`);
+    return { codeFiles: {}, stats: { total: 0, fromCache: 0, failed: 0, successful: 0 } };
+  }
+
+  // Extract data from successful Result
+  const { codeFiles, stats } = result.data;
+  const { source } = result.metadata;
+
+  if (source === 'cache') {
     console.log('✓ Loaded code from cache. Estimated token size: ~', estimateTokenSize(codeFiles, options.model));
-  } else if (stats.fromCache > 0) {
+  } else if (source === 'partial-cache') {
     console.log(`✓ Partially loaded code from cache (${stats.fromCache}/${stats.total}). Estimated token size: ~`, estimateTokenSize(codeFiles, options.model));
   } else if (stats.failed > 0) {
-    console.error('❌ Failed to collect all project code. Estimated token size: ~', estimateTokenSize(codeFiles, options.model));
+    console.warn(`⚠️  Code collection had ${stats.failed} failures. Estimated token size: ~`, estimateTokenSize(codeFiles, options.model));
   } else {
     console.log('✅ Processed project code. Estimated token size: ~', estimateTokenSize(codeFiles, options.model));
   }
+
   return { codeFiles, stats };
 }
 

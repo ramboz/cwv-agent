@@ -3,6 +3,8 @@
  * Maps layout shifts to specific CSS rules and stylesheets
  */
 
+import { SHIFT_DETECTION_THRESHOLDS as SHIFT, DISPLAY_LIMITS } from '../../config/thresholds.js';
+
 /**
  * Identify what caused the layout shift
  * @param {Object} source - Shift source
@@ -19,7 +21,7 @@ function identifyShiftCause(source, computedStyles, shiftTime) {
   };
 
   // Font swap (height change without width change)
-  if (Math.abs(rectDiff.height) > 5 && Math.abs(rectDiff.width) < 2) {
+  if (Math.abs(rectDiff.height) > SHIFT.FONT_SWAP.minHeight && Math.abs(rectDiff.width) < SHIFT.FONT_SWAP.maxWidth) {
     return {
       type: 'font-swap',
       description: `Font loaded and swapped, changing text height by ${rectDiff.height.toFixed(1)}px`,
@@ -30,7 +32,7 @@ function identifyShiftCause(source, computedStyles, shiftTime) {
   }
 
   // Dynamic content insertion (vertical shift)
-  if (rectDiff.top > 10 && Math.abs(rectDiff.height) < 5) {
+  if (rectDiff.top > SHIFT.CONTENT_INSERTION.minTop && Math.abs(rectDiff.height) < SHIFT.CONTENT_INSERTION.maxHeight) {
     return {
       type: 'content-insertion',
       description: `Element shifted down by ${rectDiff.top.toFixed(1)}px due to content inserted above`,
@@ -41,7 +43,7 @@ function identifyShiftCause(source, computedStyles, shiftTime) {
   }
 
   // Image/media without dimensions (size change)
-  if (Math.abs(rectDiff.width) > 10 || Math.abs(rectDiff.height) > 10) {
+  if (Math.abs(rectDiff.width) > SHIFT.UNSIZED_MEDIA.minWidth || Math.abs(rectDiff.height) > SHIFT.UNSIZED_MEDIA.minHeight) {
     return {
       type: 'unsized-media',
       description: `Element resized from ${source.previousRect.width.toFixed(0)}x${source.previousRect.height.toFixed(0)} to ${source.currentRect.width.toFixed(0)}x${source.currentRect.height.toFixed(0)}`,
@@ -52,7 +54,7 @@ function identifyShiftCause(source, computedStyles, shiftTime) {
   }
 
   // Animation/transition (position change)
-  if (Math.abs(rectDiff.left) > 5 || (Math.abs(rectDiff.top) > 5 && Math.abs(rectDiff.top) < 10)) {
+  if (Math.abs(rectDiff.left) > SHIFT.ANIMATION.minLeft || (Math.abs(rectDiff.top) > SHIFT.ANIMATION.minTop && Math.abs(rectDiff.top) < SHIFT.ANIMATION.maxTop)) {
     return {
       type: 'animation',
       description: `Element moved ${rectDiff.left.toFixed(1)}px horizontally and ${rectDiff.top.toFixed(1)}px vertically`,
@@ -267,7 +269,7 @@ export function summarizeCLSAttribution(enhancedShifts) {
   // Identify top issues (sorted by CLS value)
   const topIssues = enhancedShifts
     .sort((a, b) => b.value - a.value)
-    .slice(0, 5)
+    .slice(0, DISPLAY_LIMITS.LAB.MAX_CLS_SOURCES)
     .map(shift => ({
       element: shift.element,
       value: shift.value,

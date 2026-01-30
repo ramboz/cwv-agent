@@ -12,6 +12,9 @@
  * 5. Threshold-based filtering
  */
 
+import { Result } from '../../core/result.js';
+import { ErrorCodes } from '../../core/error-codes.js';
+
 export class BaseCollector {
   constructor(deviceType = 'mobile') {
     this.deviceType = deviceType;
@@ -331,5 +334,68 @@ export class LabDataCollector extends BaseCollector {
     this.collectedData = data;
     const summary = this.summarize(data, options);
     return { data, summary };
+  }
+
+  /**
+   * Safe wrapper for collect() that returns Result
+   * Catches errors and wraps them in Result.err() instead of throwing
+   * @param {Page} page - Puppeteer page instance
+   * @param {*} setupResult - Result from setup() call
+   * @returns {Promise<Result>} Result containing collected data or error
+   */
+  async collectSafe(page, setupResult) {
+    const startTime = Date.now();
+    const collectorName = this.constructor.name;
+
+    try {
+      const data = await this.collect(page, setupResult);
+      return Result.ok(data, {
+        source: 'fresh',
+        collector: collectorName,
+        duration: Date.now() - startTime
+      });
+    } catch (error) {
+      return Result.err(
+        ErrorCodes.ANALYSIS_FAILED,
+        `${collectorName} collection failed: ${error.message}`,
+        { collector: collectorName, error: error.stack },
+        false // Analysis failures are not retryable
+      );
+    }
+  }
+
+  /**
+   * Safe wrapper for run() that returns Result
+   * Catches errors and wraps them in Result.err() instead of throwing
+   * @param {Page} page - Puppeteer page instance
+   * @param {Object} options - Options for summarization
+   * @returns {Promise<Result>} Result containing data and summary or error
+   */
+  async runSafe(page, options = {}) {
+    const startTime = Date.now();
+    const collectorName = this.constructor.name;
+
+    try {
+      const setupResult = await this.setup(page);
+      const data = await this.collect(page, setupResult);
+      this.collectedData = data;
+      const summary = this.summarize(data, options);
+
+      return Result.ok(
+        { data, summary },
+        {
+          source: 'fresh',
+          collector: collectorName,
+          duration: Date.now() - startTime
+        }
+      );
+    } catch (error) {
+      return Result.err(
+        ErrorCodes.ANALYSIS_FAILED,
+        `${collectorName} failed: ${error.message}`,
+        { collector: collectorName, error: error.stack },
+        false // Analysis failures are not retryable
+      );
+    }
   }
 }

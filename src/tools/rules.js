@@ -1,6 +1,7 @@
 import { prettify } from 'htmlfy'
 import { cacheResults, getCachedResults, getCachePath } from '../utils.js';
 import rules from '../rules/index.js';
+import { DATA_LIMITS } from '../config/thresholds.js';
 
 function prettifyWithOffset(str, offset = 4, code) {
   // Use the provided offset to dynamically indent each line of the prettified HTML
@@ -12,7 +13,7 @@ function prettifyWithOffset(str, offset = 4, code) {
   }
   
   // Skip prettification for very large strings to prevent hanging
-  if (str.length > 10000) {
+  if (str.length > DATA_LIMITS.MAX_HTML_LENGTH) {
     return prefix + str + suffix;
   }
   
@@ -126,7 +127,7 @@ export async function applyRules(pageUrl, deviceType, { skipCache, outputSuffix 
   }
   
   // Limit data size if it's too large to prevent hanging
-  const maxEntries = 10000;
+  const maxEntries = DATA_LIMITS.MAX_PERF_ENTRIES;
   if (report.data.length > maxEntries) {
     report.data = report.data.slice(0, maxEntries);
   }
@@ -138,14 +139,14 @@ export async function applyRules(pageUrl, deviceType, { skipCache, outputSuffix 
   report.dataSortedByEnd = report.data.slice().sort((a, b) => a.end - b.end);
 
   // Limit other data sizes if necessary
-  if (har?.log?.entries?.length > 10000) {
-    har.log.entries = har.log.entries.slice(0, 10000);
+  if (har?.log?.entries?.length > DATA_LIMITS.MAX_HAR_ENTRIES) {
+    har.log.entries = har.log.entries.slice(0, DATA_LIMITS.MAX_HAR_ENTRIES);
   }
-  if (perfEntries?.length > 10000) {
-    perfEntries = perfEntries.slice(0, 10000);
+  if (perfEntries?.length > DATA_LIMITS.MAX_PERF_ENTRIES) {
+    perfEntries = perfEntries.slice(0, DATA_LIMITS.MAX_PERF_ENTRIES);
   }
-  if (report.data.length > 10000) {
-    report.data = report.data.slice(0, 10000);
+  if (report.data.length > DATA_LIMITS.MAX_PERF_ENTRIES) {
+    report.data = report.data.slice(0, DATA_LIMITS.MAX_PERF_ENTRIES);
   }
   
   const json = rules.map((r, index) => {

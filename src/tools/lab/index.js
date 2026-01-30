@@ -2,7 +2,7 @@ import { cacheResults, getCachedResults } from '../../utils.js';
 import { setupBrowser, waitForLCP } from './browser-utils.js';
 import { summarizeHAR, startHARRecording, stopHARRecording } from './har-collector.js';
 import { summarizePerformanceEntries, collectPerformanceEntries } from './performance-collector.js';
-import { 
+import {
   summarizeCoverageData,
   setupCodeCoverage,
   collectLcpCoverage,
@@ -11,13 +11,16 @@ import {
 import { collectJSApiData, setupCSPViolationTracking } from './js-api-collector.js';
 import { analyzeThirdPartyScripts } from './third-party-attributor.js';
 import { attributeCLStoCSS, summarizeCLSAttribution } from './cls-attributor.js';
+import { DISPLAY_LIMITS } from '../../config/thresholds.js';
+import { Result } from '../../core/result.js';
+import { ErrorCodes } from '../../core/error-codes.js';
 
 /**
  * Phase A Optimization: Extract only CWV-relevant HTML sections
  * Reduces token count from 333K to ~30K by focusing on critical rendering path
  */
 async function extractCwvRelevantHtml(page) {
-  return await page.evaluate(() => {
+  return await page.evaluate((maxClassNames, maxLcpCandidates, sampleSize) => {
     // Helper: Generate minimal CSS selector
     const getSelector = (element) => {
       if (!element) return null;
@@ -25,7 +28,7 @@ async function extractCwvRelevantHtml(page) {
       if (element.id) {
         selector += `#${element.id}`;
       } else if (element.className && typeof element.className === 'string') {
-        const classes = element.className.trim().split(/\s+/).slice(0, 2);
+        const classes = element.className.trim().split(/\s+/).slice(0, maxClassNames);
         selector += classes.map(c => `.${c}`).join('');
       }
       return selector;
@@ -82,7 +85,7 @@ async function extractCwvRelevantHtml(page) {
         // Substantial size (likely above-fold)
         return rect.width > 300 && rect.height > 200 && rect.top < window.innerHeight;
       })
-      .slice(0, 10)  // Top 10 candidates
+      .slice(0, maxLcpCandidates)
       .map(el => ({
         tag: el.tagName.toLowerCase(),
         selector: getSelector(el),
@@ -109,7 +112,7 @@ async function extractCwvRelevantHtml(page) {
     // Find images without dimensions (CLS risk)
     const imagesWithoutDimensions = Array.from(document.querySelectorAll('img'))
       .filter(img => !img.hasAttribute('width') || !img.hasAttribute('height'))
-      .slice(0, 20)  // Sample 20
+      .slice(0, sampleSize)
       .map(img => ({
         selector: getSelector(img),
         src: img.src
@@ -285,11 +288,14 @@ async function extractCwvRelevantHtml(page) {
       thirdPartyScripts,
       fontStrategy
     }, null, 2);
-  });
+  }, DISPLAY_LIMITS.LAB.MAX_CLASS_NAMES, DISPLAY_LIMITS.LAB.MAX_LCP_CANDIDATES, DISPLAY_LIMITS.LAB.SAMPLE_SIZE);
 }
 
 // Main Data Collection Function
 export async function collect(pageUrl, deviceType, { skipCache, blockRequests, collectHar = true, collectCoverage = true }) {
+  const startTime = Date.now();
+  const dataQualityWarnings = []; // Track partial failures for data quality reporting
+
   // Load cached artifacts
   let harFile = getCachedResults(pageUrl, deviceType, 'har');
   let perfEntries = getCachedResults(pageUrl, deviceType, 'perf');
@@ -311,19 +317,22 @@ export async function collect(pageUrl, deviceType, { skipCache, blockRequests, c
     // Extract summary from cached CLS attribution if it exists
     const clsAttributionSummary = clsAttribution?.summary || clsAttribution || null;
 
-    return {
-      har: collectHar ? harFile : null,
-      harSummary: collectHar && harFile ? summarizeHAR(harFile, deviceType, thirdPartyAnalysis) : null,
-      perfEntries,
-      perfEntriesSummary: summarizePerformanceEntries(perfEntries, deviceType, null, clsAttributionSummary),
-      fullHtml,
-      jsApi,
-      coverageData: collectCoverage ? coverageData : null,
-      coverageDataSummary: collectCoverage && coverageData ? summarizeCoverageData(coverageData, deviceType) : null,
-      thirdPartyAnalysis,
-      clsAttribution: clsAttributionSummary,
-      fromCache: true,
-    };
+    return Result.ok(
+      {
+        har: collectHar ? harFile : null,
+        harSummary: collectHar && harFile ? summarizeHAR(harFile, deviceType, thirdPartyAnalysis) : null,
+        perfEntries,
+        perfEntriesSummary: summarizePerformanceEntries(perfEntries, deviceType, null, clsAttributionSummary),
+        fullHtml,
+        jsApi,
+        coverageData: collectCoverage ? coverageData : null,
+        coverageDataSummary: collectCoverage && coverageData ? summarizeCoverageData(coverageData, deviceType) : null,
+        thirdPartyAnalysis,
+        clsAttribution: clsAttributionSummary,
+        fromCache: true,
+      },
+      { source: 'cache' }
+    );
   }
 
   // Setup browser
@@ -365,8 +374,13 @@ export async function collect(pageUrl, deviceType, { skipCache, blockRequests, c
     try {
       lcpCoverageData = await collectLcpCoverage(page, pageUrl, deviceType);
     } catch (err) {
-      console.error('Error collecting LCP coverage data:', err.message);
-      lcpCoverageData = {}
+      console.warn(`⚠️  LCP coverage collection failed: ${err.message}`);
+      dataQualityWarnings.push({
+        source: 'lcp-coverage',
+        error: err.message,
+        impact: 'LCP-specific coverage data unavailable'
+      });
+      lcpCoverageData = null;
     }
   }
 
@@ -400,7 +414,13 @@ export async function collect(pageUrl, deviceType, { skipCache, blockRequests, c
       );
       cacheResults(pageUrl, deviceType, 'third-party', thirdPartyAnalysis);
     } catch (err) {
-      console.error('Error analyzing third-party scripts:', err.message);
+      console.warn(`⚠️  Third-party analysis failed: ${err.message}`);
+      dataQualityWarnings.push({
+        source: 'third-party-analysis',
+        error: err.message,
+        impact: 'Third-party script recommendations may be incomplete'
+      });
+      thirdPartyAnalysis = null;
     }
   }
 
@@ -412,7 +432,13 @@ export async function collect(pageUrl, deviceType, { skipCache, blockRequests, c
       const clsSummary = summarizeCLSAttribution(clsAttribution);
       cacheResults(pageUrl, deviceType, 'cls-attribution', { detailed: clsAttribution, summary: clsSummary });
     } catch (err) {
-      console.error('Error attributing CLS to CSS:', err.message);
+      console.warn(`⚠️  CLS attribution failed: ${err.message}`);
+      dataQualityWarnings.push({
+        source: 'cls-attribution',
+        error: err.message,
+        impact: 'CLS cause identification unavailable'
+      });
+      clsAttribution = null;
     }
   }
 
@@ -460,16 +486,24 @@ export async function collect(pageUrl, deviceType, { skipCache, blockRequests, c
   }
 
   // Return collected data
-  return {
-    har: collectHar ? harFile : null,
-    harSummary,
-    perfEntries,
-    perfEntriesSummary,
-    fullHtml,
-    jsApi,
-    coverageData: collectCoverage ? coverageData : null,
-    coverageDataSummary,
-    thirdPartyAnalysis,
-    clsAttribution
-  };
+  return Result.ok(
+    {
+      har: collectHar ? harFile : null,
+      harSummary,
+      perfEntries,
+      perfEntriesSummary,
+      fullHtml,
+      jsApi,
+      coverageData: collectCoverage ? coverageData : null,
+      coverageDataSummary,
+      thirdPartyAnalysis,
+      clsAttribution
+    },
+    {
+      source: 'fresh',
+      duration: Date.now() - startTime,
+      dataQuality: dataQualityWarnings.length === 0 ? 'complete' : 'partial',
+      warnings: dataQualityWarnings
+    }
+  );
 }

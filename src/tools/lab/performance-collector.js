@@ -1,6 +1,6 @@
 // Performance Data Collection, Analysis, and Formatting Functions
 import { LabDataCollector } from './base-collector.js';
-import { RESOURCE_THRESHOLDS } from '../../config/thresholds.js';
+import { RESOURCE_THRESHOLDS, DISPLAY_LIMITS } from '../../config/thresholds.js';
 
 // PerformanceCollector Class
 export class PerformanceCollector extends LabDataCollector {
@@ -27,7 +27,7 @@ export class PerformanceCollector extends LabDataCollector {
 
   // Performance-specific methods
   async collectPerformanceEntries(page) {
-    return JSON.parse(await page.evaluate(async () => {
+    return JSON.parse(await page.evaluate(async (maxClassNames, maxClsSources) => {
       console.log('Evaluating performance entries');
 
       const clone = (obj) => {
@@ -41,7 +41,7 @@ export class PerformanceCollector extends LabDataCollector {
         if (element.id) {
           selector += `#${element.id}`;
         } else if (element.className && typeof element.className === 'string') {
-          const classes = element.className.trim().split(/\s+/).slice(0, 2);
+          const classes = element.className.trim().split(/\s+/).slice(0, maxClassNames);
           selector += classes.map(c => `.${c}`).join('');
         }
         return selector;
@@ -129,8 +129,8 @@ export class PerformanceCollector extends LabDataCollector {
         duration: e.duration,
         value: e.value,
         hadRecentInput: e.hadRecentInput,
-        // Limit to top 5 sources by impact
-        sources: e.sources?.slice(0, 5).map((s) => {
+        // Limit to top sources by impact
+        sources: e.sources?.slice(0, maxClsSources).map((s) => {
           const computedStyle = s.node ? window.getComputedStyle(s.node) : null;
           const parent = s.node?.parentElement;
           const parentStyle = parent ? window.getComputedStyle(parent) : null;
@@ -186,7 +186,7 @@ export class PerformanceCollector extends LabDataCollector {
       console.log(`Filtered performance entries: ${entries.length} → ${cwvCriticalEntries.length} (${Math.round((1 - cwvCriticalEntries.length/entries.length) * 100)}% reduction)`);
 
       return JSON.stringify(cwvCriticalEntries, null, 2);
-    }, { timeout: 30_000 }));
+    }, DISPLAY_LIMITS.LAB.MAX_CLASS_NAMES, DISPLAY_LIMITS.LAB.MAX_CLS_SOURCES, { timeout: 30_000 }));
   }
 
   summarizePerformanceEntries(performanceEntries, deviceType, maxTokens = null, clsAttribution = null) {
@@ -266,7 +266,7 @@ export class PerformanceCollector extends LabDataCollector {
 
         if (clsAttribution.summary.topIssues?.length > 0) {
           markdownOutput += '**Top CLS Issues (with CSS Attribution):**\n\n';
-          clsAttribution.summary.topIssues.slice(0, 8).forEach((issue, i) => {
+          clsAttribution.summary.topIssues.slice(0, DISPLAY_LIMITS.LAB.MAX_CLS_ISSUES).forEach((issue, i) => {
             markdownOutput += `${i + 1}. **Element**: \`${issue.element}\`\n`;
             markdownOutput += `   - **CLS Value**: ${issue.value.toFixed(3)}\n`;
             markdownOutput += `   - **Shift Type**: ${issue.cause.type}\n`;
