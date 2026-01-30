@@ -71,10 +71,12 @@ export function transformFindingsToSuggestions(findings) {
             id: index + 1,
             title: finding.description || `${finding.metric} Optimization`,
             description: finding.reasoning?.observation || finding.description,
+            // Solution field: clear explanation of the fix in plain language
+            solution: implementation || `Address the ${finding.metric || 'performance'} issue by implementing the recommended optimizations.`,
             metric: finding.metric,
             priority,
             effort,
-            impact,
+            estimatedImpact: impact,
             implementation,
             codeExample,
             category
@@ -143,9 +145,14 @@ ${i + 1}. **${rc.description}**
     suggestions.forEach((suggestion, index) => {
         markdown += `### ${index + 1}. ${suggestion.title}
 
-${suggestion.description}
+**Issue**: ${suggestion.description}
 
 `;
+
+        // Solution is the most important part - explain the fix clearly
+        if (suggestion.solution) {
+            markdown += `**Solution**: ${suggestion.solution}\n\n`;
+        }
 
         if (suggestion.metric) {
             const metrics = Array.isArray(suggestion.metric) ? suggestion.metric.join(', ') : suggestion.metric;

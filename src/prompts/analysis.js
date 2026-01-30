@@ -566,6 +566,23 @@ Output:
 - Confidence: 0.75 (depends on actual resource usage)
 - Recommendation: Keep only 2-4 preconnects for critical origins, remove others
 
+**Example 5: WRONG - Preconnect to Non-Critical Third Parties (What NOT to recommend)**
+Input: Site loads cookielaw.org for consent, adobedtm for analytics, no preconnect hints
+Output:
+- ❌ WRONG: "Add preconnect to cdn.cookielaw.org and assets.adobedtm.com"
+- ✅ CORRECT: These are non-critical third parties that should load AFTER LCP
+- Finding: Cookie consent and tag managers are NOT in LCP critical path
+- Recommendation: Load cookielaw and adobedtm async/deferred, NOT preconnect
+- Exception: Adobe Launch MAY need early loading ONLY if Adobe Target does above-fold personalization
+- Detection: Look for at.js or mbox calls to detect Target; if absent, defer adobedtm
+
+**Categories that should NEVER get preconnect recommendations:**
+- Cookie consent: cookielaw.org, onetrust.com, cookiebot.com → Always defer
+- Analytics: google-analytics.com, omtrdc.net → Always async
+- Tag managers: googletagmanager.com, adobedtm (unless Target detected) → Async
+- Monitoring: hotjar.com, fullstory.com → Async
+- Social: facebook.net, linkedin.com → Async
+
 **Example 5: Font Loading Without font-display**
 Input: @font-face rules without font-display property
 Output:

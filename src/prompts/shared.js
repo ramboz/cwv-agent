@@ -67,6 +67,7 @@ You must return a JSON object matching this exact schema:
     {
       "title": "string - short, actionable title (required)",
       "description": "string - business-friendly description of the issue (required)",
+      "solution": "string - clear explanation of the recommended fix in plain language (required)",
       "metric": "string OR array - primary metric(s) affected: LCP, CLS, INP, TBT, TTFB, FCP (optional)",
       "priority": "High | Medium | Low (optional)",
       "effort": "Easy | Medium | Hard (optional)",
@@ -95,6 +96,79 @@ You must return a JSON object matching this exact schema:
 4. **Evidence-Based**: Each suggestion should reference specific data from agent findings
 5. **Actionable**: Focus on what to change, not just what's wrong
 6. **Confidence Scoring**: Provide realistic confidence based on evidence quality
+
+### Critical: Third-Party Resource Hint Rules
+
+**NEVER recommend preconnect for these categories - they should be deferred/async instead:**
+
+| Category | Domains | Correct Action |
+|----------|---------|----------------|
+| Cookie Consent | cookielaw.org, onetrust.com, cookiebot.com | Defer to post-LCP |
+| Analytics | google-analytics.com, analytics.*, omtrdc.net | Load async |
+| Tag Managers | googletagmanager.com, assets.adobedtm.com | Load async (see exception) |
+| Monitoring | hotjar.com, fullstory.com, newrelic.com | Load async |
+| Social | facebook.net, twitter.com, linkedin.com | Load async |
+
+**Exception for Tag Managers**: Adobe Launch (adobedtm) MAY need early loading ONLY if:
+- Adobe Target is loaded AND
+- There's above-fold personalization that would cause flicker
+- Detection: Look for at.js, mbox calls, or Target library
+- If no Target detected → recommend async loading, NOT preconnect
+
+**Valid preconnect targets (affects LCP):**
+- CDN hosting hero/LCP image
+- Critical font CDN (if above-fold text renders with custom font)
+- First-party API that blocks initial render
+
+### Critical: CSS Loading Anti-Patterns (NEVER RECOMMEND)
+
+**NEVER suggest these hacky CSS async patterns - they are problematic:**
+
+| Anti-Pattern | Why It's Bad |
+|--------------|--------------|
+| media="print" hack with onload | Violates HTML spec, accessibility issues, inconsistent behavior |
+| preload as="style" with onload hack | Misuses preload semantics, accessibility problems, harder to debug |
+| noscript fallback with above hacks | Adds complexity without solving the real problem |
+
+**Examples of BAD patterns to NEVER recommend:**
+- <link rel="stylesheet" media="print" onload="this.media='all'">
+- <link rel="preload" as="style" onload="this.rel='stylesheet'">
+
+**RECOMMENDED approach for async CSS (JavaScript-based):**
+\`\`\`javascript
+// Load non-critical CSS after page load
+if ('requestIdleCallback' in window) {
+  requestIdleCallback(() => {
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = '/path/to/non-critical.css';
+    document.head.appendChild(link);
+  });
+} else {
+  setTimeout(() => { /* same approach */ }, 1);
+}
+\`\`\`
+
+**BEST approach: Split CSS into critical and non-critical:**
+- Load critical CSS synchronously (above-fold styles only)
+- Load non-critical CSS with JavaScript after page load or during idle time
+- Use requestIdleCallback for deferred loading
+
+### Solution Field Requirements
+
+Each suggestion MUST include a **solution** field that:
+1. Explains the fix in plain, non-technical language
+2. Describes WHAT to do, not just what's wrong
+3. Is actionable and specific
+4. Does NOT just repeat the code changes in words
+
+**Example of GOOD solution:**
+- "Split the CSS bundle into two parts: critical styles needed for above-the-fold content (load immediately) and non-critical styles (load after page renders). Use JavaScript with requestIdleCallback to load the non-critical CSS asynchronously."
+
+**Example of BAD solution:**
+- "Fix the CSS loading issue" (too vague)
+- "Add async loading" (doesn't explain how)
+- "Change the link tag" (just describes code change)
 
 ### Code Change Requirements
 

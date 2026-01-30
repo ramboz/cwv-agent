@@ -29,30 +29,39 @@ function categorizeScript(url, domain) {
   const lowerUrl = url.toLowerCase();
   const lowerDomain = domain.toLowerCase();
 
-  // Analytics
+  // Cookie Consent (NEVER LCP-critical, always defer)
+  if (lowerDomain.includes('cookielaw') || lowerDomain.includes('onetrust') ||
+      lowerDomain.includes('cookiebot') || lowerDomain.includes('cookieconsent') ||
+      lowerDomain.includes('trustarc') || lowerDomain.includes('usercentrics')) {
+    return 'consent';
+  }
+
+  // Analytics (NEVER LCP-critical, always async)
   if (lowerDomain.includes('google-analytics') || lowerDomain.includes('gtag') ||
       lowerDomain.includes('analytics') || lowerDomain.includes('segment') ||
-      lowerDomain.includes('omniture') || lowerDomain.includes('adobe') && lowerUrl.includes('analytics')) {
+      lowerDomain.includes('omniture') || lowerDomain.includes('omtrdc') ||
+      (lowerDomain.includes('adobe') && lowerUrl.includes('analytics'))) {
     return 'analytics';
   }
 
-  // Advertising
+  // Advertising (NEVER LCP-critical)
   if (lowerDomain.includes('doubleclick') || lowerDomain.includes('adsense') ||
       lowerDomain.includes('googlesyndication') || lowerDomain.includes('adnxs') ||
       lowerUrl.includes('/ads/') || lowerUrl.includes('/ad.')) {
     return 'advertising';
   }
 
-  // Social
+  // Social (NEVER LCP-critical)
   if (lowerDomain.includes('facebook') || lowerDomain.includes('twitter') ||
       lowerDomain.includes('linkedin') || lowerDomain.includes('instagram') ||
       lowerDomain.includes('pinterest') || lowerDomain.includes('tiktok')) {
     return 'social';
   }
 
-  // Tag managers
+  // Tag managers (usually NOT LCP-critical, unless Target personalization)
   if (lowerDomain.includes('googletagmanager') || lowerDomain.includes('tealium') ||
-      lowerDomain.includes('launch.adobe') || lowerDomain.includes('ensighten')) {
+      lowerDomain.includes('adobedtm') || lowerDomain.includes('launch.adobe') ||
+      lowerDomain.includes('assets.adobedtm') || lowerDomain.includes('ensighten')) {
     return 'tag-manager';
   }
 
@@ -63,32 +72,119 @@ function categorizeScript(url, domain) {
     return 'cdn';
   }
 
-  // Payment
+  // Payment (usually NOT LCP-critical)
   if (lowerDomain.includes('stripe') || lowerDomain.includes('paypal') ||
       lowerDomain.includes('braintree') || lowerDomain.includes('square')) {
     return 'payment';
   }
 
-  // Customer support / Chat
+  // Customer support / Chat (NEVER LCP-critical)
   if (lowerDomain.includes('zendesk') || lowerDomain.includes('intercom') ||
       lowerDomain.includes('livechat') || lowerDomain.includes('drift') ||
       lowerDomain.includes('helpscout')) {
     return 'support';
   }
 
-  // A/B Testing / Personalization
+  // A/B Testing / Personalization (MAY be LCP-critical if above-fold personalization)
   if (lowerDomain.includes('optimizely') || lowerDomain.includes('vwo') ||
-      lowerDomain.includes('abtasty')) {
+      lowerDomain.includes('abtasty') || lowerUrl.includes('at.js') ||
+      lowerUrl.includes('target') || lowerDomain.includes('tt.omtrdc')) {
     return 'testing';
   }
 
-  // RUM / Performance monitoring
+  // RUM / Performance monitoring (NEVER LCP-critical)
   if (lowerDomain.includes('newrelic') || lowerDomain.includes('datadog') ||
-      lowerDomain.includes('sentry') || lowerUrl.includes('rum')) {
+      lowerDomain.includes('sentry') || lowerDomain.includes('hotjar') ||
+      lowerDomain.includes('fullstory') || lowerDomain.includes('logrocket') ||
+      lowerUrl.includes('rum')) {
     return 'monitoring';
   }
 
   return 'other';
+}
+
+/**
+ * Categories that should NEVER be recommended for preconnect
+ * These are non-LCP-critical and should be deferred/async
+ */
+const NON_CRITICAL_CATEGORIES = new Set([
+  'consent',     // Cookie consent can always load after LCP
+  'analytics',   // Analytics never affects rendering
+  'advertising', // Ads don't block LCP
+  'social',      // Social pixels are not rendering-critical
+  'support',     // Chat widgets can load late
+  'monitoring',  // RUM/monitoring is observational only
+]);
+
+/**
+ * Check if a third-party category is LCP-critical
+ * @param {string} category - Third-party category
+ * @returns {boolean} True if category can affect LCP
+ */
+export function isLCPCriticalCategory(category) {
+  return !NON_CRITICAL_CATEGORIES.has(category);
+}
+
+/**
+ * Get recommendation for a third-party category
+ * @param {string} category - Third-party category
+ * @returns {Object} Recommendation object
+ */
+export function getCategoryRecommendation(category) {
+  const recommendations = {
+    'consent': {
+      preconnect: false,
+      action: 'defer',
+      reason: 'Cookie consent banners never affect LCP - always defer to post-LCP'
+    },
+    'analytics': {
+      preconnect: false,
+      action: 'async',
+      reason: 'Analytics does not affect rendering - always load async'
+    },
+    'advertising': {
+      preconnect: false,
+      action: 'defer',
+      reason: 'Ads should not block page rendering - defer below fold'
+    },
+    'social': {
+      preconnect: false,
+      action: 'async',
+      reason: 'Social pixels are never rendering-critical - load async'
+    },
+    'tag-manager': {
+      preconnect: 'conditional',
+      action: 'async unless Target',
+      reason: 'Load async UNLESS Adobe Target does above-fold personalization'
+    },
+    'testing': {
+      preconnect: 'conditional',
+      action: 'depends on usage',
+      reason: 'Only preconnect if doing above-fold A/B tests that could cause flicker'
+    },
+    'support': {
+      preconnect: false,
+      action: 'defer',
+      reason: 'Chat widgets should load after main content - defer'
+    },
+    'monitoring': {
+      preconnect: false,
+      action: 'async',
+      reason: 'RUM/monitoring is observational - load async'
+    },
+    'cdn': {
+      preconnect: true,
+      action: 'preconnect if LCP resource',
+      reason: 'Preconnect only if CDN hosts LCP image or critical resources'
+    },
+    'other': {
+      preconnect: 'unknown',
+      action: 'analyze',
+      reason: 'Analyze if this resource is in the LCP critical path'
+    }
+  };
+
+  return recommendations[category] || recommendations['other'];
 }
 
 /**

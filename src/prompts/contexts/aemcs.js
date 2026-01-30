@@ -128,9 +128,28 @@ You know the following about AEM CS.
 **Resource Hints:**
 - Preconnect: ONLY for external origins in the critical path for LCP (e.g., CDN hosting hero image)
   - Example: <link rel="preconnect" href="https://cdn.example.com"> if hero image loads from cdn.example.com
-- AVOID: Preconnect for non-critical resources (analytics, fonts loaded async, third-party scripts)
-  - Bad: <link rel="preconnect" href="https://fonts.googleapis.com"> (fonts should use font-display:swap, not preconnect)
-  - Bad: <link rel="preconnect" href="https://analytics.example.com"> (analytics is not in LCP critical path)
+  - Valid use cases: CDN hosting LCP image, critical font CDN (if above-fold text)
+
+- **NEVER PRECONNECT - These categories should ALWAYS be deferred/async instead:**
+  - Cookie Consent: cookielaw.org, cdn.cookielaw.org, onetrust.com, cookiebot.com
+    → Consent banners never affect LCP, always defer to post-LCP
+  - Analytics: google-analytics.com, analytics.*, omtrdc.net
+    → Analytics doesn't affect rendering, load async
+  - Tag Managers: googletagmanager.com, assets.adobedtm.com (Adobe Launch)
+    → Load async unless doing above-fold personalization (see exception below)
+  - Monitoring: hotjar.com, fullstory.com, logrocket.com, newrelic.com
+    → Session replay/monitoring is never rendering-critical
+  - Social: facebook.net, twitter.com, linkedin.com
+    → Social pixels are never LCP-critical
+  - A/B Testing: optimizely.com, vwo.com
+    → Unless doing above-fold flicker-prevention (rare)
+
+- **Exception - Adobe Target Personalization:**
+  - If Adobe Launch (adobedtm) is loading Adobe Target AND there's above-fold personalization:
+    → Preconnect MAY be justified to reduce personalization flicker
+  - Detection signal: Look for at.js, mbox calls, or Target-specific code
+  - If no Target detected: Adobe Launch should load async, NOT preconnect
+
 - Preload: Only for critical, discoverable-late resources in clientlibs (not content images)
   - Example: Critical CSS/JS in clientlibs that would otherwise be discovered late
 - DNS-prefetch: Avoid - no practical use case for modern sites

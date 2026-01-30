@@ -101,6 +101,8 @@ const suggestionSchema = z.object({
     suggestions: z.array(z.object({
         title: z.string().min(1),
         description: z.string().min(1),
+        // Solution: Plain language explanation of the fix (required)
+        solution: z.string().min(1),
         // Allow either single metric or array of metrics (for multi-metric improvements)
         metric: z.union([
             z.enum(['LCP', 'CLS', 'INP', 'TBT', 'TTFB', 'FCP', 'TTI', 'SI']),
