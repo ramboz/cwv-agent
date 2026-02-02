@@ -97,7 +97,7 @@ export function validateFindings(findings, causalGraph, config = {}) {
   if (blocked.length > 0) {
     console.log('   Blocked findings:');
     blocked.forEach(b => {
-      console.log(`   - ${b.finding.id}: ${b.issues[0]}`);
+      console.log(`   - ${b.finding.id}: ${b.issues?.[0] || 'No issue details provided'}`);
     });
   }
 
@@ -199,6 +199,6 @@ export function saveValidationResults(pageUrl, deviceType, validationResults, mo
     const report = generateValidationReport(validationResults);
     cacheResults(pageUrl, deviceType, 'validation-report', report, '', model);
   } catch (error) {
-    console.warn('Failed to save validation results:', error.message);
+    console.warn('Failed to save validation results:', error?.message || error || 'Unknown error');
   }
 }

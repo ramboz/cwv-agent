@@ -60,7 +60,7 @@ You know the following about AEM EDS.
  
 ### Anti-patterns
  
-- Do not inline critical CSS for above-the-fold content in the <head>. It would require a build system
+- NEVER inline critical CSS for above-the-fold content in the <head> (requires build system). Use separate styles.css and lazy-styles.css files instead. Inline CSS is a common web performance best practice but is NOT compatible with EDS architecture.
 - Do not minify CSS and JS files. The files are already small, HTTP compression is already properly configured, and it would again require a build system
 - Do not preload the LCP image via meta tags or HTTP headers. Setting loading to eager and fetchpriority to high using Javascript is the recommended approach. The initial markup itself cannot be modified
 - Do not add defer or async to third-party scripts in the head. "aem.js"/"lib-franklin.js" are modules and anyways loaded like "defer". Instead load those dependencies via the "loadDelayed" method

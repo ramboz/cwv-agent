@@ -269,7 +269,7 @@ export const DISPLAY_LIMITS = {
     MAX_CLASS_NAMES: 2,         // Max class names per element
     SAMPLE_SIZE: 20,            // Sample size for analysis
     MAX_ITEMS_DISPLAY: 10,      // Generic display limit
-    MAX_RESOURCES: 5,           // Max resources per category
+    MAX_RESOURCES: 15,          // Max resources per category (increased from 5 to capture long-tail third-party scripts)
     MAX_CLS_ISSUES: 8,          // Max CLS issues to display
     MAX_ABOVE_FOLD_IMAGES: 5,   // Max above-fold images
     MAX_DIMENSION_ISSUES: 5,    // Max dimension issues

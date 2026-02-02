@@ -1,5 +1,5 @@
 import { estimateTokenSize } from '../utils.js';
-import { getTechnicalContext, PHASE_FOCUS, getStructuredOutputFormat } from './shared.js';
+import { getTechnicalContext, PHASE_FOCUS, getStructuredOutputFormat, getDataPriorityGuidance } from './shared.js';
 
 // Counter for tracking analysis steps
 let stepCounter = 0;
@@ -289,6 +289,8 @@ For EVERY finding, you MUST provide structured reasoning using this 4-step chain
 export function cruxAgentPrompt(cms = 'eds') {
   return `${getBasePrompt(cms, 'analyzing Chrome User Experience Report (CrUX) field data')}
 
+${getDataPriorityGuidance('perf_observer')}
+
 ${getChainOfThoughtGuidance()}
 
 ## Few-Shot Examples
@@ -340,6 +342,8 @@ ${getStructuredOutputFormat('CrUX Agent')}
 export function rumAgentPrompt(cms = 'eds') {
   return `${getBasePrompt(cms, 'analyzing Real User Monitoring (RUM) field data')}
 
+${getDataPriorityGuidance('perf_observer')}
+
 ${getChainOfThoughtGuidance()}
 
 ## Few-Shot Examples
@@ -380,6 +384,8 @@ ${getStructuredOutputFormat('RUM Agent')}
 export function psiAgentPrompt(cms = 'eds') {
   return `${getBasePrompt(cms, 'analyzing PageSpeed Insights/Lighthouse results')}
 
+${getDataPriorityGuidance('psi')}
+
 ${getChainOfThoughtGuidance()}
 
 ## Few-Shot Examples
@@ -416,6 +422,8 @@ ${getStructuredOutputFormat('PSI Agent')}
 
 export function perfObserverAgentPrompt(cms = 'eds') {
   return `${getBasePrompt(cms, 'analyzing Performance Observer data captured during page load simulation')}
+
+${getDataPriorityGuidance('perf_observer')}
 
 ${getChainOfThoughtGuidance()}
 
@@ -476,6 +484,8 @@ ${getStructuredOutputFormat('Performance Observer Agent')}
 export function harAgentPrompt(cms = 'eds') {
   return `${getBasePrompt(cms, 'analyzing HAR (HTTP Archive) file data for Core Web Vitals optimization focused on network performance')}
 
+${getDataPriorityGuidance('har')}
+
 ${getChainOfThoughtGuidance()}
 
 ## Few-Shot Examples
@@ -513,6 +523,8 @@ ${getStructuredOutputFormat('HAR Agent')}
 
 export function htmlAgentPrompt(cms = 'eds') {
   return `${getBasePrompt(cms, 'analyzing HTML markup for Core Web Vitals optimization opportunities')}
+
+${getDataPriorityGuidance('html')}
 
 ${getChainOfThoughtGuidance()}
 
@@ -590,6 +602,8 @@ ${getStructuredOutputFormat('HTML Agent')}
 export function rulesAgentPrompt(cms = 'eds') {
   return `${getBasePrompt(cms, 'analyzing failed performance rules to identify Core Web Vitals optimization opportunities')}
 
+${getDataPriorityGuidance('psi')}
+
 ## Your Analysis Focus
 ${PHASE_FOCUS.RULES(step())}
 
@@ -601,6 +615,8 @@ ${getStructuredOutputFormat('Rules Agent')}
 
 export function coverageAgentPrompt(cms = 'eds') {
   return `${getBasePrompt(cms, 'analyzing JavaScript and CSS code coverage data to identify optimization opportunities for Core Web Vitals')}
+
+${getDataPriorityGuidance('coverage')}
 
 ${getChainOfThoughtGuidance()}
 
@@ -639,6 +655,8 @@ ${getStructuredOutputFormat('Coverage Agent')}
 
 export function codeReviewAgentPrompt(cms = 'eds') {
   return `${getBasePrompt(cms, 'analyzing JavaScript and CSS code for Core Web Vitals optimization opportunities, informed by code coverage analysis')}
+
+${getDataPriorityGuidance('code')}
 
 ## Your Analysis Focus
 ${PHASE_FOCUS.CODE_REVIEW(step())}

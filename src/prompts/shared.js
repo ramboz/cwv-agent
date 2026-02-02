@@ -46,6 +46,160 @@ Do not provide recommendations for:
 }
 
 /**
+ * Returns data priority guidance for agents
+ * @param {string} agentType - Type of agent (psi, coverage, perf_observer, har, code, html, thirdparty)
+ * @return {String}
+ */
+export function getDataPriorityGuidance(agentType) {
+  const commonPriorities = `## CRITICAL: ANALYSIS PRIORITIES
+
+**Your task is to identify HIGH IMPACT optimizations that meaningfully improve Core Web Vitals.**
+
+**IMPORTANT - Avoid Overlap with Other Agents:**
+Multiple agents analyze the same page from different angles. Focus on YOUR unique perspective:
+- **PSI Agent**: Focus on audit-level findings (lighthouse audits, scores)
+- **Coverage Agent**: Focus on file-level unused code with byte counts and line numbers
+- **HAR Agent**: Focus on network-level issues (timing, connections, protocols)
+- **Code Review Agent**: Focus on code patterns and implementation details
+- **HTML Agent**: Focus on markup structure and resource hints
+- **Performance Observer**: Focus on runtime behavior (CLS sources, long tasks, LCP candidates)
+
+When you find an issue, provide SPECIFIC DETAILS that other agents can't:
+- File names and line numbers (if you have code access)
+- Exact byte savings (if you have coverage/size data)
+- Network timing breakdown (if you have HAR data)
+- Element selectors and shift values (if you have CLS attribution)
+- Audit names and scores (if you're PSI agent)
+
+**HIGH PRIORITY (Focus here first):**
+- ✅ Render-blocking resources in <head> (directly blocks LCP)
+- ✅ Unused JavaScript/CSS loaded BEFORE LCP element renders
+- ✅ LCP image optimization (size, format, loading strategy, preload)
+- ✅ Main thread blocking tasks >50ms during user interactions
+- ✅ Layout shifts from images/ads/embeds ABOVE THE FOLD
+- ✅ Critical path resources (fonts, hero images, first-screen content)
+
+**MEDIUM PRIORITY (Analyze only if HIGH PRIORITY addressed):**
+- ⚠️ Third-party scripts that don't directly impact CWV metrics
+- ⚠️ Post-LCP image optimization (below the fold)
+- ⚠️ Below-the-fold content optimization
+- ⚠️ Non-blocking third-party resources
+
+**LOW PRIORITY (Ignore unless explicitly relevant):**
+- ❌ Post-LCP analytics scripts (Google Analytics, Adobe Analytics loaded after LCP)
+- ❌ Social media embeds loaded after LCP
+- ❌ Tiny asset optimizations (<5KB savings)
+- ❌ Cache headers for non-critical resources
+- ❌ Favicon or small icon optimizations
+
+**CRITICAL RULES:**
+1. Do NOT create suggestions for LOW PRIORITY items
+2. Focus analysis effort on HIGH PRIORITY items first
+3. Only suggest MEDIUM PRIORITY if no HIGH PRIORITY issues found
+4. Every suggestion must pass the filtering criteria (>300ms LCP, >100ms INP, >0.05 CLS)`;
+
+  const agentSpecificGuidance = {
+    psi: `
+
+**PSI-Specific Priorities:**
+- Focus on audits with >500ms savings potential (render-blocking, unused-css, unused-javascript)
+- Prioritize audits affecting LCP element specifically
+- Ignore audits with <100ms savings unless they're part of a larger pattern`,
+
+    coverage: `
+
+**Coverage-Specific Priorities:**
+- HIGHEST: Unused code loaded BEFORE LCP (delays critical rendering path)
+- MEDIUM: Unused code loaded AFTER LCP (affects TTI, not LCP)
+- If pre-LCP waste >100KB, focus EXCLUSIVELY on that
+- Ignore post-LCP analytics/tracking scripts unless they're >200KB`,
+
+    perf_observer: `
+
+**Performance Observer Priorities:**
+- HIGHEST: Layout shifts from elements ABOVE THE FOLD (visible to user)
+- HIGHEST: Long tasks BEFORE LCP (directly delays rendering)
+- MEDIUM: Long tasks AFTER LCP but before first interaction
+- Ignore shifts from below-the-fold content unless CLS >0.25`,
+
+    har: `
+
+**HAR Analysis Priorities:**
+- HIGHEST: Render-blocking requests in critical path (CSS, sync scripts in <head>)
+- HIGHEST: Resources delaying LCP element (fonts, hero images)
+- MEDIUM: Third-party requests with >500ms blocking time
+- Ignore analytics beacons, tracking pixels, post-load requests`,
+
+    code: `
+
+**Code Review Priorities:**
+- HIGHEST: JavaScript patterns affecting LCP (heavy initial render, blocking data fetches)
+- HIGHEST: Event handlers causing >200ms INP (synchronous processing, heavy computations)
+- MEDIUM: Code splitting opportunities for non-critical features
+- Ignore code loaded after LCP unless it impacts INP`,
+
+    html: `
+
+**HTML Analysis Priorities:**
+- HIGHEST: Missing preload/preconnect for LCP-critical resources
+- HIGHEST: Images without dimensions above the fold (causes CLS)
+- HIGHEST: Render-blocking scripts/styles in <head>
+- Ignore meta tags, SEO tags, below-fold markup`,
+
+    thirdparty: `
+
+**Third-Party Priorities:**
+- HIGHEST: Third-party scripts blocking LCP (>200ms in critical path)
+- HIGHEST: Third-party causing main thread blocking >100ms
+- MEDIUM: Long-tail scripts with cumulative impact >500ms
+- Ignore analytics loaded after LCP unless they affect INP`
+  };
+
+  return commonPriorities + (agentSpecificGuidance[agentType] || '');
+}
+
+/**
+ * Returns guidance for avoiding duplicate findings from previous agents
+ * @param {Array} previousFindings - Array of findings from earlier agents
+ * @return {String}
+ */
+export function getCrossAgentContext(previousFindings = []) {
+  if (!previousFindings || previousFindings.length === 0) {
+    return '';
+  }
+
+  const findingsSummary = previousFindings
+    .slice(0, 15) // Limit to top 15 to avoid token bloat
+    .map(f => `- ${f.agentName || 'Previous agent'}: ${f.type} → ${(f.recommendation || '').substring(0, 100)}`)
+    .join('\n');
+
+  return `
+## FINDINGS FROM PREVIOUS AGENTS
+
+The following issues have already been identified by other agents:
+
+${findingsSummary}
+
+**CRITICAL - Avoid Duplication:**
+1. ✅ DO add file-level detail (specific files, line numbers, element selectors) to existing findings
+2. ✅ DO identify root causes of symptoms found by previous agents
+3. ✅ DO find NEW issues in areas previous agents didn't cover
+4. ❌ DON'T repeat the same recommendation with different wording
+5. ❌ DON'T create separate suggestions for the same root cause
+
+**Example of GOOD collaboration:**
+- Previous: "unused-javascript audit shows 400KB waste in clientlib.js"
+- Your addition: "clientlib.js waste comes from unused React components in src/components/Modal.jsx (lines 45-120)"
+  → ✅ GOOD: You added file-level detail to an existing finding
+
+**Example of BAD duplication:**
+- Previous: "Preload LCP image hero.jpg"
+- You: "Add preload for hero.jpg"
+  → ❌ BAD: Exact duplicate, you should skip this and focus on new issues
+`;
+}
+
+/**
  * Returns deliverable format instructions text
  * @return {String}
  */
@@ -309,7 +463,8 @@ You must output your findings as a JSON object with the following schema:
         "observation": "string (what you observed in the data)",
         "diagnosis": "string (why this is causing the problem)",
         "mechanism": "string (how it impacts the metric)",
-        "solution": "string (why the proposed fix will work)"
+        "solution": "string (why the proposed fix will work)",
+        "codeExample": "string (OPTIONAL: AEM-specific code example with file path, using \`\`\`lang\\ncode\`\`\` format)"
       },
 
       "relatedFindings": ["array of related finding IDs (optional)"],
@@ -374,6 +529,35 @@ The **reasoning** field captures your analytical process using a structured 4-st
 - Use byte sizes from coverage (not just percentages)
 - Reference per-domain timings from HAR
 - Cite font-display values from font strategy
+
+### Code Example Guidelines (Optional in Findings)
+
+Agents MAY include a code example in \`reasoning.codeExample\` if the fix is implementation-specific:
+
+**Format**:
+\`\`\`lang
+File: /absolute/path/to/file.ext
+
+code here
+\`\`\`
+
+**When to include**:
+- Clear, actionable implementation (e.g., "add fetchpriority='high' to hero image")
+- AEM-specific patterns (clientlib, HTL, dispatcher config)
+- Simple fixes that don't require multi-file changes
+
+**When to skip**:
+- Complex architectural changes (defer to final synthesis)
+- Multi-step implementations
+- Requires extensive explanation
+
+**Example**:
+\`\`\`json
+"reasoning": {
+  "solution": "Adding fetchpriority='high' to the hero image will signal the browser to prioritize it",
+  "codeExample": "File: /apps/myproject/components/content/hero/hero.html\\n\\n<img src=\\"\\$\{image.src\}\\"\\n     fetchpriority=\\"high\\"\\n     loading=\\"eager\\" />"
+}
+\`\`\`
 
 ### Example Finding (Phase 2 with Reasoning)
 
@@ -493,7 +677,18 @@ export const PHASE_FOCUS = {
 - Detect TTFB issues that might indicate server-side performance problems
 - Look for render-blocking resources that could be deferred or optimized
 - Analyze resource sizes and compression efficiency
-- Identify cache misses or short cache durations`,
+- Identify cache misses or short cache durations
+- **Use third-party categorization** from the Third-Party Script Analysis:
+  * Analytics (google-analytics, segment, omniture) → NEVER preconnect, always async
+  * Advertising (doubleclick, adsense) → NEVER preconnect, defer below fold
+  * Consent (onetrust, cookiebot) → NEVER preconnect, always defer to post-LCP
+  * Tag managers (googletagmanager, tealium, adobedtm) → async unless Target personalization
+  * CDN (cloudfront, fastly, akamai) → preconnect ONLY if hosts LCP resource
+  * Testing/Personalization (optimizely, vwo, at.js, target) → preconnect ONLY if above-fold A/B test
+  * Support (zendesk, intercom, drift) → NEVER preconnect, defer
+  * Monitoring (newrelic, datadog, sentry) → NEVER preconnect, async
+- Reference the \`getCategoryRecommendation()\` function output for each category
+- Example: "consent category (onetrust.com): NEVER preconnect, action: defer, reason: Cookie consent never affects LCP"`,
 
   HTML: (n) => `### Step ${n}: Markup Analysis
 - Examine provided HTML for the page

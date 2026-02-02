@@ -81,7 +81,7 @@ export class Result {
    */
   unwrap() {
     if (!this.success) {
-      throw new Error(`Cannot unwrap error result: ${this.error.message}`);
+      throw new Error(`Cannot unwrap error result: ${this.error?.message || this.error || 'Unknown error'}`);
     }
     return this.data;
   }

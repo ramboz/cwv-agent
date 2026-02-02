@@ -181,10 +181,53 @@ ${i + 1}. **${rc.description}**
 
         if (suggestion.codeChanges && suggestion.codeChanges.length > 0) {
             markdown += `\n**Code Changes**:\n`;
+
+            // Helper function to clean code content
+            const cleanCode = (code) => {
+                if (!code) return '';
+                // Remove outer triple quotes if present
+                let cleaned = code.trim();
+                if (cleaned.startsWith("'''") && cleaned.endsWith("'''")) {
+                    cleaned = cleaned.slice(3, -3);
+                }
+                // Replace escaped newlines with actual newlines
+                cleaned = cleaned.replace(/\\n/g, '\n');
+                // Remove leading/trailing whitespace
+                return cleaned.trim();
+            };
+
+            // Determine language from file extension
+            const getLanguage = (filename) => {
+                if (filename.endsWith('.xml')) return 'xml';
+                if (filename.endsWith('.html')) return 'html';
+                if (filename.endsWith('.js')) return 'javascript';
+                if (filename.endsWith('.css')) return 'css';
+                if (filename.endsWith('.json')) return 'json';
+                if (filename.endsWith('.any')) return 'apache';
+                return '';
+            };
+
             suggestion.codeChanges.forEach(change => {
-                markdown += `\nFile: \`${change.file}\`${change.line ? `:${change.line}` : ''}\n`;
+                markdown += `\nFile: \`${change.file}\`${change.line ? ` (line ${change.line})` : ''}\n`;
+
+                const lang = getLanguage(change.file);
+
+                // Show before/after diff if both exist
                 if (change.before && change.after) {
-                    markdown += `\`\`\`diff\n- ${change.before}\n+ ${change.after}\n\`\`\`\n`;
+                    const beforeCode = cleanCode(change.before);
+                    const afterCode = cleanCode(change.after);
+                    markdown += `\n**Before**:\n\`\`\`${lang}\n${beforeCode}\n\`\`\`\n`;
+                    markdown += `\n**After**:\n\`\`\`${lang}\n${afterCode}\n\`\`\`\n`;
+                }
+                // Show only after if it's a new file
+                else if (change.after) {
+                    const afterCode = cleanCode(change.after);
+                    markdown += `\`\`\`${lang}\n${afterCode}\n\`\`\`\n`;
+                }
+                // Show only before if it's a deletion (rare)
+                else if (change.before) {
+                    const beforeCode = cleanCode(change.before);
+                    markdown += `\n**Removed**:\n\`\`\`${lang}\n${beforeCode}\n\`\`\`\n`;
                 }
             });
         }

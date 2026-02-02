@@ -68,17 +68,20 @@ You know the following about AEM CS.
 
 ### Anti-patterns
 
-- Do not inline critical CSS for above-the-fold content in the <head>. It would require a build system
-- Do not rely on excessive client-side rendering for critical content
-- Avoid using monolithic clientlibs that load everything at once
-- Do not use synchronous XMLHttpRequest for component data loading
-- Avoid excessive DOM manipulation during page load
-- Do not load large JavaScript libraries in the critical rendering path
-- Avoid using deprecated AEM Foundation components that aren't optimized
-- Do not depend on heavy jQuery operations for core functionality
-- Avoid excessive CSS specificity that leads to performance issues
-- Do not implement custom image handling that bypasses adaptive images
-- Avoid implementing custom clientlib categories that bypass optimization
+**CRITICAL - Absolutely prohibited (even if performance impact is severe):**
+- NEVER inline critical CSS for above-the-fold content in the <head> (requires build system not available in AEM). Instead, split clientlibs into critical (sync) and non-critical (async), load non-critical with JavaScript.
+- NEVER use synchronous XMLHttpRequest for component data loading
+- NEVER implement custom image handling that bypasses adaptive images
+
+**Strongly discouraged:**
+- AVOID relying on excessive client-side rendering for critical content
+- AVOID using monolithic clientlibs that load everything at once
+- AVOID excessive DOM manipulation during page load
+- AVOID loading large JavaScript libraries in the critical rendering path
+- AVOID using deprecated AEM Foundation components that aren't optimized
+- AVOID depending on heavy jQuery operations for core functionality
+- AVOID excessive CSS specificity that leads to performance issues
+- AVOID implementing custom clientlib categories that bypass optimization
 
 ### Practical Implementation Constraints
 
@@ -99,12 +102,12 @@ You know the following about AEM CS.
   - Example: Create separate clientlib categories per template/component
   - Load critical clientlibs synchronously in <head>
   - Load non-critical clientlibs asynchronously using JavaScript
-- AVOID: Inlining critical CSS in <style> tag (requires build system, not maintainable across AEM sites)
+- NEVER: Inline critical CSS in <style> tag (requires build system, not maintainable across AEM sites). Even with 800KB unused CSS blocking render for 15s, you MUST suggest clientlib splitting instead, not inlining.
 - RECOMMENDED: Load non-critical CSS asynchronously using JavaScript with requestIdleCallback
   - Example: Use createElement('link') in requestIdleCallback to load non-critical clientlibs
-- AVOID: Using media="print" hack for async CSS (violates HTML spec, accessibility issues)
+- NEVER: Use media="print" hack for async CSS (violates HTML spec, accessibility issues)
   - Example of anti-pattern: <link rel="stylesheet" href="..." media="print" onload="this.media='all'">
-- AVOID: Using <link rel="preload" as="style" onload="..."> hack for async CSS (equally problematic)
+- NEVER: Use <link rel="preload" as="style" onload="..."> hack for async CSS (equally problematic)
   - Example of anti-pattern: <link rel="preload" href="..." as="style" onload="this.onload=null;this.rel='stylesheet'">
   - Issues: Violates preload semantics, accessibility problems, harder to debug than JavaScript approach
 - AVOID: Loading 15+ render-blocking CSS files synchronously
