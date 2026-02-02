@@ -119,7 +119,14 @@ const suggestionSchema = z.object({
             before: z.string().optional(),
             after: z.string().optional()
         })).optional(),
-        validationCriteria: z.array(z.string()).optional()
+        validationCriteria: z.array(z.string()).optional(),
+        // NEW: Verification instructions for customers to validate fixes
+        verification: z.object({
+            tool: z.enum(['lighthouse', 'chrome-devtools', 'web-vitals-library', 'crux', 'psi', 'manual']),
+            method: z.string().describe('Step-by-step instructions to verify fix'),
+            expectedImprovement: z.string().describe('What user should see if fix is successful'),
+            acceptanceCriteria: z.string().optional().describe('How to know if fix meets threshold')
+        }).optional()
     }))
 });
 

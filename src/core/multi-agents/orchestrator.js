@@ -12,6 +12,7 @@
 import { cacheResults, estimateTokenSize } from '../../utils.js';
 import { getCrux, getPsi, getRUM, getLabData, getCode } from '../collect.js';
 import { detectAEMVersion } from '../../tools/aem.js';
+import { detectFramework } from '../../tools/code.js';
 import merge from '../../tools/merge.js';
 import { applyRules } from '../../tools/rules.js';
 import { LLMFactory } from '../../models/llm-factory.js';
@@ -198,6 +199,13 @@ export async function runAgentFlow(pageUrl, deviceType, options = {}) {
     const cms = detectAEMVersion(harHeavy?.log?.entries?.[0]?.headers, fullHtml || resources[pageUrl]);
     console.log('AEM Version:', cms);
 
+    // Detect frameworks from HTML content and script URLs
+    const scriptUrls = harHeavy?.log?.entries
+        ?.filter(e => e.request?.url?.endsWith('.js'))
+        ?.map(e => e.request.url) || [];
+    const frameworks = detectFramework(fullHtml || '', scriptUrls);
+    console.log(`🔍 Detected frameworks: ${frameworks.join(', ')}`);
+
     // Create LLM instance and compute token limits
     const llm = LLMFactory.createLLM(options.model, options.llmOptions || {});
     const tokenLimits = getTokenLimits(options.model);
@@ -234,6 +242,7 @@ export async function runAgentFlow(pageUrl, deviceType, options = {}) {
         thirdPartyAnalysis,
         clsAttribution,
         dataQuality, // Include data quality information
+        frameworks,  // NEW: detected frameworks for framework-specific guidance
     };
 
     // Execute agent flow (force conditional multi-agent mode)

@@ -26,6 +26,7 @@ import {
     perfObserverAgentPrompt, psiAgentPrompt, rulesAgentPrompt,
     initializeSystemAgents,
 } from '../../prompts/index.js';
+import { getFrameworkContext } from '../../prompts/framework-patterns.js';
 import { buildCausalGraph, generateGraphSummary, deduplicateFindings } from '../causal-graph-builder.js';
 import { AgentGating } from '../gating.js';
 import { validateFindings, saveValidationResults } from '../validator.js';
@@ -60,7 +61,7 @@ const isPromptValid = (length, limits) => length <= (limits.input - limits.outpu
  * @returns {Array} Array of agent configurations
  */
 function generateConditionalAgentConfig(pageData, cms) {
-    const { psi, har, harSummary, perfEntries, perfEntriesSummary, pageUrl, resources, coverageData, coverageDataSummary, rulesSummary } = pageData;
+    const { psi, har, harSummary, perfEntries, perfEntriesSummary, pageUrl, resources, coverageData, coverageDataSummary, rulesSummary, frameworks } = pageData;
     const signals = extractPsiSignals(psi);
     const harStats = computeHarStats(har);
 
@@ -126,6 +127,12 @@ function generateConditionalAgentConfig(pageData, cms) {
         ? codeSignals.filter(Boolean).length >= 2
         : (shouldRunCoverage || (signals.reduceUnusedJS === true && (signals.tbt ?? 0) > TH.TBT_MS));
 
+    // Generate framework context for all CWV metrics (agents will use what's relevant)
+    const fwContextLCP = frameworks ? getFrameworkContext(frameworks, 'lcp') : '';
+    const fwContextINP = frameworks ? getFrameworkContext(frameworks, 'inp') : '';
+    const fwContextCLS = frameworks ? getFrameworkContext(frameworks, 'cls') : '';
+    const frameworkContext = fwContextLCP + fwContextINP + fwContextCLS;
+
     const steps = [];
 
     // Always-on lightweight agents (use summaries where possible)
@@ -136,11 +143,15 @@ function generateConditionalAgentConfig(pageData, cms) {
         steps.push({ name: 'RUM Agent', sys: rumAgentPrompt(cms), hum: rumSummaryStep(pageData.rumSummary) });
     }
 
-    steps.push({ name: 'PSI Agent', sys: psiAgentPrompt(cms), hum: psiSummaryStep(pageData.psiSummary) });
-    steps.push({ name: 'Perf Observer Agent', sys: perfObserverAgentPrompt(cms), hum: perfSummaryStep(perfEntriesSummary) });
+    // PSI Agent - include framework context for CWV optimization guidance
+    steps.push({ name: 'PSI Agent', sys: psiAgentPrompt(cms), hum: psiSummaryStep(pageData.psiSummary) + frameworkContext });
+
+    // Perf Observer Agent - include framework context for performance optimization
+    steps.push({ name: 'Perf Observer Agent', sys: perfObserverAgentPrompt(cms), hum: perfSummaryStep(perfEntriesSummary) + frameworkContext });
+
     // Prefer fullHtml when available for correctness; fallback to resources[pageUrl]
     const htmlPayload = pageData.fullHtml || resources;
-    steps.push({ name: 'HTML Agent', sys: htmlAgentPrompt(cms), hum: htmlStep(pageUrl, htmlPayload) });
+    steps.push({ name: 'HTML Agent', sys: htmlAgentPrompt(cms), hum: htmlStep(pageUrl, htmlPayload) + frameworkContext });
     steps.push({ name: 'Rules Agent', sys: rulesAgentPrompt(cms), hum: rulesStep(rulesSummary) });
 
     if (shouldRunHar) {
@@ -148,11 +159,13 @@ function generateConditionalAgentConfig(pageData, cms) {
     }
 
     if (shouldRunCoverage) {
-        steps.push({ name: 'Code Coverage Agent', sys: coverageAgentPrompt(cms), hum: coverageSummaryStep(coverageDataSummary || coverageData) });
+        // Coverage Agent - include framework context for unused code analysis
+        steps.push({ name: 'Code Coverage Agent', sys: coverageAgentPrompt(cms), hum: coverageSummaryStep(coverageDataSummary || coverageData) + frameworkContext });
     }
 
     if (shouldRunCode) {
-        steps.push({ name: 'Code Review Agent', sys: codeReviewAgentPrompt(cms), hum: codeStep(pageUrl, resources, 10_000) });
+        // Code Review Agent - include framework context for code-level optimizations
+        steps.push({ name: 'Code Review Agent', sys: codeReviewAgentPrompt(cms), hum: codeStep(pageUrl, resources, 10_000) + frameworkContext });
     }
 
     // Debug/log the gating outcome so users can see why agent count == N

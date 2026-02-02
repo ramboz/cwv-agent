@@ -193,6 +193,22 @@ ${i + 1}. **${rc.description}**
             markdown += `\n**Validation Criteria**:\n${suggestion.validationCriteria.map(c => `- ${c}`).join('\n')}\n`;
         }
 
+        // NEW: Format verification instructions
+        if (suggestion.verification) {
+            markdown += `\n**How to Verify This Fix**:\n`;
+            markdown += `- **Tool**: ${suggestion.verification.tool}\n`;
+            markdown += `- **Method**:\n`;
+            // Split method by newlines and format as numbered list
+            const methodSteps = suggestion.verification.method.split('\\n').filter(s => s.trim());
+            methodSteps.forEach(step => {
+                markdown += `  ${step}\n`;
+            });
+            markdown += `- **Expected Result**: ${suggestion.verification.expectedImprovement}\n`;
+            if (suggestion.verification.acceptanceCriteria) {
+                markdown += `- **Acceptance Criteria**: ${suggestion.verification.acceptanceCriteria}\n`;
+            }
+        }
+
         markdown += `\n---\n\n`;
     });
 

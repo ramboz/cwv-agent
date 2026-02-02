@@ -235,3 +235,42 @@ export async function collect(pageUrl, deviceType, resources, { skipCache, skipT
     );
   }
 }
+
+/**
+ * Detects which framework(s) are being used on the page
+ * @param {string} htmlContent - HTML content of the page
+ * @param {string[]} scriptUrls - Array of script URLs loaded on the page
+ * @returns {string[]} - Array of detected framework names
+ */
+export function detectFramework(htmlContent, scriptUrls = []) {
+  const frameworks = {
+    nextjs: /_next\/|__NEXT_DATA__/i,
+    nuxt: /__NUXT__|nuxtApp/i,
+    react: /react\.|React\.|_reactListening/i,
+    vue: /__vue|Vue\.|vue-/i,
+    angular: /ng-version=|ng-app|angular\.io/i,
+    svelte: /__svelte|svelte-/i,
+    astro: /astro-island|data-astro/i
+  };
+
+  const detected = [];
+
+  // Check HTML content
+  for (const [name, pattern] of Object.entries(frameworks)) {
+    if (pattern.test(htmlContent)) {
+      detected.push(name);
+    }
+  }
+
+  // Check script URLs
+  scriptUrls.forEach(script => {
+    if (/react|react-dom/.test(script) && !detected.includes('react')) {
+      detected.push('react');
+    }
+    if (/vue\./.test(script) && !detected.includes('vue')) {
+      detected.push('vue');
+    }
+  });
+
+  return detected.length > 0 ? detected : ['vanilla'];
+}

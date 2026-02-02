@@ -82,7 +82,13 @@ You must return a JSON object matching this exact schema:
           "after": "string - code after change (optional)"
         }
       ],
-      "validationCriteria": ["array of strings - how to verify the fix worked (optional)"]
+      "validationCriteria": ["array of strings - how to verify the fix worked (optional)"],
+      "verification": {
+        "tool": "lighthouse | chrome-devtools | web-vitals-library | crux | psi | manual",
+        "method": "string - step-by-step instructions to verify fix (e.g., '1. Open Chrome DevTools\\n2. Go to Lighthouse tab\\n3. Run Mobile audit\\n4. Check LCP metric')",
+        "expectedImprovement": "string - what user should see if fix is successful (e.g., 'LCP should decrease from 4.2s to ~3.0s')",
+        "acceptanceCriteria": "string - optional threshold to consider fix successful (e.g., 'LCP ≤ 2.5s to pass CWV')"
+      }
     }
   ]
 }
@@ -96,6 +102,61 @@ You must return a JSON object matching this exact schema:
 4. **Evidence-Based**: Each suggestion should reference specific data from agent findings
 5. **Actionable**: Focus on what to change, not just what's wrong
 6. **Confidence Scoring**: Provide realistic confidence based on evidence quality
+7. **Verification Instructions**: Include clear, step-by-step verification for each suggestion (see below)
+
+### Verification Requirements (IMPORTANT)
+
+For EVERY suggestion, include a "verification" object to help customers validate fixes immediately:
+
+**Required fields:**
+- **tool**: Which tool to use (lighthouse, chrome-devtools, web-vitals-library, crux, psi, or manual)
+- **method**: Step-by-step instructions (use \\n for line breaks)
+- **expectedImprovement**: Specific numbers showing before/after state
+
+**Optional field:**
+- **acceptanceCriteria**: Threshold to consider fix successful (e.g., "LCP ≤ 2.5s")
+
+**Tool Selection Guide:**
+- **lighthouse**: For comprehensive CWV metrics (LCP, CLS, INP) - recommended for most cases
+- **chrome-devtools**: For detailed performance profiling (long tasks, layout shifts)
+- **web-vitals-library**: For programmatic metric collection in production
+- **crux**: For real-world field data (28-day P75 metrics)
+- **psi**: For combined lab + field data from PageSpeed Insights
+- **manual**: For visual inspection or accessibility checks
+
+**Example verification objects:**
+
+\`\`\`json
+{
+  "verification": {
+    "tool": "lighthouse",
+    "method": "1. Open Chrome DevTools (F12)\\n2. Navigate to Lighthouse tab\\n3. Select 'Mobile' device\\n4. Click 'Analyze page load'\\n5. Check LCP metric in report",
+    "expectedImprovement": "LCP should decrease from 4.2s to approximately 3.0s (1.2s improvement)",
+    "acceptanceCriteria": "LCP ≤ 2.5s to pass Core Web Vitals threshold"
+  }
+}
+\`\`\`
+
+\`\`\`json
+{
+  "verification": {
+    "tool": "chrome-devtools",
+    "method": "1. Open Performance tab in DevTools\\n2. Click record button\\n3. Reload page\\n4. Stop recording after 5 seconds\\n5. Check 'Long Tasks' in timeline for tasks >50ms",
+    "expectedImprovement": "Long task count should decrease from 8 tasks to 2-3 tasks",
+    "acceptanceCriteria": "No long tasks exceeding 200ms"
+  }
+}
+\`\`\`
+
+\`\`\`json
+{
+  "verification": {
+    "tool": "manual",
+    "method": "1. Clear browser cache\\n2. Open DevTools Network tab\\n3. Reload page\\n4. Visually observe when largest content appears\\n5. Check Network waterfall for image load timing",
+    "expectedImprovement": "Hero image should appear 800ms earlier in visual timeline"
+  }
+}
+\`\`\`
 
 ### Critical: Third-Party Resource Hint Rules
 

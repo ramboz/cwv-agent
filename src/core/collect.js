@@ -1,7 +1,7 @@
 import { collect as collectCrux } from '../tools/crux.js';
 import { collect as collectLabData } from '../tools/lab/index.js';
 import { collect as collectPsi } from '../tools/psi.js';
-import { collect as collectCode } from '../tools/code.js';
+import { collect as collectCode, detectFramework } from '../tools/code.js';
 import { collectRUMData, summarizeRUM } from '../tools/rum.js';
 import { estimateTokenSize } from '../utils.js';
 
@@ -192,6 +192,10 @@ export default async function collectArtifacts(pageUrl, deviceType, options) {
     resources = codeFiles;
   }
 
+  // Detect frameworks from HTML content and script URLs
+  const frameworks = detectFramework(fullHtml || '', requests || []);
+  console.log(`🔍 Detected frameworks: ${frameworks.join(', ')}`);
+
   return {
     har,
     harSummary,
@@ -208,5 +212,6 @@ export default async function collectArtifacts(pageUrl, deviceType, options) {
     jsApi,
     coverageData,
     coverageDataSummary,
+    frameworks,  // NEW: add detected frameworks
   };
 }
