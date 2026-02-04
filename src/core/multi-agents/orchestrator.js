@@ -16,7 +16,7 @@ import { detectFramework } from '../../tools/code.js';
 import merge from '../../tools/merge.js';
 import { applyRules } from '../../tools/rules.js';
 import { LLMFactory } from '../../models/llm-factory.js';
-import { getTokenLimits } from '../../models/config.js';
+import { getTokenLimits, DEFAULT_MODEL } from '../../models/config.js';
 import { DEVICE_THRESHOLDS } from '../../config/thresholds.js';
 import { RESOURCE_DENYLIST_REGEX } from '../../config/regex-patterns.js';
 
@@ -124,6 +124,18 @@ function selectCodeResources(pageUrl, resources) {
  * @returns {Promise<string>} Markdown report
  */
 export async function runAgentFlow(pageUrl, deviceType, options = {}) {
+    // Early credential validation - fail fast before expensive data collection
+    const modelToUse = options.model || DEFAULT_MODEL;
+    const credentialValidation = LLMFactory.validateModelCredentials(modelToUse);
+    if (!credentialValidation.valid) {
+        const errorMsg = `❌ Credential validation failed for model "${modelToUse}" (provider: ${credentialValidation.provider}):\n` +
+            `   ${credentialValidation.error}\n\n` +
+            `Please configure the required credentials before running the agent.`;
+        console.error(errorMsg);
+        throw new Error(credentialValidation.error);
+    }
+    console.log(`✓ Credentials validated for ${credentialValidation.provider} model: ${modelToUse}`);
+
     // Data quality tracking
     const dataQualityIssues = [];
 

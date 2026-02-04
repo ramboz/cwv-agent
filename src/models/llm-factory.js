@@ -1,3 +1,4 @@
+import fs from 'fs';
 import { ChatVertexAI } from '@langchain/google-vertexai';
 import { AzureChatOpenAI } from '@langchain/openai';
 import { Bedrock } from '@langchain/community/llms/bedrock';
@@ -9,6 +10,111 @@ import { getConfig } from '../config/index.js';
  * Factory for creating LLM instances with abstraction layer
  */
 export class LLMFactory {
+  /**
+   * Validate credentials for a model before running expensive operations.
+   * This should be called early in the workflow to fail fast if credentials are missing.
+   *
+   * @param {String} model - The model name to validate credentials for
+   * @return {Object} Validation result with { valid: Boolean, error: String|null, provider: String }
+   */
+  static validateModelCredentials(model) {
+    const provider = getProviderForModel(model);
+
+    switch (provider) {
+      case 'gemini': {
+        // Check GOOGLE_APPLICATION_CREDENTIALS env var exists
+        const credentialsPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+        if (!credentialsPath) {
+          return {
+            valid: false,
+            provider,
+            error: 'Missing required environment variable: GOOGLE_APPLICATION_CREDENTIALS. ' +
+              'Set this to the path of your Google Cloud service account JSON file.'
+          };
+        }
+
+        // Check that the credentials file actually exists
+        if (!fs.existsSync(credentialsPath)) {
+          return {
+            valid: false,
+            provider,
+            error: `Google Cloud credentials file not found at: ${credentialsPath}. ` +
+              'Verify GOOGLE_APPLICATION_CREDENTIALS points to a valid service account JSON file.'
+          };
+        }
+
+        // Optionally validate it's valid JSON with expected structure
+        try {
+          const credContent = JSON.parse(fs.readFileSync(credentialsPath, 'utf8'));
+          if (!credContent.type || !credContent.project_id) {
+            return {
+              valid: false,
+              provider,
+              error: `Invalid Google Cloud credentials file at: ${credentialsPath}. ` +
+                'File must contain "type" and "project_id" fields.'
+            };
+          }
+        } catch (parseError) {
+          return {
+            valid: false,
+            provider,
+            error: `Failed to parse Google Cloud credentials file at: ${credentialsPath}. ` +
+              `Error: ${parseError.message}`
+          };
+        }
+
+        return { valid: true, provider, error: null };
+      }
+
+      case 'openai': {
+        const requiredAzureVars = [
+          'AZURE_OPENAI_API_INSTANCE_NAME',
+          'AZURE_OPENAI_API_DEPLOYMENT_NAME',
+          'AZURE_OPENAI_API_KEY',
+          'AZURE_OPENAI_API_VERSION'
+        ];
+
+        const missingAzureVars = requiredAzureVars.filter(varName => !process.env[varName]);
+        if (missingAzureVars.length > 0) {
+          return {
+            valid: false,
+            provider,
+            error: `Missing required environment variables for Azure OpenAI: ${missingAzureVars.join(', ')}. ` +
+              'Set these in your .env file or environment.'
+          };
+        }
+
+        return { valid: true, provider, error: null };
+      }
+
+      case 'bedrock': {
+        const requiredAwsVars = [
+          'AWS_ACCESS_KEY_ID',
+          'AWS_SECRET_ACCESS_KEY',
+          'AWS_REGION',
+        ];
+
+        const missingAwsVars = requiredAwsVars.filter(varName => !process.env[varName]);
+        if (missingAwsVars.length > 0) {
+          return {
+            valid: false,
+            provider,
+            error: `Missing required environment variables for AWS Bedrock: ${missingAwsVars.join(', ')}. ` +
+              'Set these in your .env file or environment.'
+          };
+        }
+
+        return { valid: true, provider, error: null };
+      }
+
+      default:
+        return {
+          valid: false,
+          provider,
+          error: `Unsupported provider: ${provider}`
+        };
+    }
+  }
   /**
    * Create an LLM instance based on the model name
    * @param {string} model - The model name

@@ -15,9 +15,17 @@ Setup instructions for using the CWV Agent within Cursor IDE with MCP integratio
    npm install
    ```
 
-2. **Open in Cursor**: Open the cwv-agent folder in Cursor IDE
+2. **Configure environment**: Create a `.env` file with your API keys:
+   ```env
+   GOOGLE_CRUX_API_KEY=your-crux-key
+   GOOGLE_PAGESPEED_INSIGHTS_API_KEY=your-psi-key
+   GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
+   RUM_DOMAIN_KEY=your-rum-domain-key  # Optional
+   ```
 
-3. **Start using**: The MCP server and rules are auto-configured. Open a chat and try:
+3. **Open in Cursor**: Open the cwv-agent folder in Cursor IDE
+
+4. **Start using**: The MCP server and rules are auto-configured. Open a chat and try:
    ```
    Generate CWV suggestions for https://www.example.com
    ```

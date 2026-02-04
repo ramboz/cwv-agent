@@ -17,6 +17,7 @@ The CWV Agent includes an integrated MCP (Model Context Protocol) reviewer that 
 1. **Node.js**: Version 18 or higher
 2. **Cursor IDE**: Latest version with MCP support
 3. **Dependencies**: Run `npm install` in the cwv-agent directory
+4. **API Keys**: See [Environment Variables](#environment-variables) below
 
 ## Setup Instructions
 
@@ -177,9 +178,55 @@ If you need to customize the MCP server, edit `.cursor/mcp.json`:
 
 To see debug output, remove the `--silent` flag from the MCP config args.
 
+## Environment Variables
+
+API keys and credentials should be configured via environment variables to keep them out of the chat context.
+
+### Option 1: `.env` File (Recommended)
+
+Create a `.env` file in the project root:
+
+```env
+# Required for CrUX and PSI data
+GOOGLE_CRUX_API_KEY=your-crux-api-key
+GOOGLE_PAGESPEED_INSIGHTS_API_KEY=your-psi-api-key
+
+# Required for LLM analysis (Gemini)
+GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
+
+# Optional: RUM data collection (per-domain key)
+RUM_DOMAIN_KEY=your-rum-domain-key
+```
+
+The `.env` file is loaded automatically when the MCP server starts via `dotenv`.
+
+### Option 2: MCP Config Environment
+
+Add keys directly to `.cursor/mcp.json` in the `env` section:
+
+```json
+{
+  "cwv-reviewer": {
+    "command": "node",
+    "args": ["./index.js", "--action", "mcp-reviewer", "--silent"],
+    "cwd": ".",
+    "env": {
+      "RUM_DOMAIN_KEY": "your-rum-domain-key",
+      "GOOGLE_CRUX_API_KEY": "your-crux-key",
+      "GOOGLE_PAGESPEED_INSIGHTS_API_KEY": "your-psi-key",
+      "ADOBE_SCOPE": "...",
+      "ADOBE_CLIENT_ID": "pss-user"
+    }
+  }
+}
+```
+
+**Note**: The `.env` file approach is preferred as it keeps secrets out of version control (`.env` is gitignored).
+
 ## Best Practices
 
 1. **Start with mobile**: Mobile analysis often reveals more issues
 2. **Review by category**: More efficient than individual suggestions
 3. **Always dry-run uploads**: Prevents accidental overwrites
 4. **Check existing suggestions**: Before uploading to avoid conflicts
+5. **Use environment variables**: Keep API keys out of the chat context

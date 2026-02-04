@@ -1,0 +1,55 @@
+# CWV Agent - Cursor Rules
+
+You are working in the CWV (Core Web Vitals) Agent repository - a tool for analyzing web performance and generating AI-powered optimization suggestions.
+
+## MCP Tools Available (cwv-reviewer server)
+
+### Generation Tool
+- `run_agent` - Run full multi-agent CWV analysis (~3-5 min). Collects performance data and generates suggestions.
+
+### Review Tools
+- `load_suggestions_by_url` - Load suggestions by URL (auto-discovers mobile/desktop files in .cache)
+- `load_multi_device_suggestions` - Load mobile/desktop suggestion files manually
+- `load_cwv_suggestions` - Load a single suggestion file
+- `get_suggestions_by_url_and_type` - Fetch existing suggestions from SpaceCat API
+
+### Editing Tools
+- `create_category_editor` - Create markdown editor for a category (LCP/CLS/INP/TTFB)
+- `read_category_edits` - Apply edits from markdown file
+- `approve_category` - Mark category as approved for upload
+
+### Upload Tools
+- `check_existing_suggestions` - Check SpaceCat for conflicts before upload
+- `batch_upload_to_spacecat` - Upload approved suggestions (use dryRun:true first)
+
+### Status Tools
+- `get_status` - Overall workflow status
+- `get_category_status` - Category-specific status
+- `cleanup_temp_files` - Remove temporary markdown files
+
+## Workflow
+
+### Generate New Suggestions
+1. `run_agent({ url: "https://example.com", device: "mobile" })`
+2. Wait for completion (~3-5 min)
+3. `load_suggestions_by_url({ url: "https://example.com" })`
+
+### Review Existing Suggestions
+1. `load_suggestions_by_url({ url: "https://example.com" })`
+2. Present suggestions by category with priority/device info
+3. `create_category_editor({ category: "LCP" })` for bulk edits
+4. `approve_category({ category: "LCP" })` after review
+5. `batch_upload_to_spacecat({ dryRun: true })` then real upload
+
+## Communication Style
+- Be concise and actionable
+- Organize suggestions by Web Vital category (LCP, CLS, INP, TTFB)
+- Show device source: mobile/desktop/merged
+- Always confirm before SpaceCat uploads
+- Use dryRun:true for initial upload attempts
+
+## Project Structure
+- `/src/core/` - Core agent logic (actions, MCP server, suggestion manager)
+- `/src/tools/` - Data collection tools (CrUX, PSI, HAR, code analysis)
+- `/src/prompts/` - LLM prompt templates
+- `/.cache/` - Cached performance data and generated suggestions
