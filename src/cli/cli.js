@@ -56,6 +56,11 @@ export function parseArguments() {
       describe: 'RUM domain key for Helix RUM Bundler authentication (per-domain, not per-URL)',
       type: 'string'
     })
+    .option('silent', {
+      describe: 'Suppress all console output (useful for MCP mode)',
+      type: 'boolean',
+      default: false
+    })
     .check((argv) => {
       if (argv.action === 'mcp-reviewer') {
         // MCP reviewer doesn't need URL parameters

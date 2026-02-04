@@ -7,6 +7,69 @@ import {
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { CWVSuggestionManager } from './suggestion-manager.js';
+import { runAgentFlow } from './multi-agents.js';
+import { getNormalizedUrl, getCachePath } from '../utils.js';
+
+/**
+ * Run the multi-agent CWV analysis workflow.
+ * @param {Object} args - Tool arguments
+ * @param {string} args.url - URL to analyze
+ * @param {string} [args.device='mobile'] - Device type
+ * @param {boolean} [args.skipCache=false] - Skip cache
+ * @param {string} [args.model] - LLM model to use
+ * @param {string} [args.blockRequests] - URL patterns to block
+ * @returns {Promise<Object>} Result with file paths and status
+ */
+async function runAgentTool(args) {
+  const { url, device = 'mobile', skipCache = false, model, blockRequests } = args;
+
+  if (!url) {
+    throw new Error('URL is required');
+  }
+
+  const startTime = Date.now();
+
+  // Normalize the URL first
+  const normalizedUrl = await getNormalizedUrl(url, device);
+  if (!normalizedUrl?.url) {
+    throw new Error(`Failed to access: ${url}`);
+  }
+
+  // Run the multi-agent flow
+  const result = await runAgentFlow(normalizedUrl.url, device, {
+    skipCache,
+    skipTlsCheck: normalizedUrl.skipTlsCheck,
+    outputSuffix: '',
+    blockRequests: blockRequests || '',
+    model,
+  });
+
+  const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+
+  if (result?.error) {
+    return {
+      success: false,
+      error: result.error,
+      duration: `${duration}s`,
+    };
+  }
+
+  // Get paths to generated files
+  const suggestionsPath = getCachePath(normalizedUrl.url, device, 'suggestions', '', false, model);
+  const reportPath = getCachePath(normalizedUrl.url, device, 'report', '', true, model);
+
+  return {
+    success: true,
+    url: normalizedUrl.url,
+    device,
+    duration: `${duration}s`,
+    files: {
+      suggestions: suggestionsPath,
+      report: reportPath,
+    },
+    message: `Analysis completed. Use load_suggestions_by_url to review the results.`,
+  };
+}
 
 /**
  * Start MCP reviewer action
@@ -150,6 +213,21 @@ export async function startMCPReviewer() {
               fileType: { type: 'string', description: 'Type of files to clean up', enum: ['all', 'category', 'suggestion', 'markdown'], default: 'all' }
             }
           }
+        },
+        {
+          name: 'run_agent',
+          description: 'Run full multi-agent CWV analysis workflow for a URL. Collects performance data (CrUX, PSI, HAR, code coverage) and generates AI-powered optimization suggestions. Takes 3-5 minutes to complete.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              url: { type: 'string', description: 'URL to analyze' },
+              device: { type: 'string', description: 'Device type for analysis', enum: ['mobile', 'desktop'], default: 'mobile' },
+              skipCache: { type: 'boolean', description: 'Force fresh data collection, ignoring cache', default: false },
+              model: { type: 'string', description: 'LLM model to use (e.g., "gemini-2.5-pro-preview-05-06")' },
+              blockRequests: { type: 'string', description: 'Comma-separated list of URL patterns to block (e.g., "google-analytics,facebook")' }
+            },
+            required: ['url']
+          }
         }
       ]
     };
@@ -195,6 +273,9 @@ export async function startMCPReviewer() {
           break;
         case 'get_suggestions_by_url_and_type':
           result = await manager.getSuggestionsByUrlAndType(args.url, args.opportunityType);
+          break;
+        case 'run_agent':
+          result = await runAgentTool(args);
           break;
         default:
           throw new Error(`Unknown tool: ${name}`);

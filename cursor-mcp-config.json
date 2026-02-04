@@ -5,7 +5,8 @@
       "args": [
         "./index.js",
         "--action",
-        "mcp-reviewer"
+        "mcp-reviewer",
+        "--silent"
       ],
       "cwd": ".",
       "env": {

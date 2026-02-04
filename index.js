@@ -6,6 +6,22 @@ import { processUrl } from './src/core/actions.js';
 // Load environment variables
 dotenv.config();
 
+/**
+ * Suppress all console output when in silent mode.
+ * Useful for MCP mode where stdout must be clean JSON-RPC.
+ */
+function enableSilentMode() {
+  const noop = () => {};
+  console.log = noop;
+  console.info = noop;
+  console.warn = noop;
+  console.error = noop;
+  console.debug = noop;
+  console.group = noop;
+  console.groupEnd = noop;
+  console.table = noop;
+}
+
 async function main() {
   // Parse command line arguments
   const argv = parseArguments();
@@ -18,6 +34,12 @@ async function main() {
   const blockRequests = argv.blockRequests;
   const model = argv.model;
   const rumDomainKey = argv.rumDomainKey;
+  const silent = argv.silent;
+
+  // Enable silent mode if requested (suppresses all console output)
+  if (silent) {
+    enableSilentMode();
+  }
 
   // Handle MCP reviewer action separately
   if (action === 'mcp-reviewer') {

@@ -1,167 +1,104 @@
 # Cursor IDE Setup for CWV Agent
 
-This document provides setup instructions for using the CWV Agent within Cursor IDE with Model Context Protocol (MCP) integration.
-
-## Overview
-
-The CWV Agent integrates with Cursor IDE through an MCP server that provides specialized tools for reviewing, editing, and managing Core Web Vitals performance suggestions. This setup enables seamless workflow between suggestion generation and expert review.
+Setup instructions for using the CWV Agent within Cursor IDE with MCP integration.
 
 ## Prerequisites
 
-- Cursor IDE installed
-- Node.js (v18 or higher)
-- Access to the cwv-agent repository
-- Adobe IMS authentication setup (for SpaceCat integration)
+- Cursor IDE (latest version with MCP support)
+- Node.js v18 or higher
+- Adobe IMS authentication (for SpaceCat integration)
 
-## Setup Instructions
+## Quick Start
 
-### 1. MCP Server Configuration
+1. **Install dependencies**:
+   ```bash
+   npm install
+   ```
 
-The MCP server configuration is already set up in the repository. Verify the configuration files:
+2. **Open in Cursor**: Open the cwv-agent folder in Cursor IDE
 
-**Main Configuration** (`cursor-mcp-config.json`):
-```json
-{
-  "mcpServers": {
-    "cwv-reviewer": {
-      "command": "node",
-      "args": [
-        "./index.js",
-        "--action",
-        "mcp-reviewer"
-      ],
-      "cwd": ".",
-      "env": {
-        "ADOBE_SCOPE": "openid,AdobeID,additional_info.projectedProductContext,additional_info.roles,read_organizations",
-        "ADOBE_CLIENT_ID": "pss-user",
-        "ADOBE_DEBUG": "true"
-      }
-    }
-  }
-} 
-```
+3. **Start using**: The MCP server and rules are auto-configured. Open a chat and try:
+   ```
+   Generate CWV suggestions for https://www.example.com
+   ```
 
-### 2. Cursor IDE Configuration
+## How It Works
 
-1. **Install MCP Extension**: Ensure you have the MCP extension installed in Cursor
-2. **Configure MCP Server**: Copy the appropriate `cursor-mcp-config.json` to your Cursor configuration directory
-3. **Restart Cursor**: Restart Cursor IDE to load the MCP server configuration
+The project includes pre-configured files that Cursor automatically loads:
 
-### 3. Custom Mode Setup
+- **`.cursor/mcp.json`** - MCP server configuration (starts the cwv-reviewer server)
+- **`.cursorrules`** - AI assistant rules for CWV workflows
 
-The CWV suggestion review mode is configured as a custom AI assistant mode optimized for the workflow.
-
-**System Instruction Location**: [`CURSOR-CWV-MODE.md`](../../CURSOR-CWV-MODE.md)
-
-To activate this mode in Cursor:
-1. Open the AI assistant panel
-2. Create a new custom mode
-3. Copy the contents of `CURSOR-CWV-MODE.md` as the system instruction
-4. Name it "CWV Review"
+No manual configuration is needed.
 
 ## Available MCP Tools
 
-The MCP server provides 13 specialized tools organized into categories:
+### Generation
+- `run_agent` - Run full multi-agent CWV analysis (~3-5 min)
 
-### Loading Tools
+### Loading
 - `load_suggestions_by_url` - Auto-discover suggestions by URL
-- `load_multi_device_suggestions` - Load and merge mobile/desktop suggestions  
+- `load_multi_device_suggestions` - Load mobile/desktop files manually
 - `load_cwv_suggestions` - Load single suggestion file
+- `get_suggestions_by_url_and_type` - Fetch from SpaceCat API
 
-### Editing Tools
-- `create_suggestion_editor` - Create markdown editor for individual suggestions
-- `create_category_editor` - Create markdown editor for entire categories
-- `read_suggestion_edits` - Read back edited suggestions
-- `read_category_edits` - Read back edited categories
+### Editing
+- `create_category_editor` - Create markdown editor for categories (LCP/CLS/INP/TTFB)
+- `read_category_edits` - Apply edits from markdown file
+- `approve_category` - Mark category as approved
 
-### SpaceCat Integration
-- `upload_to_spacecat` - Upload individual suggestions
-- `batch_upload_to_spacecat` - Batch upload approved suggestions
-- `check_existing_suggestions` - Check for existing suggestions
+### Upload
+- `check_existing_suggestions` - Check SpaceCat for conflicts
+- `batch_upload_to_spacecat` - Upload approved suggestions
 
-### Status & Management
-- `get_status` - Get overall workflow status
-- `get_category_status` - Get category-specific status
-- `cleanup_temp_files` - Clean up temporary files
-
-## Key Features
-
-### Multi-Device Intelligence
-- Automatically merges mobile and desktop suggestions
-- Identifies device-specific vs universal optimizations
-- Prioritizes based on combined impact
-
-### Batch Operations
-- Category-level editing for efficient bulk changes
-- Batch uploads with conflict detection
-- Comprehensive status tracking
-
-### Enhanced SpaceCat Integration
-- Pre-upload validation and conflict detection
-- Dry-run capabilities for safe testing
-- Automatic CWV opportunity management
+### Status
+- `get_status` - Overall workflow status
+- `get_category_status` - Category-specific status
+- `cleanup_temp_files` - Remove temporary files
 
 ## Workflow Examples
 
-### Loading Suggestions
+### Generate & Review
 ```
-Load suggestions for https://www.qualcomm.com
+Generate CWV suggestions for https://www.example.com
 ```
 
-### Category-Based Editing
+### Load Existing
+```
+Load suggestions for https://www.example.com
+```
+
+### Edit & Approve
 ```
 Edit LCP suggestions
+Approve LCP category
 ```
 
-### Batch Operations
+### Upload
 ```
-Batch upload LCP
-```
-
-### Status Checking
-```
-Show category status
+Batch upload with dry run
+Batch upload to SpaceCat
 ```
 
 ## Troubleshooting
 
-### Common Issues
+### MCP Tools Not Available
+- Restart Cursor after opening the project
+- Verify `.cursor/mcp.json` exists
+- Check dependencies: `npm list @modelcontextprotocol/sdk`
 
-1. **MCP Server Not Starting**
-   - Check Node.js version (requires v18+)
-   - Verify file paths in configuration
-   - Check console for error messages
-
-2. **Authentication Issues**
-   - Ensure Adobe IMS credentials are configured
-   - Check network connectivity
-   - Verify access permissions
-
-3. **File Not Found Errors**
-   - Verify suggestion files exist in `.cache/` directory
-   - Check file naming conventions
-   - Ensure proper URL formatting
+### Authentication Issues (SpaceCat)
+- Ensure Adobe IMS credentials are configured
+- Verify `mcp-remote-with-okta` is installed
 
 ### Debug Mode
-
-To enable debug logging, set the environment variable:
-```bash
-export DEBUG=cwv-agent:*
-```
+Remove `--silent` from `.cursor/mcp.json` args to see console output.
 
 ## Architecture
 
-The system consists of:
-- **MCP Server** (`cwv-suggestion-reviewer/mcp-server.js`) - Main server implementation
-- **Suggestion Manager** - Core logic for managing suggestions
-- **SpaceCat Client** - Integration with SpaceCat API
-- **Adobe IMS Auth** - Authentication via `mcp-remote-with-okta`
+- **MCP Server**: `src/core/mcp-reviewer.js`
+- **Suggestion Manager**: `src/core/suggestion-manager.js`
+- **SpaceCat Client**: `src/core/spacecat-client.js`
+- **Rules**: `.cursorrules`
 
-## Updates and Maintenance
-
-The system instruction and MCP tools are actively maintained. Key files to monitor:
-- `cursor-cwv-mode.md` - System instruction updates
-- `mcp-server.js` - Tool implementations
-- `cursor-mcp-config.json` - Configuration changes
-
-For the latest improvements and features, refer to the main system instruction file. 
+For detailed usage, see [MCP-REVIEWER-GUIDE.md](./MCP-REVIEWER-GUIDE.md).
