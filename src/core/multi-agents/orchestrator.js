@@ -172,7 +172,7 @@ export async function runAgentFlow(pageUrl, deviceType, options = {}) {
     const shouldRunCode = (signals.reduceUnusedJS === true && (signals.tbt ?? 0) > TH.TBT_MS) || shouldRunCoverage;
 
     // Phase 2: Single lab run, always collecting HAR, conditionally collecting Coverage
-    const { har: harHeavy, harSummary, perfEntries, perfEntriesSummary, fullHtml, jsApi, coverageData, coverageDataSummary, thirdPartyAnalysis, clsAttribution } = await getLabData(pageUrl, deviceType, {
+    const { har: harHeavy, harSummary, perfEntries, perfEntriesSummary, fullHtml, fontData, fontDataSummary, jsApi, coverageData, coverageDataSummary, thirdPartyAnalysis, clsAttribution } = await getLabData(pageUrl, deviceType, {
         ...options,
         collectHar: true,  // Always collect HAR
         collectCoverage: shouldRunCoverage,
@@ -200,7 +200,7 @@ export async function runAgentFlow(pageUrl, deviceType, options = {}) {
         pageUrl,
         deviceType,
         options,
-        { crux, psi, har: (harHeavy && harHeavy.log ? harHeavy : { log: { entries: [] } }), perfEntries, resources, fullHtml, jsApi, report }
+        { crux, psi, har: (harHeavy && harHeavy.log ? harHeavy : { log: { entries: [] } }), perfEntries, resources, fullHtml, fontData, jsApi, report }
     );
     if (fromCache) {
         console.log('✓ Loaded rules from cache. Estimated token size: ~', estimateTokenSize(rulesSummary, options.model));
@@ -251,10 +251,12 @@ export async function runAgentFlow(pageUrl, deviceType, options = {}) {
         harSummary,
         coverageDataSummary,
         fullHtml,
+        fontData,
+        fontDataSummary,
         thirdPartyAnalysis,
         clsAttribution,
-        dataQuality, // Include data quality information
-        frameworks,  // NEW: detected frameworks for framework-specific guidance
+        dataQuality,
+        frameworks,
     };
 
     // Execute agent flow (force conditional multi-agent mode)

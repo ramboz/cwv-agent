@@ -99,7 +99,7 @@ export async function getLabData(pageUrl, deviceType, options) {
     return { 
       har: null, harSummary: null, 
       perfEntries: null, perfEntriesSummary: null, 
-      fullHtml: null, jsApi: null, 
+      fullHtml: null, fontData: null, fontDataSummary: null, jsApi: null, 
       coverageData: null, coverageDataSummary: null 
     };
   }
@@ -112,13 +112,13 @@ export async function getLabData(pageUrl, deviceType, options) {
     return {
       har: null, harSummary: null,
       perfEntries: null, perfEntriesSummary: null,
-      fullHtml: null, jsApi: null,
+      fullHtml: null, fontData: null, fontDataSummary: null, jsApi: null,
       coverageData: null, coverageDataSummary: null
     };
   }
 
   // Extract data and metadata from successful Result
-  const { har, harSummary, perfEntries, perfEntriesSummary, fullHtml, jsApi, coverageData, coverageDataSummary, fromCache } = labResult.data;
+  const { har, harSummary, perfEntries, perfEntriesSummary, fullHtml, fontData, fontDataSummary, jsApi, coverageData, coverageDataSummary, fromCache } = labResult.data;
   const { source, warnings } = labResult.metadata;
 
   // Log warnings if any partial failures occurred
@@ -132,16 +132,18 @@ export async function getLabData(pageUrl, deviceType, options) {
     if (!skipHar) console.log('✓ Loaded HAR data from cache. Estimated token size: ~', estimateTokenSize(har, options.model));
     if (!skipPerfEntries) console.log('✓ Loaded Performance Entries data from cache. Estimated token size: ~', estimateTokenSize(perfEntries, options.model));
     if (!skipFullHtml) console.log('✓ Loaded full rendered HTML markup from cache. Estimated token size: ~', estimateTokenSize(fullHtml, options.model));
+    console.log('✓ Loaded Font data from cache. Estimated token size: ~', estimateTokenSize(fontData, options.model));
     if (!skipCode) console.log('✓ Loaded JS API data from cache. Estimated token size: ~', estimateTokenSize(jsApi, options.model));
     if (!skipCoverage) console.log('✓ Loaded coverage data from cache. Estimated token size: ~', estimateTokenSize(coverageData, options.model));
   } else {
     if (!skipHar) console.log('✅ Processed HAR data. Estimated token size: ~', estimateTokenSize(har, options.model));
     if (!skipPerfEntries) console.log('✅ Processed Performance Entries data. Estimated token size: ~', estimateTokenSize(perfEntries, options.model));
     if (!skipFullHtml) console.log('✅ Processed full rendered HTML markup. Estimated token size: ~', estimateTokenSize(fullHtml, options.model));
+    console.log('✅ Processed Font data. Estimated token size: ~', estimateTokenSize(fontData, options.model));
     if (!skipCode) console.log('✅ Processed JS API data. Estimated token size: ~', estimateTokenSize(jsApi, options.model));
     if (!skipCoverage) console.log('✅ Processed coverage data. Estimated token size: ~', estimateTokenSize(coverageData, options.model));
   }
-  return { har, harSummary, perfEntries, perfEntriesSummary, fullHtml, jsApi, coverageData, coverageDataSummary };
+  return { har, harSummary, perfEntries, perfEntriesSummary, fullHtml, fontData, fontDataSummary, jsApi, coverageData, coverageDataSummary };
 }
 
 export async function getCode(pageUrl, deviceType, requests, options) {
@@ -178,7 +180,7 @@ export default async function collectArtifacts(pageUrl, deviceType, options) {
   const { data: rum, summary: rumSummary } = await getRUM(pageUrl, deviceType, options);
 
   // Collect lab data based on options (respect lazy heavy flags)
-  const { har, harSummary, perfEntries, perfEntriesSummary, fullHtml, jsApi, coverageData, coverageDataSummary } = await getLabData(pageUrl, deviceType, options);
+  const { har, harSummary, perfEntries, perfEntriesSummary, fullHtml, fontData, fontDataSummary, jsApi, coverageData, coverageDataSummary } = await getLabData(pageUrl, deviceType, options);
   const requests = har?.log?.entries?.map((e) => e.request.url) || [];
 
   // Check if code analysis should be skipped
@@ -209,9 +211,11 @@ export default async function collectArtifacts(pageUrl, deviceType, options) {
     rum,
     rumSummary,
     fullHtml,
+    fontData,
+    fontDataSummary,
     jsApi,
     coverageData,
     coverageDataSummary,
-    frameworks,  // NEW: add detected frameworks
+    frameworks,
   };
 }

@@ -99,15 +99,26 @@ function details(rule) {
 export function summarize(rulesResults) {
   const failedRules = rulesResults.filter((r) => r && !r.passing);
   failedRules.sort((a, b) => a.time - b.time);
-  return failedRules
+  
+  let summary = failedRules
     .map((r) => `
 - ${r.message}${r.time ? ` at ${r.time}ms` : ''}:
   - Recommendation: ${r.recommendation}
   ${details(r) ? `- ${details(r)}` : ''}${r.initiator ? `\n  - Initiator: ${r.initiator}` : ''}`)
     .join('\n');
+
+  // Include passing font checks to prevent false positives about font-display
+  // This is important because we can't read cross-origin stylesheets (e.g., Google Fonts)
+  const passingFontChecks = rulesResults.filter((r) => r && r.passing && r.category === 'fonts');
+  if (passingFontChecks.length > 0) {
+    summary += '\n\n## Confirmed Font Optimizations (Already Implemented)\n';
+    summary += passingFontChecks.map((r) => `- ✅ ${r.message}${r.url ? ` (${r.url.substring(0, 80)}...)` : r.name ? ` (${r.name})` : ''}`).join('\n');
+  }
+
+  return summary;
 }
 
-export async function applyRules(pageUrl, deviceType, { skipCache, outputSuffix }, { crux, psi, har, perfEntries, resources, fullHtml, jsApi, report }) {
+export async function applyRules(pageUrl, deviceType, { skipCache, outputSuffix }, { crux, psi, har, perfEntries, resources, fullHtml, fontData, jsApi, report }) {
   if (!skipCache) {
     const cache = getCachedResults(pageUrl, deviceType, 'rules', outputSuffix);
     if (cache) {
@@ -151,7 +162,7 @@ export async function applyRules(pageUrl, deviceType, { skipCache, outputSuffix 
   
   const json = rules.map((r, index) => {
     try {
-      const result = r({ summary: { url: pageUrl, type: deviceType }, crux, psi, har, perfEntries, resources, fullHtml, jsApi, report });
+      const result = r({ summary: { url: pageUrl, type: deviceType }, crux, psi, har, perfEntries, resources, fullHtml, fontData, jsApi, report });
       return result;
     } catch (error) {
       console.error(`❌ Error applying rule ${index + 1}:`, error);

@@ -1,4 +1,17 @@
-// JavaScript API Data Collection Functions
+/**
+ * JavaScript API Data Collection
+ * Collects browser API data that requires page context
+ *
+ * Note: Font collection has been moved to font-analyzer.js for consolidated font analysis
+ */
+
+/**
+ * Setup CSP violation tracking before page navigation
+ * Must be called before page.goto()
+ *
+ * @param {Object} page - Puppeteer page instance
+ * @return {Promise<void>}
+ */
 export async function setupCSPViolationTracking(page) {
   await page.evaluateOnNewDocument(() => {
     if (!window.CSP_VIOLATIONS) {
@@ -12,39 +25,41 @@ export async function setupCSPViolationTracking(page) {
           sourceFile: e.sourceFile,
           statusCode: e.statusCode,
           referrer: e.referrer,
-          effectiveDirective: e.effectiveDirective
+          effectiveDirective: e.effectiveDirective,
         });
       });
     }
   });
 }
 
+/**
+ * Collect CSP violations that occurred during page load
+ *
+ * @param {Object} page - Puppeteer page instance
+ * @return {Promise<Array>} Array of CSP violation objects
+ */
+export async function collectCSPViolations(page) {
+  return await page.evaluate(() => {
+    return window.CSP_VIOLATIONS || [];
+  });
+}
+
+/**
+ * Collect general JavaScript API data from the page
+ * (CSP violations, and other browser API data as needed)
+ *
+ * @param {Object} page - Puppeteer page instance
+ * @return {Promise<Object>} Collected API data
+ */
 export async function collectJSApiData(page) {
-  return await page.evaluate(async () => {
-    const fontsSet = await document.fonts.ready;
-    return {
-      fonts: [...fontsSet].map((ff) => ({
-        ascentOverride: ff.ascentOverride,
-        descentOverride: ff.descentOverride,
-        display: ff.display,
-        family: ff.family,
-        featureSettings: ff.featureSettings,
-        lineGapOverride: ff.lineGapOverride,
-        sizeAdjust: ff.sizeAdjust,
-        status: ff.status,
-        stretch: ff.stretch,
-        style: ff.style,
-        unicodeRange: ff.unicodeRange,
-        variant: ff.variant,
-        weight: ff.weight,
-      })),
-      usedFonts: ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'body', 'p', 'button']
-        .map((sel) => document.querySelector(sel))
-        .filter((sel) => !!sel)
-        .map((el) => el && window.getComputedStyle(el).fontFamily)
-        .map((ff) => ff.split(',').map((f) => f.trim().replace(/['"]/g, '')))
-        .reduce((set, val) => { set[val[0]] = []; val.splice(1).forEach((v) => set[val[0]].push(v)); return set; }, {}),
-      cspViolations: window.CSP_VIOLATIONS || [],
-    };
-  }, { timeout: 30_000 });
+  return await page.evaluate(
+    async () => {
+      return {
+        cspViolations: window.CSP_VIOLATIONS || [],
+      };
+    },
+    { timeout: 30_000 }
+  );
+}
+
 } 
