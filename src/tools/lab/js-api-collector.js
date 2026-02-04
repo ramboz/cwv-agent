@@ -61,5 +61,3 @@ export async function collectJSApiData(page) {
     { timeout: 30_000 }
   );
 }
-
-} 
