@@ -17,7 +17,6 @@
     "@langchain/core": "0.3.79",
     "@langchain/google-genai": "0.2.18",
     "@langchain/google-vertexai": "0.2.18",
-    "@langchain/langgraph": "0.2.74",
     "@langchain/openai": "0.0.14",
     "@modelcontextprotocol/sdk": "1.21.0",
     "@smithy/eventstream-codec": "2.2.0",
