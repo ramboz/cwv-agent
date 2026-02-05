@@ -40,8 +40,8 @@ import {
     DEFAULT_THRESHOLDS
 } from './orchestrator.js';
 
-// Import schema from parent module (will be moved to schemas.js in Issue 5)
-import { suggestionSchema } from '../multi-agents.js';
+// Import schema from dedicated schemas module
+import { suggestionSchema } from './schemas.js';
 
 // Import transformers from utils module
 import {

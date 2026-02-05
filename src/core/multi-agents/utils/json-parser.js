@@ -9,8 +9,8 @@
 // Import transformFindingsToSuggestions from sibling module
 import { transformFindingsToSuggestions } from './transformers.js';
 import { LLM_PATTERNS } from '../../../config/regex-patterns.js';
-// Import suggestionSchema from parent module (will be moved to schemas.js in Issue 5)
-import { suggestionSchema } from '../../multi-agents.js';
+// Import suggestionSchema from dedicated schemas module
+import { suggestionSchema } from '../schemas.js';
 
 /**
  * Extract structured suggestions from markdown content

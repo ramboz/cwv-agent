@@ -1,5 +1,5 @@
 
-import { readCache, cacheResults } from '../utils.js';
+import { getCachedResults, cacheResults } from '../utils.js';
 
 
 const formatTime = (x) => (x !== 0 ? Math.round(x) : 0);
@@ -257,8 +257,8 @@ function getData(har, perf) {
 }
 
 export default function merge(siteURL, type) {
-  const har = readCache(siteURL, type, 'har') || {};
-  const perf = readCache(siteURL, type, 'perf') || [];
+  const har = getCachedResults(siteURL, type, 'har') || {};
+  const perf = getCachedResults(siteURL, type, 'perf') || [];
   const data = getData(har, perf);
 
   data.sort((a, b) => a.start - b.start);

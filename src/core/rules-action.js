@@ -1,15 +1,22 @@
+/**
+ * Rules Action Handler
+ * 
+ * CLI action for running rules-based analysis on a page.
+ * This is separate from src/tools/rules.js which contains the actual rules engine.
+ */
+
 import { getLabData } from './collect.js';
 import merge from '../tools/merge.js';
-import { readCache, estimateTokenSize } from '../utils.js';
+import { getCachedResults, estimateTokenSize } from '../utils.js';
 import { applyRules } from '../tools/rules.js';
 
 export default async function rulesAction(pageUrl, deviceType, options) {
   let har, perfEntries, fullHtml, fontData, jsApi;
-  let report = await readCache(pageUrl, deviceType, 'merge');
+  let report = getCachedResults(pageUrl, deviceType, 'merge');
   if (!report || options.skipCache) {
     ({ har, perfEntries, fullHtml, fontData, jsApi } = await getLabData(pageUrl, deviceType, { ...options, skipCache: true }));
     merge(pageUrl, deviceType);
-    report = await readCache(pageUrl, deviceType, 'merge');
+    report = getCachedResults(pageUrl, deviceType, 'merge');
   } else {
     ({ har, perfEntries, fullHtml, fontData, jsApi } = await getLabData(pageUrl, deviceType, { ...options, skipCache: false }));
   }

@@ -5,7 +5,6 @@ import { Agent } from 'undici';
 import { Tiktoken } from 'js-tiktoken/lite';
 import cl100k_base from 'js-tiktoken/ranks/cl100k_base';
 import { DEFAULT_MODEL } from './models/config.js';
-import { createHash } from 'crypto';
 import { sanitizeUrlForFilename, urlToFilename } from './config/regex-patterns.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -224,23 +223,6 @@ export function cacheResults(urlString, deviceType, type, results, suffix = '', 
   }
   
   return outputFile;
-}
-
-export function getSummaryLogger(urlString, deviceType, type) {
-  const filePath = `${getFilePrefix(urlString, deviceType, type)}.summary.txt`;
-  return fs.createWriteStream(filePath, {
-    flags: 'w+'
-  });
-}
-
-export function readCache(urlString, deviceType, type) {
-  const filePath = `${getFilePrefix(urlString, deviceType, type)}.json`;
-  try {
-    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
-  } catch (err) {
-    console.warn(`Cache file ${filePath} does not exist`);
-    return null;
-  }
 }
 
 function ensureHttps(url) {

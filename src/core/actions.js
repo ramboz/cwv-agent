@@ -1,5 +1,5 @@
 import collecetAction from './collect.js';
-import rulesAction from './rules.js';
+import rulesAction from './rules-action.js';
 import { startMCPReviewer } from './mcp-reviewer.js';
 import { getNormalizedUrl, getCachePath } from '../utils.js';
 import { runAgentFlow } from './multi-agents.js';
