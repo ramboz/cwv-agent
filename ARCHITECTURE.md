@@ -346,7 +346,7 @@ The `mcp-reviewer` action starts a Model Context Protocol server for interactive
 - get_suggestions_by_url_and_type // Query SpaceCat API
 - create_category_editor        // Edit suggestion categories
 - save_category_edits           // Persist changes
-- submit_suggestions            // Push to SpaceCat
+- batch_upload_to_spacecat      // Push to SpaceCat
 ```
 
 ## Caching Strategy

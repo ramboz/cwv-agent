@@ -216,7 +216,7 @@ Available MCP tools:
 - `load_suggestions_by_url` - Auto-discover from cache
 - `get_suggestions_by_url_and_type` - Query SpaceCat API
 - `create_category_editor` - Edit suggestion categories
-- `submit_suggestions` - Push to SpaceCat
+- `batch_upload_to_spacecat` - Push to SpaceCat
 
 ## 📁 Workflow Examples
 
