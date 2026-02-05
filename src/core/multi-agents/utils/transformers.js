@@ -93,7 +93,7 @@ export function transformFindingsToSuggestions(findings) {
  * @returns {string} Formatted markdown report
  */
 export function formatSuggestionsToMarkdown(structuredData, metadata = {}) {
-    const { url, deviceType, rootCauseImpacts, validationSummary } = metadata;
+    const { url, deviceType, mode, rootCauseImpacts, validationSummary } = metadata;
     const suggestions = structuredData.suggestions || [];
 
     let markdown = `# Core Web Vitals Analysis Report
@@ -101,7 +101,7 @@ export function formatSuggestionsToMarkdown(structuredData, metadata = {}) {
 **URL**: ${url}
 **Device**: ${deviceType}
 **Date**: ${new Date().toISOString()}
-**Suggestions**: ${suggestions.length}
+${mode === 'light' ? `**Analysis Mode**: Light (focused on: hero images, fonts, image sizing)\n` : ''}**Suggestions**: ${suggestions.length}
 
 ---
 

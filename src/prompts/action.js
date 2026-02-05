@@ -36,6 +36,48 @@ If you receive "Root Cause Prioritization" data from the causal graph:
    - Depth 2+: Root causes (fundamental issues)
    - Prioritize depth 2+ for strategic improvements
 
+## CRITICAL: Semantic Type Classification
+
+EVERY suggestion MUST include a semanticType field for downstream filtering and targeted analysis:
+
+1. **Inherit from findings**: When creating a suggestion from agent findings, use the semanticType from the primary finding
+   - If the suggestion addresses an LCP image issue, use "lcp-image"
+   - If the suggestion addresses font loading, use "font-format" or "font-preload"
+   - If the suggestion addresses missing image dimensions, use "image-sizing"
+
+2. **For merged suggestions**: When combining multiple findings into one suggestion, use the semantic type of the root cause finding
+   - Example: If merging unused-code + TBT + INP findings, use "unused-code" as semanticType
+   - Example: If merging lcp-image + CLS findings about the same image, use "lcp-image" as the primary type
+
+3. **Valid semantic types** (use the most specific type that matches):
+   - **lcp-image**: LCP-specific image issues (missing preload, fetchpriority, lazy loading on LCP element)
+   - **font-format**: Font format/loading issues (missing font-display, FOIT/FOUT)
+   - **font-preload**: Missing font preload hints or preconnect to font CDN
+   - **image-sizing**: Missing width/height/aspect-ratio attributes causing CLS
+   - **unused-code**: Code waste (unused CSS/JS in bundles)
+   - **js-execution**: Long tasks, heavy JavaScript execution
+   - **layout-shift**: CLS issues (dynamic content insertion, unsized elements)
+   - **blocking-resource**: Render-blocking CSS/JS resources
+   - **ttfb**: Server response time, backend performance
+   - **third-party**: Third-party scripts impacting performance
+   - **resource-preload**: Missing preload hints for critical resources
+   - And others as appropriate...
+
+4. **When uncertain**: Choose the most specific type that matches the primary issue being addressed
+   - Prefer specific types (lcp-image, font-preload) over generic types (resource-preload)
+   - If truly ambiguous, use the type of the finding with highest impact
+
+**Why this matters**: The semanticType field enables:
+- Targeted analysis modes (light mode for quick wins, full mode for comprehensive audit)
+- Downstream filtering by SpaceCat platform
+- Better categorization and prioritization of suggestions
+
+**Examples**:
+- Suggestion about hero image loading → semanticType: "lcp-image"
+- Suggestion about custom font optimization → semanticType: "font-format" or "font-preload"
+- Suggestion about images missing dimensions → semanticType: "image-sizing"
+- Suggestion about removing unused CSS → semanticType: "unused-code"
+
 ## Code Example Quality Standards
 
 **GOOD Example** (AEM image optimization):

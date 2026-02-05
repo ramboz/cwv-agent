@@ -169,7 +169,9 @@ export async function runAgentFlow(pageUrl, deviceType, options = {}) {
     const shouldRunCoverage = coverageSignals.some(Boolean);
 
     // Code collection gating (same logic as in generateConditionalAgentConfig)
-    const shouldRunCode = (signals.reduceUnusedJS === true && (signals.tbt ?? 0) > TH.TBT_MS) || shouldRunCoverage;
+    // Skip code collection entirely in light mode
+    const isLightMode = options.mode === 'light';
+    const shouldRunCode = !isLightMode && ((signals.reduceUnusedJS === true && (signals.tbt ?? 0) > TH.TBT_MS) || shouldRunCoverage);
 
     // Phase 2: Single lab run, always collecting HAR, conditionally collecting Coverage
     const { har: harHeavy, harSummary, perfEntries, perfEntriesSummary, fullHtml, fontData, fontDataSummary, jsApi, coverageData, coverageDataSummary, thirdPartyAnalysis, clsAttribution } = await getLabData(pageUrl, deviceType, {
@@ -192,20 +194,29 @@ export async function runAgentFlow(pageUrl, deviceType, options = {}) {
         }
         const { codeFiles } = await getCode(pageUrl, deviceType, codeRequests, options);
         resources = codeFiles;
+    } else if (isLightMode) {
+        console.log('🚀 Skipping code collection in light mode');
     }
 
-    // Apply rules (cached when available)
-    const report = merge(pageUrl, deviceType);
-    const { summary: rulesSummary, fromCache } = await applyRules(
-        pageUrl,
-        deviceType,
-        options,
-        { crux, psi, har: (harHeavy && harHeavy.log ? harHeavy : { log: { entries: [] } }), perfEntries, resources, fullHtml, fontData, jsApi, report }
-    );
-    if (fromCache) {
-        console.log('✓ Loaded rules from cache. Estimated token size: ~', estimateTokenSize(rulesSummary, options.model));
+    // Apply rules (cached when available) - skip in light mode
+    let rulesSummary = null;
+
+    if (isLightMode) {
+        console.log('🚀 Skipping rules analysis in light mode');
     } else {
-        console.log('✅ Processed rules. Estimated token size: ~', estimateTokenSize(rulesSummary, options.model));
+        const report = merge(pageUrl, deviceType);
+        const { summary: rulesSummaryResult, fromCache } = await applyRules(
+            pageUrl,
+            deviceType,
+            options,
+            { crux, psi, har: (harHeavy && harHeavy.log ? harHeavy : { log: { entries: [] } }), perfEntries, resources, fullHtml, fontData, jsApi, report }
+        );
+        rulesSummary = rulesSummaryResult;
+        if (fromCache) {
+            console.log('✓ Loaded rules from cache. Estimated token size: ~', estimateTokenSize(rulesSummary, options.model));
+        } else {
+            console.log('✅ Processed rules. Estimated token size: ~', estimateTokenSize(rulesSummary, options.model));
+        }
     }
 
     const cms = detectAEMVersion(harHeavy?.log?.entries?.[0]?.headers, fullHtml || resources[pageUrl]);
@@ -260,7 +271,7 @@ export async function runAgentFlow(pageUrl, deviceType, options = {}) {
     };
 
     // Execute agent flow (force conditional multi-agent mode)
-    const { markdown, structuredData } = await runMultiAgents(pageData, tokenLimits, llm, options.model);
+    const { markdown, structuredData } = await runMultiAgents(pageData, tokenLimits, llm, options.model, { mode: options.mode });
 
     // Persist markdown report
     cacheResults(pageUrl, deviceType, 'report', markdown, '', options.model);

@@ -91,8 +91,11 @@ export async function getLabData(pageUrl, deviceType, options) {
   const skipHar = process.env.SKIP_HAR_ANALYSIS === 'true';
   const skipPerfEntries = process.env.SKIP_PERFORMANCE_ENTRIES === 'true';
   const skipFullHtml = process.env.SKIP_FULL_HTML === 'true';
-  const skipCoverage = process.env.SKIP_COVERAGE_ANALYSIS === 'true';
-  const skipCode = process.env.SKIP_CODE_ANALYSIS === 'true';
+
+  // In light mode, skip expensive collectors (Coverage and Code)
+  const isLightMode = options.mode === 'light';
+  const skipCoverage = process.env.SKIP_COVERAGE_ANALYSIS === 'true' || isLightMode;
+  const skipCode = process.env.SKIP_CODE_ANALYSIS === 'true' || isLightMode;
 
   if (skipHar && skipPerfEntries && skipFullHtml && skipCoverage && skipCode) {
     console.log('🚀 Skipping heavy data collection due to environment variables');
@@ -172,29 +175,39 @@ export async function getCode(pageUrl, deviceType, requests, options) {
   return { codeFiles, stats };
 }
 
+/**
+ * Collect all artifacts for a page.
+ *
+ * NOTE: This is a legacy wrapper used by the 'collect' action in actions.js.
+ * The main agent flow (orchestrator.js) calls getCrux/getPsi/getLabData/getCode directly
+ * with proper gating and light mode support.
+ *
+ * This function does NOT collect code files - that's handled by orchestrator.js with gating.
+ *
+ * @param {string} pageUrl - URL to analyze
+ * @param {string} deviceType - 'mobile' or 'desktop'
+ * @param {Object} options - Collection options
+ * @returns {Promise<Object>} Collected artifacts
+ */
 export default async function collectArtifacts(pageUrl, deviceType, options) {
   const { full: crux, summary: cruxSummary } = await getCrux(pageUrl, deviceType, options);
   const { full: psi, summary: psiSummary } = await getPsi(pageUrl, deviceType, options);
-
-  // Collect RUM data (Real User Monitoring - more recent than CrUX)
   const { data: rum, summary: rumSummary } = await getRUM(pageUrl, deviceType, options);
 
-  // Collect lab data based on options (respect lazy heavy flags)
-  const { har, harSummary, perfEntries, perfEntriesSummary, fullHtml, fontData, fontDataSummary, jsApi, coverageData, coverageDataSummary } = await getLabData(pageUrl, deviceType, options);
+  const {
+    har,
+    harSummary,
+    perfEntries,
+    perfEntriesSummary,
+    fullHtml,
+    fontData,
+    fontDataSummary,
+    jsApi,
+    coverageData,
+    coverageDataSummary
+  } = await getLabData(pageUrl, deviceType, options);
+
   const requests = har?.log?.entries?.map((e) => e.request.url) || [];
-
-  // Check if code analysis should be skipped
-  const skipCode = process.env.SKIP_CODE_ANALYSIS === 'true';
-  let resources = {};
-
-  if (skipCode) {
-    console.log('🚀 Skipping code analysis due to SKIP_CODE_ANALYSIS environment variable');
-  } else {
-    const { codeFiles } = await getCode(pageUrl, deviceType, requests, options);
-    resources = codeFiles;
-  }
-
-  // Detect frameworks from HTML content and script URLs
   const frameworks = detectFramework(fullHtml || '', requests || []);
   console.log(`🔍 Detected frameworks: ${frameworks.join(', ')}`);
 
@@ -203,7 +216,7 @@ export default async function collectArtifacts(pageUrl, deviceType, options) {
     harSummary,
     psi,
     psiSummary,
-    resources,
+    resources: {}, // Note: Code collection is handled by orchestrator.js, not here
     perfEntries,
     perfEntriesSummary,
     crux,

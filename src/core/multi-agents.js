@@ -99,6 +99,7 @@ export { generateConditionalAgentConfig };
 const suggestionSchema = z.object({
     deviceType: z.enum(['mobile', 'desktop']),
     suggestions: z.array(z.object({
+        semanticType: z.string().optional(),
         title: z.string().min(1),
         description: z.string().min(1),
         // Solution: Plain language explanation of the fix (required)

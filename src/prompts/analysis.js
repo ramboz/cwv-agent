@@ -420,8 +420,24 @@ ${getStructuredOutputFormat('PSI Agent')}
 `;
 }
 
-export function perfObserverAgentPrompt(cms = 'eds') {
+export function perfObserverAgentPrompt(cms = 'eds', options = {}) {
+  const { lightMode = false } = options;
+
+  let focusInstruction = '';
+  if (lightMode) {
+    focusInstruction = `
+**LIGHT MODE** - Focus on low-hanging fruit performance issues:
+
+This analysis focuses ONLY on:
+- **LCP Timing**: Identify LCP element and timing breakdown
+- **CLS Attribution**: Identify layout shifts caused by unsized images or font swaps
+
+ONLY report findings related to LCP timing or CLS attribution. Ignore long tasks, INP, and other issues.
+`;
+  }
+
   return `${getBasePrompt(cms, 'analyzing Performance Observer data captured during page load simulation')}
+${focusInstruction}
 
 ${getDataPriorityGuidance('perf_observer')}
 
@@ -481,8 +497,24 @@ ${getStructuredOutputFormat('Performance Observer Agent')}
 `;
 }
 
-export function harAgentPrompt(cms = 'eds') {
+export function harAgentPrompt(cms = 'eds', options = {}) {
+  const { lightMode = false } = options;
+
+  let focusInstruction = '';
+  if (lightMode) {
+    focusInstruction = `
+**LIGHT MODE** - Focus on low-hanging fruit performance issues:
+
+This analysis focuses ONLY on:
+- **Hero Image Network Timing**: Identify LCP image request timing, connection overhead
+- **Font Network Timing**: Identify font CDN timing, missing preconnect
+
+ONLY report findings related to hero image or font network timing. Ignore other network issues.
+`;
+  }
+
   return `${getBasePrompt(cms, 'analyzing HAR (HTTP Archive) file data for Core Web Vitals optimization focused on network performance')}
+${focusInstruction}
 
 ${getDataPriorityGuidance('har')}
 
@@ -521,8 +553,25 @@ ${getStructuredOutputFormat('HAR Agent')}
 `;
 }
 
-export function htmlAgentPrompt(cms = 'eds') {
+export function htmlAgentPrompt(cms = 'eds', options = {}) {
+  const { lightMode = false } = options;
+
+  let focusInstruction = '';
+  if (lightMode) {
+    focusInstruction = `
+**LIGHT MODE** - Focus on low-hanging fruit performance issues:
+
+This analysis focuses ONLY on these issue types:
+- **Hero Image Loading** (LCP): Missing preload/fetchpriority, late discovery, loading="lazy" on LCP
+- **Font Optimization** (LCP/CLS): Missing font-display or preload hints for custom fonts
+- **Image Sizing** (CLS): Missing width/height/aspect-ratio attributes
+
+ONLY report findings that match these patterns. Ignore all other issues.
+`;
+  }
+
   return `${getBasePrompt(cms, 'analyzing HTML markup for Core Web Vitals optimization opportunities')}
+${focusInstruction}
 
 ${getDataPriorityGuidance('html')}
 

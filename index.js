@@ -33,6 +33,7 @@ async function main() {
   const outputSuffix = argv.outputSuffix;
   const blockRequests = argv.blockRequests;
   const model = argv.model;
+  const mode = argv.mode;
   const rumDomainKey = argv.rumDomainKey;
   const silent = argv.silent;
 
@@ -58,10 +59,13 @@ async function main() {
   if (model) {
     console.log(`Using model: ${model}`);
   }
+  if (mode && mode !== 'full') {
+    console.log(`Using ${mode} mode analysis`);
+  }
 
   // Process each URL
   for (const url of urls) {
-    await processUrl(url, action, deviceType, skipCache, outputSuffix, blockRequests, model, rumDomainKey);
+    await processUrl(url, action, deviceType, skipCache, outputSuffix, blockRequests, model, rumDomainKey, mode);
 
     // Small delay between processing URLs
     if (urls.length > 1) {

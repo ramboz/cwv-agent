@@ -219,6 +219,7 @@ You must return a JSON object matching this exact schema:
   "deviceType": "string - mobile or desktop",
   "suggestions": [
     {
+      "semanticType": "string - issue category: lcp-image | font-format | font-preload | image-sizing | unused-code | js-execution | layout-shift | blocking-resource | ttfb | third-party | etc. (optional)",
       "title": "string - short, actionable title (required)",
       "description": "string - business-friendly description of the issue (required)",
       "solution": "string - clear explanation of the recommended fix in plain language (required)",

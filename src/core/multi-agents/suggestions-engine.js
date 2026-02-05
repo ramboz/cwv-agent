@@ -182,6 +182,54 @@ function generateConditionalAgentConfig(pageData, cms) {
 }
 
 /**
+ * Generate light mode agent configuration
+ * Light mode uses only lightweight agents and focuses on 3 low-hanging fruit patterns:
+ * - Hero image loading (lcp-image)
+ * - Custom font optimization (font-format, font-preload)
+ * - Image sizing (image-sizing)
+ *
+ * @param {Object} pageData - All collected page data
+ * @param {string} cms - CMS type (eds, aemcs, ams)
+ * @returns {Array} Array of agent configurations for light mode
+ */
+function generateLightModeConfig(pageData, cms) {
+    const { psiSummary, perfEntriesSummary, harSummary, fullHtml, fontDataSummary, cruxSummary, pageUrl, resources } = pageData;
+
+    const steps = [];
+
+    // Always-on lightweight agents (no gating in light mode)
+    steps.push({ name: 'CrUX Agent', sys: cruxAgentPrompt(cms), hum: cruxSummaryStep(cruxSummary) });
+    steps.push({ name: 'PSI Agent', sys: psiAgentPrompt(cms), hum: psiSummaryStep(psiSummary) });
+
+    // Core lightweight agents with light mode focus
+    steps.push({
+        name: 'HTML Agent',
+        sys: htmlAgentPrompt(cms, { lightMode: true }),
+        hum: htmlStep(pageUrl, fullHtml || resources)
+    });
+    steps.push({
+        name: 'Performance Observer Agent',
+        sys: perfObserverAgentPrompt(cms, { lightMode: true }),
+        hum: perfSummaryStep(perfEntriesSummary)
+    });
+    steps.push({
+        name: 'HAR Agent',
+        sys: harAgentPrompt(cms, { lightMode: true }),
+        hum: harSummaryStep(harSummary)
+    });
+
+    console.log(`- Light mode: using ${steps.length} lightweight agents`);
+    console.log(`- Focused on: hero images, fonts, image sizing`);
+
+    return steps.map(({ name, sys, hum }) => ({
+        name,
+        role: name.replace(/_/g, ' ').replace('agent', '').trim(),
+        systemPrompt: sys,
+        humanPrompt: hum,
+    }));
+}
+
+/**
  * Check if all Core Web Vitals pass "good" thresholds
  * Returns early exit info if site performs well, null otherwise
  *
@@ -293,10 +341,13 @@ Consider monitoring these metrics over time to catch any regressions.
  * @param {Object} tokenLimits - Token limits for the LLM
  * @param {Object} llm - LLM instance
  * @param {string} model - Model name
+ * @param {Object} options - Additional options (mode: 'light' | 'full')
  * @returns {Promise<{markdown: string, structuredData: Object}>}
  */
-export async function runMultiAgents(pageData, tokenLimits, llm, model) {
-    console.group('Starting multi-agent flow...');
+export async function runMultiAgents(pageData, tokenLimits, llm, model, options = {}) {
+    const { mode = 'full' } = options;
+
+    console.group(`Starting multi-agent flow (mode: ${mode})...`);
     if (!pageData || !tokenLimits || !llm) {
         console.warn('runMultiAgents: invalid arguments');
         return null;
@@ -309,7 +360,10 @@ export async function runMultiAgents(pageData, tokenLimits, llm, model) {
         return earlyExitResult;
     }
 
-    let agentsConfig = generateConditionalAgentConfig(pageData, pageData.cms);
+    // Choose agent configuration based on mode
+    let agentsConfig = mode === 'light'
+        ? generateLightModeConfig(pageData, pageData.cms)
+        : generateConditionalAgentConfig(pageData, pageData.cms);
 
     // Validate token budgets (include global init with data quality)
     const baseInit = initializeSystemAgents(pageData.cms, pageData.dataQuality);
@@ -576,6 +630,16 @@ ${i + 1}. **${rc.description}**
         structuredData.timestamp = new Date().toISOString();
         console.log(`✅ Generated ${structuredData.suggestions.length} recommendations`);
 
+        // Filter suggestions in light mode
+        if (mode === 'light') {
+            const LIGHT_MODE_TYPES = ['lcp-image', 'font-format', 'font-preload', 'image-sizing'];
+            const originalCount = structuredData.suggestions.length;
+            structuredData.suggestions = structuredData.suggestions.filter(suggestion => {
+                return suggestion.semanticType && LIGHT_MODE_TYPES.includes(suggestion.semanticType);
+            });
+            console.log(`🎯 Light mode: Filtered to ${structuredData.suggestions.length}/${originalCount} suggestions (types: ${LIGHT_MODE_TYPES.join(', ')})`);
+        }
+
         // Cache structured suggestions
         await cacheResults(pageData.pageUrl, pageData.deviceType, structuredData, 'suggestions');
         console.log(`📝 Cached ${structuredData.suggestions.length} structured suggestions to .cache/`);
@@ -597,6 +661,7 @@ ${i + 1}. **${rc.description}**
     const markdown = formatSuggestionsToMarkdown(structuredData, {
         url: pageData.pageUrl,
         deviceType: pageData.deviceType,
+        mode,
         rootCauseImpacts: rootCauseImpacts, // Pass the computed objects, not the raw ID array
         validationSummary: validationResults?.summary
     });

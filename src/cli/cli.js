@@ -39,6 +39,12 @@ export function parseArguments() {
       type: 'string',
       default: DEFAULT_MODEL
     })
+    .option('mode', {
+      describe: 'Analysis mode: "light" (fast, focused on low-hanging fruit) or "full" (comprehensive, default)',
+      type: 'string',
+      default: 'full',
+      choices: ['light', 'full']
+    })
     .option('output-suffix', {
       alias: 'o',
       describe: 'Suffix for output recommendations file',
