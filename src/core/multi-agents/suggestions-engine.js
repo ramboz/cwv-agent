@@ -400,19 +400,27 @@ export async function runMultiAgents(pageData, tokenLimits, llm, model, options 
         }
 
         // Extract successful output from Result
+        // Since Issue #1 fix, agents now use withStructuredOutput() which guarantees valid JSON
+        // No need for regex parsing fallback - output is already structured
         const output = result.data;
 
+        // withStructuredOutput() returns the parsed object directly (not a string)
+        if (typeof output === 'object' && output !== null) {
+            return output;
+        }
+
+        // Legacy fallback for backward compatibility (should never happen after Issue #1 fix)
         try {
-            // Try to parse as structured JSON output
             const jsonMatch = output.match(/\{[\s\S]*"agentName"[\s\S]*\}/);
             if (jsonMatch) {
                 const parsed = JSON.parse(jsonMatch[0]);
                 return parsed;
             }
         } catch (e) {
-            // Not JSON or parse failed, return placeholder
+            console.warn(`⚠️  Agent ${agent} returned unexpected output format:`, e.message);
         }
-        // Return minimal structure for non-JSON agents
+
+        // Return minimal structure as last resort
         return {
             agentName: agent,
             findings: [],

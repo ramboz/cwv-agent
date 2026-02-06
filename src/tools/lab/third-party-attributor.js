@@ -30,17 +30,25 @@ function categorizeScript(url, domain) {
   const lowerDomain = domain.toLowerCase();
 
   // Cookie Consent (NEVER LCP-critical, always defer)
+  // Issue #4 fix: Added Termly, iubenda, Osano, Complianz
   if (lowerDomain.includes('cookielaw') || lowerDomain.includes('onetrust') ||
       lowerDomain.includes('cookiebot') || lowerDomain.includes('cookieconsent') ||
-      lowerDomain.includes('trustarc') || lowerDomain.includes('usercentrics')) {
+      lowerDomain.includes('trustarc') || lowerDomain.includes('usercentrics') ||
+      lowerDomain.includes('termly') || lowerDomain.includes('iubenda') ||
+      lowerDomain.includes('osano') || lowerDomain.includes('complianz')) {
     return 'consent';
   }
 
   // Analytics (NEVER LCP-critical, always async)
+  // Issue #4 fix: Added Mixpanel, Amplitude, Heap, Pendo, Matomo, Piwik, Kissmetrics, Clicky
   if (lowerDomain.includes('google-analytics') || lowerDomain.includes('gtag') ||
       lowerDomain.includes('analytics') || lowerDomain.includes('segment') ||
       lowerDomain.includes('omniture') || lowerDomain.includes('omtrdc') ||
-      (lowerDomain.includes('adobe') && lowerUrl.includes('analytics'))) {
+      (lowerDomain.includes('adobe') && lowerUrl.includes('analytics')) ||
+      lowerDomain.includes('mixpanel') || lowerDomain.includes('amplitude') ||
+      lowerDomain.includes('heapanalytics') || lowerDomain.includes('pendo') ||
+      lowerDomain.includes('matomo') || lowerDomain.includes('piwik') ||
+      lowerDomain.includes('kissmetrics') || lowerDomain.includes('clicky')) {
     return 'analytics';
   }
 
@@ -86,18 +94,67 @@ function categorizeScript(url, domain) {
   }
 
   // A/B Testing / Personalization (MAY be LCP-critical if above-fold personalization)
+  // Issue #4 fix: Added Google Optimize, Convert, Unbounce, Instapage, Leadpages
   if (lowerDomain.includes('optimizely') || lowerDomain.includes('vwo') ||
       lowerDomain.includes('abtasty') || lowerUrl.includes('at.js') ||
-      lowerUrl.includes('target') || lowerDomain.includes('tt.omtrdc')) {
+      lowerUrl.includes('target') || lowerDomain.includes('tt.omtrdc') ||
+      lowerDomain.includes('googleoptimize') || lowerDomain.includes('optimize.google') ||
+      lowerDomain.includes('convert.com') || lowerDomain.includes('unbounce') ||
+      lowerDomain.includes('instapage') || lowerDomain.includes('leadpages')) {
     return 'testing';
   }
 
   // RUM / Performance monitoring (NEVER LCP-critical)
+  // Issue #4 fix: Added Rollbar, Bugsnag, Raygun, TrackJS
   if (lowerDomain.includes('newrelic') || lowerDomain.includes('datadog') ||
       lowerDomain.includes('sentry') || lowerDomain.includes('hotjar') ||
       lowerDomain.includes('fullstory') || lowerDomain.includes('logrocket') ||
-      lowerUrl.includes('rum')) {
+      lowerUrl.includes('rum') || lowerDomain.includes('rollbar') ||
+      lowerDomain.includes('bugsnag') || lowerDomain.includes('raygun') ||
+      lowerDomain.includes('trackjs')) {
     return 'monitoring';
+  }
+
+  // Issue #4 fix: NEW CATEGORIES BELOW (Session Replay, Feature Flags, Marketing, Forms, Video)
+
+  // Session Replay - HIGH PERFORMANCE IMPACT (200-500ms typical)
+  // These tools record user sessions and can significantly impact performance
+  if (lowerDomain.includes('clarity.microsoft') || lowerDomain.includes('clarity.ms') ||
+      lowerDomain.includes('contentsquare') || lowerDomain.includes('sessioncam') ||
+      lowerDomain.includes('glassbox') || lowerDomain.includes('trusense')) {
+    return 'session-replay';
+  }
+
+  // Feature Flagging / Experimentation - MODERATE IMPACT (execution + flickering)
+  // These tools control feature rollouts and can cause visual flickering
+  if (lowerDomain.includes('launchdarkly') || lowerDomain.includes('statsig') ||
+      lowerDomain.includes('split.io') || lowerDomain.includes('getunleash')) {
+    return 'feature-flag';
+  }
+
+  // Marketing Automation - VARIABLE IMPACT (typically async but can be blocking)
+  // These platforms often load heavy tracking/form widgets
+  if (lowerDomain.includes('hubspot') || lowerDomain.includes('marketo') ||
+      lowerDomain.includes('pardot') || lowerDomain.includes('eloqua') ||
+      lowerDomain.includes('klaviyo') || lowerDomain.includes('mailchimp') ||
+      lowerDomain.includes('activehosted')) {
+    return 'marketing';
+  }
+
+  // Form Builders - VARIABLE IMPACT (depends on implementation)
+  // Embedded forms can delay LCP if above-fold
+  if (lowerDomain.includes('typeform') || lowerDomain.includes('jotform') ||
+      lowerDomain.includes('wufoo') || lowerDomain.includes('formstack') ||
+      lowerDomain.includes('gravityforms') || lowerDomain.includes('calderaforms')) {
+    return 'forms';
+  }
+
+  // Video Hosting - HIGH IMPACT if above-fold, LOW if lazy-loaded
+  // Video players can be heavy and block rendering
+  if (lowerDomain.includes('wistia') || lowerDomain.includes('vidyard') ||
+      lowerDomain.includes('brightcove') || lowerDomain.includes('kaltura') ||
+      (lowerDomain.includes('youtube') && lowerUrl.includes('iframe_api'))) {
+    return 'video';
   }
 
   return 'other';
@@ -106,6 +163,14 @@ function categorizeScript(url, domain) {
 /**
  * Categories that should NEVER be recommended for preconnect
  * These are non-LCP-critical and should be deferred/async
+ *
+ * Issue #4 fix: Added 'marketing' category
+ *
+ * NOTE: NOT included (may be LCP-critical):
+ * - 'session-replay' - Can have 200-500ms impact
+ * - 'feature-flag' - Can cause flickering/blocking
+ * - 'forms' - May be above-fold and blocking
+ * - 'video' - May be LCP element
  */
 const NON_CRITICAL_CATEGORIES = new Set([
   'consent',     // Cookie consent can always load after LCP
@@ -114,6 +179,7 @@ const NON_CRITICAL_CATEGORIES = new Set([
   'social',      // Social pixels are not rendering-critical
   'support',     // Chat widgets can load late
   'monitoring',  // RUM/monitoring is observational only
+  'marketing',   // Marketing automation typically non-blocking (Issue #4 fix)
 ]);
 
 /**
@@ -176,6 +242,37 @@ export function getCategoryRecommendation(category) {
       preconnect: true,
       action: 'preconnect if LCP resource',
       reason: 'Preconnect only if CDN hosts LCP image or critical resources'
+    },
+    // Issue #4 fix: NEW CATEGORY RECOMMENDATIONS
+    'session-replay': {
+      preconnect: false,
+      action: 'defer',
+      reason: 'Session replay tools record user interactions and have significant performance overhead (200-500ms typical). Load after page is interactive.',
+      priority: 'low'
+    },
+    'feature-flag': {
+      preconnect: 'conditional',
+      action: 'optimize',
+      reason: 'Feature flags can cause visual flickering if not optimized. Preconnect only if flags control above-fold features. Consider server-side evaluation.',
+      priority: 'medium'
+    },
+    'marketing': {
+      preconnect: false,
+      action: 'defer',
+      reason: 'Marketing automation platforms typically load tracking pixels and form widgets that are not rendering-critical.',
+      priority: 'low'
+    },
+    'forms': {
+      preconnect: 'conditional',
+      action: 'analyze',
+      reason: 'Form builders can delay LCP if the form is above the fold. Consider loading form scripts after LCP if below fold.',
+      priority: 'medium'
+    },
+    'video': {
+      preconnect: 'conditional',
+      action: 'analyze',
+      reason: 'Video players can be LCP elements. Preconnect only if video is above-fold. Use poster images and lazy-load players below fold.',
+      priority: 'high'
     },
     'other': {
       preconnect: 'unknown',

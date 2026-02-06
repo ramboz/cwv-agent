@@ -15,6 +15,7 @@ import { StringOutputParser } from '@langchain/core/output_parsers';
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { Result } from '../result.js';
 import { ErrorCodes } from '../error-codes.js';
+import { agentOutputSchemaFlat } from './schemas.js';
 
 /**
  * Tool Wrapper
@@ -33,7 +34,7 @@ export class Tool {
  * Represents a single AI agent with specific role and capabilities
  */
 export class Agent {
-    constructor({ name, role, systemPrompt, humanPrompt = "", llm, tools = [], globalSystemPrompt = "" }) {
+    constructor({ name, role, systemPrompt, humanPrompt = "", llm, tools = [], globalSystemPrompt = "", useStructuredOutput = true }) {
         if (typeof systemPrompt !== "string" || typeof humanPrompt !== "string") {
             throw new Error(`Invalid prompt for Agent "${name}"`);
         }
@@ -51,10 +52,21 @@ export class Agent {
         this.role = role;
         this.tools = tools;
         this.llm = llm;
+        this.useStructuredOutput = useStructuredOutput;
 
         // Extract the base LLM from ModelAdapter if needed for RunnableSequence
         const baseLLM = llm.getBaseLLM ? llm.getBaseLLM() : llm;
-        this.chain = RunnableSequence.from([prompt, baseLLM, new StringOutputParser()]);
+
+        // Use structured output with Zod schema for guaranteed JSON structure
+        // This prevents intermittent failures where agents return plain text instead of valid JSON
+        // (Issue #1 from architectural review - CRITICAL fix)
+        if (useStructuredOutput) {
+            const llmWithStructuredOutput = baseLLM.withStructuredOutput(agentOutputSchemaFlat);
+            this.chain = RunnableSequence.from([prompt, llmWithStructuredOutput]);
+        } else {
+            // Fallback for agents that need plain text output (e.g., final synthesis)
+            this.chain = RunnableSequence.from([prompt, baseLLM, new StringOutputParser()]);
+        }
     }
 
     async invoke(input) {

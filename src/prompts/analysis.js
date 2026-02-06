@@ -490,6 +490,25 @@ Output:
 - Confidence: 0.8 (pre-LCP tasks directly impact LCP timing)
 - Recommendation: Defer non-critical scripts, prioritize LCP-critical resources
 
+**Example 6: High INP from Slow Event Handler (Issue #2 fix)**
+Input: EventTiming entry for 'click' on button.submit-form: duration=340ms, processingStart=1520ms, startTime=1500ms, processingEnd=1780ms
+Output:
+- Finding: Click interaction on submit button has 340ms latency (poor INP threshold >200ms)
+- Evidence: EventTiming shows: input delay=20ms, processing time=260ms, presentation delay=60ms
+- Impact: Optimizing event handler could reduce INP by ~200ms to meet "good" threshold
+- Confidence: 0.9 (EventTiming provides precise latency breakdown)
+- Root Cause: Processing time (260ms) is the bottleneck, likely heavy JavaScript execution in click handler
+- Recommendation: Break up long task in event handler, use requestIdleCallback for non-critical work, consider debouncing
+
+**Example 7: First Input Delay (Fallback for older browsers)**
+Input: first-input entry: name='pointerdown', duration=180ms, processingStart=850ms, startTime=720ms
+Output:
+- Finding: First user interaction delayed by 180ms (FID)
+- Evidence: first-input entry shows 130ms input delay + 50ms processing time
+- Impact: Reducing main-thread blocking could improve FID by ~100-150ms
+- Confidence: 0.85 (first-input provides reliable FID measurement)
+- Recommendation: Defer or break up long tasks blocking main thread during page load
+
 ## Your Analysis Focus
 ${PHASE_FOCUS.PERF_OBSERVER(step())}
 
@@ -545,6 +564,26 @@ Output:
 - Evidence: HAR domain analysis shows non-first-party origins account for 40% of total requests
 - Impact: Deferring non-critical third-parties could improve TBT by ~300ms and reduce bandwidth
 - Confidence: 0.8 (defer strategy is proven, but requires careful implementation)
+
+**Example 4: Server-Timing Shows Origin Bottleneck (Issue #3 fix)**
+Input: Server-Timing header shows: cdn;dur=5, dispatcher;dur=10, origin;dur=1200
+Output:
+- Finding: Origin processing dominates TTFB (1200ms of 1215ms total)
+- Evidence: Server-Timing breakdown: CDN=5ms, Dispatcher=10ms, Origin=1200ms
+- Impact: Optimizing origin tier (Sling Models, DB queries) could reduce TTFB by ~1000ms
+- Confidence: 0.9 (Server-Timing provides precise attribution)
+- Root Cause: True (origin processing is the bottleneck, not network or CDN)
+- Recommendation: Profile Sling Models, check for N+1 queries, enable caching
+
+**Example 5: CDN Cache Miss Causes High TTFB (Issue #3 fix)**
+Input: Server-Timing header shows: cache;desc=MISS;dur=0.1, cdn;dur=850
+Output:
+- Finding: CDN cache MISS forces origin request, adding 850ms to TTFB
+- Evidence: Server-Timing shows cache=MISS, CDN processing=850ms (includes origin fetch)
+- Impact: Improving cache hit rate could reduce TTFB by ~700-800ms
+- Confidence: 0.85 (cache MISS clearly documented)
+- Root Cause: True (cache configuration is the root cause)
+- Recommendation: Fix cache headers (Cache-Control, Vary), increase TTL, check invalidation rules
 
 ## Your Analysis Focus
 ${PHASE_FOCUS.HAR(step())}

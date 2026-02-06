@@ -656,9 +656,20 @@ export const PHASE_FOCUS = {
   * Use the shift type to inform recommendations (e.g., "font-swap → use font-display: optional or size-adjust")
   * Example: "Element 'body > h1' has 0.15 CLS due to font-family: Proximanova in /styles/fonts.css (font-swap type)" not just "layout shift detected"
 - Analyze layout-shift entries to pinpoint the exact timing, score, and source elements contributing to CLS
+- **PRIORITY 3: Analyze INP (Interaction to Next Paint) using EventTiming entries (Issue #2 fix)**
+  * Examine 'event' entries (EventTiming API) for interaction latency breakdown:
+    - duration: Total interaction latency (input delay + processing time + presentation delay)
+    - processingStart - startTime: Input delay (time from user interaction to event handler start)
+    - processingEnd - processingStart: Processing time (event handler execution duration)
+    - duration - (processingEnd - startTime): Presentation delay (rendering after handler)
+  * Identify interactions with duration >200ms (poor INP threshold):
+    - Example: "Click on button.submit-form took 340ms (input delay: 20ms, processing: 280ms, presentation: 40ms)"
+  * Note the target element (button, link, input, etc.) and its selector for recommendations
+  * If no 'event' entries, check 'first-input' entries for FID (First Input Delay) as fallback
+  * Correlate high event durations with longtask entries to identify blocking JavaScript
+  * Recommend specific optimizations: break up long tasks, use requestIdleCallback, debounce handlers
 - Identify longtask entries (duration, timing) that contribute to high TBT/INP, noting potential attribution if available
 - Review resource timing entries for critical resources, comparing with HAR data for discrepancies or finer details
-- Examine event and first-input entries (if available) for insights into input delay and event handling duration related to INP
 - Correlate paint timings (first-paint, first-contentful-paint) with resource loading and rendering events`,
 
   HAR: (n) => `### Step ${n}: HAR File Analysis
@@ -672,6 +683,16 @@ export const PHASE_FOCUS = {
   * Use the "Top Scripts by Execution Time" list for specific recommendations
   * Reference long task attribution to specific third-party scripts
   * Example: "analytics category: 3 scripts, 450ms execution (Google Analytics: 280ms)" not just "third-party scripts are slow"
+- **PRIORITY 2: Use Server-Timing Headers for TTFB Diagnosis (Issue #3 fix)**
+  * Check the "Server-Timing Breakdown" section in the HAR summary
+  * Identify which tier is the bottleneck: CDN, cache, dispatcher, origin
+  * Look for cache hit/miss indicators (HIT, MISS, REVALIDATE, STALE, EXPIRED)
+  * Analyze origin time vs edge time to determine root cause:
+    - High origin time (>200ms) → Slow Sling Models, DB queries, or backend processing
+    - High CDN time but low origin → Network latency or CDN routing issues
+    - Cache MISS → Fix cache headers, increase TTL, check invalidation rules
+  * Example: "Server-Timing shows origin=1200ms vs CDN=5ms - optimize publish tier, not CDN" not just "high TTFB"
+  * Correlate Server-Timing with TTFB from timing breakdown to validate findings
 - Pinpoint third-party resources causing delays with specific domains and timing
 - Identify connection setup overhead (DNS, TCP, TLS) for key domains
 - Examine resource priorities and their impact on loading sequence
@@ -680,16 +701,21 @@ export const PHASE_FOCUS = {
 - Analyze resource sizes and compression efficiency
 - Identify cache misses or short cache durations
 - **Use third-party categorization** from the Third-Party Script Analysis:
-  * Analytics (google-analytics, segment, omniture) → NEVER preconnect, always async
+  * Analytics (google-analytics, segment, omniture, mixpanel, amplitude) → NEVER preconnect, always async
   * Advertising (doubleclick, adsense) → NEVER preconnect, defer below fold
-  * Consent (onetrust, cookiebot) → NEVER preconnect, always defer to post-LCP
+  * Consent (onetrust, cookiebot, termly, iubenda) → NEVER preconnect, always defer to post-LCP
   * Tag managers (googletagmanager, tealium, adobedtm) → async unless Target personalization
   * CDN (cloudfront, fastly, akamai) → preconnect ONLY if hosts LCP resource
-  * Testing/Personalization (optimizely, vwo, at.js, target) → preconnect ONLY if above-fold A/B test
+  * Testing/Personalization (optimizely, vwo, at.js, target, googleoptimize) → preconnect ONLY if above-fold A/B test
   * Support (zendesk, intercom, drift) → NEVER preconnect, defer
-  * Monitoring (newrelic, datadog, sentry) → NEVER preconnect, async
+  * Monitoring (newrelic, datadog, sentry, rollbar) → NEVER preconnect, async
+  * Session Replay (clarity.microsoft, contentsquare) → NEVER preconnect, defer to post-interaction (Issue #4 fix)
+  * Feature Flags (launchdarkly, statsig) → preconnect ONLY if controls above-fold, consider SSR (Issue #4 fix)
+  * Marketing (hubspot, marketo, klaviyo) → NEVER preconnect, defer (Issue #4 fix)
+  * Forms (typeform, jotform) → preconnect ONLY if form above-fold (Issue #4 fix)
+  * Video (wistia, vidyard, brightcove) → preconnect ONLY if video is LCP element (Issue #4 fix)
 - Reference the \`getCategoryRecommendation()\` function output for each category
-- Example: "consent category (onetrust.com): NEVER preconnect, action: defer, reason: Cookie consent never affects LCP"`,
+- Example: "session-replay category (clarity.microsoft.com): NEVER preconnect, action: defer, reason: 200-500ms overhead"`,
 
   HTML: (n) => `### Step ${n}: Markup Analysis
 - Examine provided HTML for the page

@@ -12,6 +12,7 @@ export {
     suggestionSchema,
     agentFindingSchema,
     agentOutputSchema,
+    agentOutputSchemaFlat,
     qualityMetricsSchema
 } from './multi-agents/schemas.js';
 

@@ -159,6 +159,40 @@ export class PerformanceCollector extends LabDataCollector {
         })) || []
       }));
 
+      // Issue #2 Fix: Collect EventTiming entries for INP analysis
+      // EventTiming API provides interaction latency data (processingStart, processingEnd, duration)
+      // This is critical for diagnosing INP (Interaction to Next Paint) issues
+      await appendEntries(entries, 'event', (e) => ({
+        name: e.name,
+        entryType: e.entryType,
+        startTime: e.startTime,
+        duration: e.duration,
+        processingStart: e.processingStart,
+        processingEnd: e.processingEnd,
+        interactionId: e.interactionId,
+        // Element that received the event
+        target: e.target ? {
+          tag: e.target.tagName?.toLowerCase(),
+          selector: getSelector(e.target)
+        } : null
+      }));
+
+      // Issue #2 Fix: Collect first-input entries (fallback for older browsers)
+      // first-input provides FID (First Input Delay) which is a precursor to INP
+      await appendEntries(entries, 'first-input', (e) => ({
+        name: e.name,
+        entryType: e.entryType,
+        startTime: e.startTime,
+        duration: e.duration,
+        processingStart: e.processingStart,
+        processingEnd: e.processingEnd,
+        // Element that received the first input
+        target: e.target ? {
+          tag: e.target.tagName?.toLowerCase(),
+          selector: getSelector(e.target)
+        } : null
+      }));
+
       // Phase A+ Optimization: Filter to only CWV-critical entries
       // Resource timing is redundant (already in HAR), only keep VERY problematic ones
       const cwvCriticalEntries = entries.filter(entry => {
@@ -167,11 +201,21 @@ export class PerformanceCollector extends LabDataCollector {
           return true;
         }
 
+        // Issue #2 Fix: Keep event entries for INP analysis
+        // EventTiming provides critical interaction latency data
+        if (entry.entryType === 'event') {
+          return true;
+        }
+
         // For resource timing: VERY selective - only truly problematic resources
         // (All resource data is in HAR anyway, this is just for quick reference)
+        // Issue #6 Fix: Lower thresholds to catch moderate issues (1000ms, 50KB)
         if (entry.entryType === 'resource') {
           return entry.renderBlockingStatus === 'blocking' ||
-                 (entry.duration > 3000 && entry.decodedBodySize > 100000);  // Very slow AND large only
+                 entry.fetchPriority === 'high' ||
+                 (entry.duration > 1000 && entry.decodedBodySize > 50000) ||  // Moderate issues
+                 (entry.duration > 2000) ||  // Slow resources
+                 (entry.decodedBodySize > 200000);  // Large resources
         }
 
         // Keep FCP, FID, other paint/mark entries
@@ -179,7 +223,7 @@ export class PerformanceCollector extends LabDataCollector {
           return true;
         }
 
-        // Filter out everything else (visibility-state, event, etc.)
+        // Filter out everything else (visibility-state, etc.)
         return false;
       });
 

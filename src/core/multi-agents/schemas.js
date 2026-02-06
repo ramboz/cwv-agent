@@ -117,6 +117,58 @@ export const agentOutputSchema = z.object({
     })
 });
 
+/**
+ * Flat Agent Output Schema - For use with withStructuredOutput()
+ *
+ * This is identical to agentOutputSchema but with agentFindingSchema inlined
+ * to avoid $ref in JSON Schema (which Gemini doesn't support).
+ *
+ * CRITICAL: This fixes Issue #1 from architectural review - agents now use
+ * withStructuredOutput() instead of StringOutputParser() to guarantee valid JSON.
+ */
+export const agentOutputSchemaFlat = z.object({
+    agentName: z.string(),
+    findings: z.array(z.object({
+        id: z.string(), // Unique ID for cross-referencing (e.g., "psi-lcp-1")
+        type: z.enum(['bottleneck', 'waste', 'opportunity']),
+        // NOTE: Enum inlined to avoid $ref in JSON Schema
+        metric: z.enum(['LCP', 'CLS', 'INP', 'TBT', 'TTFB', 'FCP', 'TTI', 'SI']),
+        description: z.string().min(10), // Human-readable finding
+
+        // Evidence structure
+        evidence: z.object({
+            source: z.string(), // 'psi', 'har', 'coverage', 'perfEntries', 'crux', 'rum', 'code', 'html', 'rules'
+            reference: z.string(), // Specific data point (audit name, file:line, timing breakdown, etc.)
+            confidence: z.number().min(0).max(1) // 0-1 confidence score
+        }),
+
+        // Impact estimation
+        estimatedImpact: z.object({
+            metric: z.string(), // Which metric improves
+            reduction: z.number(), // Estimated improvement (ms, score, bytes, etc.)
+            confidence: z.number().min(0).max(1), // Confidence in estimate
+            calculation: z.string().optional() // Show your work
+        }),
+
+        // Causal relationships (for Phase 3 graph building)
+        relatedFindings: z.array(z.string()).optional(), // IDs of related findings
+        rootCause: z.boolean(), // true = root cause, false = symptom
+
+        // Chain-of-thought reasoning (Phase 2 will populate)
+        reasoning: z.object({
+            symptom: z.string(), // What is observed
+            rootCauseHypothesis: z.string(), // Why it occurs
+            evidenceSupport: z.string(), // How evidence supports hypothesis
+            impactRationale: z.string() // Why this impact estimate
+        }).optional()
+    })),
+    metadata: z.object({
+        executionTime: z.number(),
+        dataSourcesUsed: z.array(z.string()),
+        coverageComplete: z.boolean() // Did agent examine all relevant data?
+    })
+});
+
 // ============================================================================
 // Quality Metrics Schema - Track suggestion quality
 // ============================================================================
