@@ -365,16 +365,41 @@ export async function runMultiAgents(pageData, tokenLimits, llm, model, options 
         ? generateLightModeConfig(pageData, pageData.cms)
         : generateConditionalAgentConfig(pageData, pageData.cms);
 
-    // Validate token budgets (include global init with data quality)
+    // Validate token budgets and truncate oversized human prompts
     const baseInit = initializeSystemAgents(pageData.cms, pageData.dataQuality);
     const baseTokens = estimateTokenSize(baseInit, model);
+    const CHARS_PER_TOKEN = 4; // Conservative estimate for truncation
+    const MIN_HUMAN_PROMPT_TOKENS = 200; // Minimum useful human prompt size
+
     agentsConfig = agentsConfig.map((agent) => {
-        const tokenLength = baseTokens + estimateTokenSize(agent.systemPrompt, model) + estimateTokenSize(agent.humanPrompt, model);
-        if (!isPromptValid(tokenLength, tokenLimits)) {
-            // For this conditional flow, humanPrompt is already summarized for heavy artifacts.
+        const sysTokens = estimateTokenSize(agent.systemPrompt, model);
+        const humTokens = estimateTokenSize(agent.humanPrompt, model);
+        const totalTokens = baseTokens + sysTokens + humTokens;
+
+        if (isPromptValid(totalTokens, tokenLimits)) {
+            return agent; // Within budget
         }
-        return agent;
-    });
+
+        // Calculate available token budget for human prompt
+        const maxInputTokens = Math.floor((tokenLimits.input - tokenLimits.output) * 0.9);
+        const availableForHuman = maxInputTokens - baseTokens - sysTokens;
+
+        if (availableForHuman < MIN_HUMAN_PROMPT_TOKENS) {
+            // System prompt alone exceeds budget — skip this agent
+            console.warn(`⚠️  ${agent.name}: System prompt (${sysTokens} tokens) + base (${baseTokens} tokens) exceeds budget (${maxInputTokens} tokens). Skipping agent.`);
+            return null;
+        }
+
+        // Truncate human prompt to fit within budget
+        const overageTokens = totalTokens - maxInputTokens;
+        const charsToTrim = overageTokens * CHARS_PER_TOKEN;
+        const truncatedPrompt = agent.humanPrompt.slice(0, agent.humanPrompt.length - charsToTrim);
+        const truncatedTokens = estimateTokenSize(truncatedPrompt, model);
+
+        console.warn(`⚠️  ${agent.name}: Prompt exceeded budget by ~${overageTokens} tokens. Truncated human prompt from ${humTokens} → ${truncatedTokens} tokens.`);
+
+        return { ...agent, humanPrompt: truncatedPrompt };
+    }).filter(Boolean); // Remove null entries (skipped agents)
 
     const system = new MultiAgentSystem({ llm, toolsConfig: [], agentsConfig, globalSystemPrompt: initializeSystemAgents(pageData.cms, pageData.dataQuality) });
     const tasks = agentsConfig.map(agent => ({ agent: agent.name }));
@@ -493,23 +518,11 @@ export async function runMultiAgents(pageData, tokenLimits, llm, model, options 
         }
     }
 
-    let result = '';
-    let context = '';
-    responses.forEach(({ agent, output }, index) => {
-        const section = `## Phase ${index + 1} - ${agent}:\n${output}`;
-        result += `\n\n${section}`;
-        context += `\n${agent}: ${output}`;
-    });
-
-    // Add causal graph summary to context for final synthesis
-    if (graphSummary) {
-        context += `\n\nCausal Graph Analysis:\n${graphSummary}`;
-    }
-
-    // Phase 4: Validate findings
+    // Phase 4: Validate findings BEFORE building synthesis context
+    // This ensures blocked findings are excluded from what the synthesis LLM sees
     let validatedFindings = allFindings;
     let validationSummary = '';
-    let validationResults = null;  // Declare outside try-catch so it's available later
+    let validationResults = null;
     if (allFindings.length > 0 && causalGraph) {
         try {
             validationResults = validateFindings(allFindings, causalGraph, {
@@ -526,7 +539,7 @@ export async function runMultiAgents(pageData, tokenLimits, llm, model, options 
             // Save validation results
             saveValidationResults(pageData.pageUrl, pageData.deviceType, validationResults, model);
 
-            // Add validation summary to context
+            // Build validation summary for context
             validationSummary = `\n\nValidation Summary:
 - Total findings: ${validationResults.summary.total}
 - Approved: ${validationResults.summary.approved}
@@ -534,9 +547,7 @@ export async function runMultiAgents(pageData, tokenLimits, llm, model, options 
 - Blocked: ${validationResults.summary.blocked}
 - Average confidence: ${(validationResults.summary.averageConfidence * 100).toFixed(1)}%`;
 
-            context += validationSummary;
-
-            // Update agent outputs to reflect validated findings
+            // Filter agent outputs to only include validated findings
             agentOutputs.forEach(output => {
                 if (output.findings && Array.isArray(output.findings)) {
                     output.findings = output.findings.filter(f =>
@@ -547,6 +558,25 @@ export async function runMultiAgents(pageData, tokenLimits, llm, model, options 
         } catch (error) {
             console.warn('Failed to validate findings:', error?.message || error || 'Unknown error');
         }
+    }
+
+    // Build synthesis context AFTER validation so blocked findings are excluded
+    // Each agentOutput now contains only approved/adjusted findings
+    let context = '';
+    agentOutputs.forEach((output, index) => {
+        const agentName = output.agentName || `agent_${index}`;
+        const findingsJson = JSON.stringify(output.findings, null, 2);
+        context += `\n## Phase ${index + 1} - ${agentName}:\n${findingsJson}`;
+    });
+
+    // Add causal graph summary to context for final synthesis
+    if (graphSummary) {
+        context += `\n\nCausal Graph Analysis:\n${graphSummary}`;
+    }
+
+    // Append validation summary so synthesis LLM knows what was filtered
+    if (validationSummary) {
+        context += validationSummary;
     }
 
     // Phase 5: Build graph-enhanced context for synthesis
@@ -649,7 +679,7 @@ ${i + 1}. **${rc.description}**
         }
 
         // Cache structured suggestions
-        await cacheResults(pageData.pageUrl, pageData.deviceType, structuredData, 'suggestions');
+        await cacheResults(pageData.pageUrl, pageData.deviceType, 'suggestions', structuredData);
         console.log(`📝 Cached ${structuredData.suggestions.length} structured suggestions to .cache/`);
     } catch (error) {
         console.error('❌ Failed to generate structured suggestions:', error?.message || String(error));

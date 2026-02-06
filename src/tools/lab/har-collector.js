@@ -63,6 +63,8 @@ export class HARCollector extends LabDataCollector {
       () => this.findLongBlockingTimes(entries),
       () => this.findLongTTFB(entries),
       () => this.findDeprioritizedCriticalResources(entries),
+      () => this.analyzeMainDocumentTiming(entries),  // Issue #6 fix: Separate main document analysis
+      () => this.analyzeAggregateTimings(entries),    // Issue #6 fix: Aggregate timing statistics
       () => this.analyzeTimingBreakdown(entries),
       () => this.findHTTP1Resources(entries),
       () => this.findRedirects(entries),
@@ -157,7 +159,15 @@ export class HARCollector extends LabDataCollector {
 
     let report = '* **High Time to First Byte (TTFB) - Server Response Times:**\n';
     longTTFB.forEach(entry => {
-      report += `    * ${this.truncate(entry.request.url)}: ${Math.round(entry.timings.wait)}ms\n`;
+      // Issue #6 fix: Show full timing breakdown for high TTFB resources
+      const dns = Math.round(entry.timings.dns || 0);
+      const tcp = Math.round(entry.timings.connect || 0);
+      const ssl = Math.round(entry.timings.ssl || 0);
+      const wait = Math.round(entry.timings.wait);
+      const download = Math.round(entry.timings.receive || 0);
+
+      report += `    * ${this.truncate(entry.request.url)}: ${wait}ms TTFB\n`;
+      report += `      (Breakdown: DNS: ${dns}ms, TCP: ${tcp}ms, SSL: ${ssl}ms, Wait: ${wait}ms, Download: ${download}ms)\n`;
     });
     return report;
   }
@@ -169,10 +179,12 @@ export class HARCollector extends LabDataCollector {
         const totalTime = (entry.timings.dns || 0) + (entry.timings.connect || 0) +
                          (entry.timings.ssl || 0) + (entry.timings.wait || 0) +
                          (entry.timings.receive || 0);
-        return totalTime > 200;
+        // Issue #6 fix: Lower threshold from 200ms to 100ms to catch moderate issues
+        return totalTime > 100;
       })
       .sort((a, b) => this.getTotalTime(b) - this.getTotalTime(a))
-      .slice(0, DISPLAY_LIMITS.LAB.MAX_ITEMS_DISPLAY);
+      // Issue #6 fix: Show more resources (15 instead of default 5-10)
+      .slice(0, 15);
 
     if (criticalResources.length === 0) return null;
 
@@ -192,6 +204,112 @@ export class HARCollector extends LabDataCollector {
       report += `      Total: ${total}ms | DNS: ${dns}ms, TCP: ${tcp}ms, SSL: ${ssl}ms, TTFB: ${wait}ms, Download: ${download}ms\n`;
       report += `      Bottleneck: ${bottleneck.name} (${bottleneck.value}ms, ${this.percentage(bottleneck.value, total)}%)\n`;
     });
+    return report;
+  }
+
+  /**
+   * Analyze main HTML document timing separately (Issue #6 fix)
+   * The main document is the most critical resource and deserves dedicated analysis
+   */
+  analyzeMainDocumentTiming(entries) {
+    // Find main HTML document (first entry with text/html)
+    const mainDoc = entries.find(entry =>
+      entry.response?.content?.mimeType?.includes('text/html')
+    );
+
+    if (!mainDoc || !mainDoc.timings) return null;
+
+    const timings = mainDoc.timings;
+    const dns = Math.round(timings.dns || 0);
+    const tcp = Math.round(timings.connect || 0);
+    const ssl = Math.round(timings.ssl || 0);
+    const wait = Math.round(timings.wait || 0);
+    const download = Math.round(timings.receive || 0);
+    const total = dns + tcp + ssl + wait + download;
+
+    // Identify bottleneck phase
+    const phases = { DNS: dns, TCP: tcp, SSL: ssl, TTFB: wait, Download: download };
+    const bottleneck = Object.entries(phases)
+      .sort((a, b) => b[1] - a[1])[0];
+
+    let report = '* **Main HTML Document Timing Breakdown (Navigation TTFB):**\n';
+    report += `    * URL: ${this.truncate(mainDoc.request.url)}\n`;
+    report += `    * Total: ${total}ms | DNS: ${dns}ms, TCP: ${tcp}ms, SSL: ${ssl}ms, TTFB: ${wait}ms, Download: ${download}ms\n`;
+    report += `    * Bottleneck: ${bottleneck[0]} (${bottleneck[1]}ms, ${this.percentage(bottleneck[1], total)}%)\n`;
+
+    // Add recommendations based on bottleneck
+    if (dns > 50) {
+      report += `    * ⚠️ High DNS time (${dns}ms) - Consider using a faster DNS provider or preconnect\n`;
+    }
+    if (tcp > 50) {
+      report += `    * ⚠️ High TCP time (${tcp}ms) - Consider using a CDN closer to users\n`;
+    }
+    if (ssl > 100) {
+      report += `    * ⚠️ High SSL time (${ssl}ms) - Check TLS configuration, use TLS 1.3, or enable session resumption\n`;
+    }
+    if (wait > 600) {
+      report += `    * ⚠️ High server processing time (${wait}ms TTFB) - Check Server-Timing header for breakdown\n`;
+    }
+
+    return report;
+  }
+
+  /**
+   * Aggregate timing statistics across all resources (Issue #6 fix)
+   * Helps identify systemic issues like "high DNS across all domains"
+   */
+  analyzeAggregateTimings(entries) {
+    const withTimings = entries.filter(e => e.timings);
+
+    if (withTimings.length === 0) return null;
+
+    // Aggregate by phase
+    const totals = {
+      dns: 0,
+      tcp: 0,
+      ssl: 0,
+      wait: 0,
+      receive: 0,
+      count: withTimings.length
+    };
+
+    withTimings.forEach(entry => {
+      totals.dns += entry.timings.dns || 0;
+      totals.tcp += entry.timings.connect || 0;
+      totals.ssl += entry.timings.ssl || 0;
+      totals.wait += entry.timings.wait || 0;
+      totals.receive += entry.timings.receive || 0;
+    });
+
+    const avgDns = Math.round(totals.dns / totals.count);
+    const avgTcp = Math.round(totals.tcp / totals.count);
+    const avgSsl = Math.round(totals.ssl / totals.count);
+    const avgWait = Math.round(totals.wait / totals.count);
+    const avgReceive = Math.round(totals.receive / totals.count);
+
+    let report = '* **Aggregate Timing Statistics (averages across all resources):**\n';
+    report += `    * Resources analyzed: ${totals.count}\n`;
+    report += `    * Avg DNS: ${avgDns}ms | Avg TCP: ${avgTcp}ms | Avg SSL: ${avgSsl}ms | Avg TTFB: ${avgWait}ms | Avg Download: ${avgReceive}ms\n`;
+
+    // Identify systemic issues
+    const issues = [];
+    if (avgDns > 30) {
+      issues.push(`High average DNS (${avgDns}ms) suggests missing preconnect hints`);
+    }
+    if (avgTcp > 30) {
+      issues.push(`High average TCP (${avgTcp}ms) suggests CDN not geographically optimized`);
+    }
+    if (avgSsl > 50) {
+      issues.push(`High average SSL (${avgSsl}ms) suggests TLS configuration issues`);
+    }
+
+    if (issues.length > 0) {
+      report += `    * Systemic Issues:\n`;
+      issues.forEach(issue => {
+        report += `      - ${issue}\n`;
+      });
+    }
+
     return report;
   }
 

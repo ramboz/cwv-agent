@@ -273,9 +273,7 @@ export async function runAgentFlow(pageUrl, deviceType, options = {}) {
     // Execute agent flow (force conditional multi-agent mode)
     const { markdown, structuredData } = await runMultiAgents(pageData, tokenLimits, llm, options.model, { mode: options.mode });
 
-    // Persist markdown report
-    cacheResults(pageUrl, deviceType, 'report', markdown, '', options.model);
-
+    // Persist markdown report (strip structured data section if present)
     const markdownData = extractMarkdownSuggestions(markdown);
     const path = cacheResults(pageUrl, deviceType, 'report', markdownData, '', options.model);
     console.log('✅ CWV report generated at:', path);

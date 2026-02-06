@@ -159,47 +159,6 @@ When you find an issue, provide SPECIFIC DETAILS that other agents can't:
 }
 
 /**
- * Returns guidance for avoiding duplicate findings from previous agents
- * @param {Array} previousFindings - Array of findings from earlier agents
- * @return {String}
- */
-export function getCrossAgentContext(previousFindings = []) {
-  if (!previousFindings || previousFindings.length === 0) {
-    return '';
-  }
-
-  const findingsSummary = previousFindings
-    .slice(0, 15) // Limit to top 15 to avoid token bloat
-    .map(f => `- ${f.agentName || 'Previous agent'}: ${f.type} → ${(f.recommendation || '').substring(0, 100)}`)
-    .join('\n');
-
-  return `
-## FINDINGS FROM PREVIOUS AGENTS
-
-The following issues have already been identified by other agents:
-
-${findingsSummary}
-
-**CRITICAL - Avoid Duplication:**
-1. ✅ DO add file-level detail (specific files, line numbers, element selectors) to existing findings
-2. ✅ DO identify root causes of symptoms found by previous agents
-3. ✅ DO find NEW issues in areas previous agents didn't cover
-4. ❌ DON'T repeat the same recommendation with different wording
-5. ❌ DON'T create separate suggestions for the same root cause
-
-**Example of GOOD collaboration:**
-- Previous: "unused-javascript audit shows 400KB waste in clientlib.js"
-- Your addition: "clientlib.js waste comes from unused React components in src/components/Modal.jsx (lines 45-120)"
-  → ✅ GOOD: You added file-level detail to an existing finding
-
-**Example of BAD duplication:**
-- Previous: "Preload LCP image hero.jpg"
-- You: "Add preload for hero.jpg"
-  → ❌ BAD: Exact duplicate, you should skip this and focus on new issues
-`;
-}
-
-/**
  * Returns deliverable format instructions text
  * @return {String}
  */

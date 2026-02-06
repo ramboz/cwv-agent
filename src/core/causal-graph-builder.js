@@ -28,7 +28,8 @@ import {
  */
 function classifyFindingType(finding) {
   const desc = (finding.finding || finding.description || '').toLowerCase();
-  const evidence = (finding.evidence?.[0]?.reference || finding.evidence?.reference || '').toLowerCase();
+  // evidence is an object {source, reference, confidence} from withStructuredOutput()
+  const evidence = (finding.evidence?.reference || '').toLowerCase();
   const combined = `${desc} ${evidence}`;
 
   // Image-related issues
@@ -310,8 +311,9 @@ function areDuplicates(findingA, findingB) {
   if (commonKeywords.length < 3) return false;
 
   // Third check: similar evidence references (same file)
-  const refA = findingA.evidence?.[0]?.reference || '';
-  const refB = findingB.evidence?.[0]?.reference || '';
+  // evidence is an object {source, reference, confidence} from withStructuredOutput()
+  const refA = findingA.evidence?.reference || '';
+  const refB = findingB.evidence?.reference || '';
   const fileA = refA.match(/([a-zA-Z0-9_-]+\.(js|css|woff2?|jpg|png|webp))/)?.[1];
   const fileB = refB.match(/([a-zA-Z0-9_-]+\.(js|css|woff2?|jpg|png|webp))/)?.[1];
 
@@ -594,9 +596,9 @@ function extractFileFromFinding(finding) {
     });
   }
 
-  // 3. Check evidence[0].reference (nested array access)
-  if (finding.evidence?.[0]?.reference) {
-    sources.push(finding.evidence[0].reference);
+  // 3. Check evidence.reference (evidence is an object, not array)
+  if (finding.evidence?.reference) {
+    sources.push(finding.evidence.reference);
   }
 
   // 4. Check description

@@ -89,12 +89,14 @@ export const agentFindingSchema = z.object({
     relatedFindings: z.array(z.string()).optional(), // IDs of related findings
     rootCause: z.boolean(), // true = root cause, false = symptom
 
-    // Chain-of-thought reasoning (Phase 2 will populate)
+    // Chain-of-thought reasoning
+    // Field names MUST match prompts (getChainOfThoughtGuidance) and validator (validateReasoning)
     reasoning: z.object({
-        symptom: z.string(), // What is observed
-        rootCauseHypothesis: z.string(), // Why it occurs
-        evidenceSupport: z.string(), // How evidence supports hypothesis
-        impactRationale: z.string() // Why this impact estimate
+        observation: z.string(), // What specific data point was observed
+        diagnosis: z.string(), // Why this observation is problematic
+        mechanism: z.string(), // How the problem affects the metric
+        solution: z.string(), // Why the proposed fix will work
+        codeExample: z.string().optional() // AEM-specific code example with file path
     }).optional()
 });
 
@@ -154,12 +156,14 @@ export const agentOutputSchemaFlat = z.object({
         relatedFindings: z.array(z.string()).optional(), // IDs of related findings
         rootCause: z.boolean(), // true = root cause, false = symptom
 
-        // Chain-of-thought reasoning (Phase 2 will populate)
+        // Chain-of-thought reasoning
+        // Field names MUST match prompts (getChainOfThoughtGuidance) and validator (validateReasoning)
         reasoning: z.object({
-            symptom: z.string(), // What is observed
-            rootCauseHypothesis: z.string(), // Why it occurs
-            evidenceSupport: z.string(), // How evidence supports hypothesis
-            impactRationale: z.string() // Why this impact estimate
+            observation: z.string(), // What specific data point was observed
+            diagnosis: z.string(), // Why this observation is problematic
+            mechanism: z.string(), // How the problem affects the metric
+            solution: z.string(), // Why the proposed fix will work
+            codeExample: z.string().optional() // AEM-specific code example with file path
         }).optional()
     })),
     metadata: z.object({
