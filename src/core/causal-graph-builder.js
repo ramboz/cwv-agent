@@ -18,7 +18,6 @@ import {
   identifyRootCauses,
   identifySymptoms,
   findCriticalPaths,
-  exportToDot,
 } from '../models/causal-graph.js';
 
 /**
@@ -475,28 +474,6 @@ function detectTimingRelationship(findingA, findingB) {
 }
 
 /**
- * Exports the causal graph to various formats
- * @param {Object} graph - The causal graph
- * @returns {Object} Export data
- */
-export function exportGraph(graph) {
-  return {
-    json: JSON.stringify(graph, null, 2),
-    dot: exportToDot(graph),
-    summary: {
-      totalNodes: Object.keys(graph.nodes).length,
-      totalEdges: graph.edges.length,
-      rootCauses: graph.rootCauses.length,
-      symptoms: graph.symptoms.length,
-      criticalPaths: graph.criticalPaths.length,
-      avgDepth: Object.values(graph.nodes)
-        .filter(n => n.depth !== null)
-        .reduce((sum, n) => sum + n.depth, 0) / Object.keys(graph.nodes).length
-    }
-  };
-}
-
-/**
  * Deterministic deduplication of findings before synthesis
  * Groups findings by file + metric combination and merges duplicates
  *
@@ -588,20 +565,7 @@ function extractFileFromFinding(finding) {
     sources.push(finding.evidence.reference);
   }
 
-  // 2. Check evidence array (some agents use array format)
-  if (Array.isArray(finding.evidence)) {
-    finding.evidence.forEach(e => {
-      if (e?.reference) sources.push(e.reference);
-      if (e?.source) sources.push(e.source);
-    });
-  }
-
-  // 3. Check evidence.reference (evidence is an object, not array)
-  if (finding.evidence?.reference) {
-    sources.push(finding.evidence.reference);
-  }
-
-  // 4. Check description
+  // 2. Check description
   if (finding.description) {
     sources.push(finding.description);
   }

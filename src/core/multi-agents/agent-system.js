@@ -128,15 +128,27 @@ export class Agent {
                     duration: Date.now() - startTime
                 });
             } catch (error) {
-                // Check if it's a rate limit error (429)
-                const isRateLimitError = error.message?.includes('429') ||
-                    error.message?.includes('Resource exhausted') ||
-                    error.message?.includes('rateLimitExceeded');
+                // Defensive: LangChain/Gemini may throw non-Error values (undefined, null, string)
+                const errorMessage = error?.message || (typeof error === 'string' ? error : String(error ?? 'Unknown error'));
 
-                // If rate limit and retries remaining, retry with exponential backoff
-                if (isRateLimitError && attempt < maxRetries - 1) {
+                // Classify retryable errors
+                const isRateLimitError = errorMessage.includes('429') ||
+                    errorMessage.includes('Resource exhausted') ||
+                    errorMessage.includes('rateLimitExceeded');
+
+                // LangChain empty-generation bug: ChatVertexAI.invoke() throws when
+                // Gemini returns no content (result.generations[0][0] is undefined).
+                // This is transient and worth retrying.
+                const isEmptyGenerationError = errorMessage.includes("reading 'message'") &&
+                    error?.stack?.includes('chat_models');
+
+                const isRetryable = isRateLimitError || isEmptyGenerationError;
+
+                // If retryable and retries remaining, retry with exponential backoff
+                if (isRetryable && attempt < maxRetries - 1) {
                     const retryDelay = INITIAL_RETRY_DELAY * Math.pow(2, attempt);
-                    console.log(`⚠️  ${this.name} hit rate limit, retrying in ${retryDelay / 1000}s (attempt ${attempt + 2}/${maxRetries})`);
+                    const reason = isRateLimitError ? 'rate limit' : 'empty LLM generation';
+                    console.warn(`⚠️  ${this.name} hit ${reason}, retrying in ${retryDelay / 1000}s (attempt ${attempt + 2}/${maxRetries})`);
                     await new Promise(resolve => setTimeout(resolve, retryDelay));
                     continue;
                 }
@@ -145,13 +157,13 @@ export class Agent {
                 const errorCode = isRateLimitError ? ErrorCodes.RATE_LIMIT : ErrorCodes.ANALYSIS_FAILED;
                 return Result.err(
                     errorCode,
-                    `Agent ${this.name} failed: ${error.message}`,
+                    `Agent ${this.name} failed: ${errorMessage}`,
                     {
                         agent: this.name,
                         attempts: attempt + 1,
-                        error: error.stack
+                        error: error?.stack || errorMessage
                     },
-                    isRateLimitError // Rate limits are retryable
+                    isRetryable
                 );
             }
         }
@@ -236,7 +248,7 @@ export class MultiAgentSystem {
             if (result.isOk()) {
                 console.log(`✅ ${agentName} (${Math.round(completed / total * 100)}%, ${Number(dt)}s)`);
             } else {
-                console.log(`❌ ${agentName} (${Math.round(completed / total * 100)}%, ${Number(dt)}s):`, result.error.message);
+                console.log(`❌ ${agentName} (${Math.round(completed / total * 100)}%, ${Number(dt)}s):`, result.error?.message || result.error || 'Unknown error');
             }
 
             return { agent: agentName, result };

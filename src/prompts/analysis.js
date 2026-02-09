@@ -1,43 +1,5 @@
 import { estimateTokenSize } from '../utils.js';
-import { getTechnicalContext, PHASE_FOCUS, getStructuredOutputFormat, getDataPriorityGuidance } from './shared.js';
-
-// Counter for tracking analysis steps
-let stepCounter = 0;
-
-/**
- * Resets the step counter to zero
- */
-export function resetStepCounter() {
-  stepCounter = 0;
-}
-
-function step() {
-  stepCounter += 1;
-  return stepCounter;
-}
-
-/**
- * Helper function to generate phase transition text
- * @returns {string} Phase transition text with incremented step number
- */
-function stepVerbose() {
-   const n = step();
-   if (n === 1) {
-      return 'Starting with phase 1,';
-   }
-   return `Continuing with phase ${n},`;
-}
-
-/**
- * Prompt for CrUX data analysis
- * @param {Object} crux - CrUX data object
- * @returns {string} CrUX analysis prompt
- */
-export const cruxStep = (crux) => `
-${stepVerbose()} here is the detailed CrUX data for the page (in JSON format):
-
-${JSON.stringify(crux, null, 2)}
-`;
+import { PHASE_FOCUS, getStructuredOutputFormat, getDataPriorityGuidance } from './shared.js';
 
 /**
  * Prompt for CrUX summary analysis
@@ -45,20 +7,9 @@ ${JSON.stringify(crux, null, 2)}
  * @returns {string} CrUX summary analysis prompt
  */
 export const cruxSummaryStep = (cruxSummary) => `
-${stepVerbose()} here is the summarized CrUX data for the page:
+Here is the summarized CrUX data for the page:
 
 ${cruxSummary}
-`;
-
-/**
- * Prompt for PSI analysis
- * @param {Object} psi - PSI data object
- * @returns {string} PSI analysis prompt
- */
-export const psiStep = (psi) => `
-${stepVerbose()} here is the full PSI audit in JSON for the page load.
-
-${JSON.stringify(psi, null, 2)}
 `;
 
 /**
@@ -67,20 +18,9 @@ ${JSON.stringify(psi, null, 2)}
  * @returns {string} PSI summary analysis prompt
  */
 export const psiSummaryStep = (psiSummary) => `
-${stepVerbose()} here is the summarized PSI audit for the page load.
+Here is the summarized PSI audit for the page load:
 
 ${psiSummary}
-`;
-
-/**
- * Prompt for HAR analysis
- * @param {Object} har - HAR data object
- * @returns {string} HAR analysis prompt
- */
-export const harStep = (har) => `
-${stepVerbose()} here is the HAR JSON object for the page:
-
-${JSON.stringify(har, null, 2)}
 `;
 
 /**
@@ -89,20 +29,9 @@ ${JSON.stringify(har, null, 2)}
  * @returns {string} HAR summary analysis prompt
  */
 export const harSummaryStep = (harSummary) => `
-${stepVerbose()} here is the summarized HAR data for the page:
+Here is the summarized HAR data for the page:
 
 ${harSummary}
-`;
-
-/**
- * Prompt for performance entries analysis
- * @param {Object} perfEntries - Performance entries object
- * @returns {string} Performance entries analysis prompt
- */
-export const perfStep = (perfEntries) => `
-${stepVerbose()} here are the performance entries for the page:
-
-${JSON.stringify(perfEntries, null, 2)}
 `;
 
 /**
@@ -111,7 +40,7 @@ ${JSON.stringify(perfEntries, null, 2)}
  * @returns {string} Performance entries summary analysis prompt
  */
 export const perfSummaryStep = (perfEntriesSummary) => `
-${stepVerbose()} here are summarized performance entries for the page load:
+Here are the summarized performance entries for the page load:
 
 ${perfEntriesSummary}
 `;
@@ -126,7 +55,7 @@ ${perfEntriesSummary}
 export const htmlStep = (pageUrl, resourcesOrHtml) => {
   const htmlData = typeof resourcesOrHtml === 'string' ? resourcesOrHtml : resourcesOrHtml?.[pageUrl];
 
-  return `${stepVerbose()} here is CWV-relevant HTML data for the page:
+  return `Here is CWV-relevant HTML data for the page:
 
 **Note**: This is an optimized extract containing only CWV-critical elements:
 - <head> metadata (preload, preconnect, scripts, stylesheets)
@@ -143,7 +72,7 @@ ${htmlData}`;
  * @returns {string} Rule analysis prompt
  */
 export const rulesStep = (rules) => `
-${stepVerbose()} here is the set of custom rules that failed for the page:
+Here is the set of custom rules that failed for the page:
 
 ${rules}
 `;
@@ -164,7 +93,7 @@ export const codeStep = (pageUrl, resources, threshold = 100_000) => {
        .filter(([,value]) => estimateTokenSize(value) < threshold) // do not bloat context with too large files
        .map(([key, value]) => `// File: ${key}\n${value}\n\n`).join('\n');
     return `
-${stepVerbose()} here are the source codes for the important files on the page (the name for each file is given
+Here are the source codes for the important files on the page (the name for each file is given
 to you as a comment before its content):
 
 ${code}
@@ -175,23 +104,12 @@ ${code}
 };
 
 /**
- * Prompt for code coverage analysis
- * @param {string} codeCoverage - Code coverage JSON
- * @returns {string} Code coverage analysis prompt
- */
-export const coverageStep = (codeCoverage) => `
-${stepVerbose()} here is the detailed JSON with code coverage data for the CSS and JS files in the page:
-
-${JSON.stringify(codeCoverage, null, 2)}
-`;
-
-/**
  * Prompt for code coverage summary analysis
  * @param {string} codeCoverageSummary - Code coverage summary text
  * @returns {string} Code coverage summary analysis prompt
  */
 export const coverageSummaryStep = (codeCoverageSummary) => `
-${stepVerbose()} here is the summarized code coverage data for the page:
+Here is the summarized code coverage data for the page:
 
 ${codeCoverageSummary}
 `;
@@ -202,16 +120,18 @@ ${codeCoverageSummary}
  * @returns {string} RUM data summary analysis prompt
  */
 export const rumSummaryStep = (rumSummary) => `
-${stepVerbose()} here is the Real User Monitoring (RUM) data from the last 7 days:
+Here is the Real User Monitoring (RUM) data from the last 7 days:
 
 ${rumSummary}
+
+**CRITICAL: Focus ONLY on "Current Page Metrics" section**
+- Report findings ONLY for the current page being analyzed
+- DO NOT report issues from "Other Pages on Site" unless marked as "CURRENT PAGE"
+- Site-wide metrics are provided for context/comparison only
 `;
 
-function getBasePrompt(cms, role) {
-  return `You are ${role} for Core Web Vitals optimization.
-
-## Technical Context
-${getTechnicalContext(cms)}`;
+function getBasePrompt(role) {
+  return `You are ${role} for Core Web Vitals optimization.`;
 }
 
 /**
@@ -222,29 +142,10 @@ function getChainOfThoughtGuidance() {
   return `
 ## Chain-of-Thought Reasoning (MANDATORY)
 
-For EVERY finding, you MUST provide structured reasoning using this 4-step chain:
+For EVERY finding, provide structured reasoning in the 4-step chain: observation -> diagnosis -> mechanism -> solution.
+Be concrete with file names, sizes (KB), timings (ms), and metric values. Reference exact sources.
 
-1. **Observation**: What specific data point did you observe?
-   - Be concrete: Include file names, sizes (in KB/MB), timings (in ms), metric values
-   - Reference exact sources: audit names, HAR entries, coverage percentages AND bytes
-   - Use the new rich data: byte-level savings, per-domain timings, font strategies
-
-2. **Diagnosis**: Why is this observation problematic for CWV?
-   - Connect the data to the problem
-   - Explain what makes this a bottleneck/waste/opportunity
-   - Reference thresholds (LCP > 2.5s, CLS > 0.1, INP > 200ms)
-
-3. **Mechanism**: How does this problem affect the specific metric?
-   - Trace the causal path: X causes Y which impacts Z
-   - Quantify the relationship (direct delay, cascading effect, etc.)
-   - Consider timing dependencies (blocking, sequential vs parallel)
-
-4. **Solution**: Why will your proposed fix address the root cause?
-   - Explain the mechanism of the fix
-   - Connect fix to the specific problem identified
-   - Justify why this is the right approach (not just a best practice)
-
-**Examples using Phase A+ rich data**:
+**Examples**:
 
 ### Good Reasoning (Coverage with Bytes):
 {
@@ -287,9 +188,9 @@ For EVERY finding, you MUST provide structured reasoning using this 4-step chain
 }
 
 export function cruxAgentPrompt(cms = 'eds') {
-  return `${getBasePrompt(cms, 'analyzing Chrome User Experience Report (CrUX) field data')}
+  return `${getBasePrompt('analyzing Chrome User Experience Report (CrUX) field data')}
 
-${getDataPriorityGuidance('perf_observer')}
+${getDataPriorityGuidance('crux')}
 
 ${getChainOfThoughtGuidance()}
 
@@ -333,16 +234,16 @@ Output:
 - Recommendation: Use PSI lab data as primary source, consider enabling RUM for field insights
 
 ## Your Analysis Focus
-${PHASE_FOCUS.CRUX(step())}
+${PHASE_FOCUS.CRUX}
 
 ${getStructuredOutputFormat('CrUX Agent')}
 `;
 }
 
 export function rumAgentPrompt(cms = 'eds') {
-  return `${getBasePrompt(cms, 'analyzing Real User Monitoring (RUM) field data')}
+  return `${getBasePrompt('analyzing Real User Monitoring (RUM) field data')}
 
-${getDataPriorityGuidance('perf_observer')}
+${getDataPriorityGuidance('rum')}
 
 ${getChainOfThoughtGuidance()}
 
@@ -375,14 +276,14 @@ Output:
 - Confidence: 0.95 (cross-validated by two field data sources)
 
 ## Your Analysis Focus
-${PHASE_FOCUS.RUM(step())}
+${PHASE_FOCUS.RUM}
 
 ${getStructuredOutputFormat('RUM Agent')}
 `;
 }
 
 export function psiAgentPrompt(cms = 'eds') {
-  return `${getBasePrompt(cms, 'analyzing PageSpeed Insights/Lighthouse results')}
+  return `${getBasePrompt('analyzing PageSpeed Insights/Lighthouse results')}
 
 ${getDataPriorityGuidance('psi')}
 
@@ -414,7 +315,7 @@ Output:
 - Confidence: 0.9 (dimensions fix is direct cause-effect)
 
 ## Your Analysis Focus
-${PHASE_FOCUS.PSI(step())}
+${PHASE_FOCUS.PSI}
 
 ${getStructuredOutputFormat('PSI Agent')}
 `;
@@ -436,7 +337,7 @@ ONLY report findings related to LCP timing or CLS attribution. Ignore long tasks
 `;
   }
 
-  return `${getBasePrompt(cms, 'analyzing Performance Observer data captured during page load simulation')}
+  return `${getBasePrompt('analyzing Performance Observer data captured during page load simulation')}
 ${focusInstruction}
 
 ${getDataPriorityGuidance('perf_observer')}
@@ -510,7 +411,7 @@ Output:
 - Recommendation: Defer or break up long tasks blocking main thread during page load
 
 ## Your Analysis Focus
-${PHASE_FOCUS.PERF_OBSERVER(step())}
+${PHASE_FOCUS.PERF_OBSERVER}
 
 ${getStructuredOutputFormat('Performance Observer Agent')}
 `;
@@ -532,7 +433,7 @@ ONLY report findings related to hero image or font network timing. Ignore other 
 `;
   }
 
-  return `${getBasePrompt(cms, 'analyzing HAR (HTTP Archive) file data for Core Web Vitals optimization focused on network performance')}
+  return `${getBasePrompt('analyzing HAR (HTTP Archive) file data for Core Web Vitals optimization focused on network performance')}
 ${focusInstruction}
 
 ${getDataPriorityGuidance('har')}
@@ -586,7 +487,7 @@ Output:
 - Recommendation: Fix cache headers (Cache-Control, Vary), increase TTL, check invalidation rules
 
 ## Your Analysis Focus
-${PHASE_FOCUS.HAR(step())}
+${PHASE_FOCUS.HAR}
 
 ${getStructuredOutputFormat('HAR Agent')}
 `;
@@ -609,7 +510,7 @@ ONLY report findings that match these patterns. Ignore all other issues.
 `;
   }
 
-  return `${getBasePrompt(cms, 'analyzing HTML markup for Core Web Vitals optimization opportunities')}
+  return `${getBasePrompt('analyzing HTML markup for Core Web Vitals optimization opportunities')}
 ${focusInstruction}
 
 ${getDataPriorityGuidance('html')}
@@ -671,7 +572,7 @@ Output:
 - Monitoring: hotjar.com, fullstory.com → Async
 - Social: facebook.net, linkedin.com → Async
 
-**Example 5: Font Loading Without font-display**
+**Example 6: Font Loading Without font-display**
 Input: @font-face rules without font-display property
 Output:
 - Finding: Custom fonts may cause invisible text (FOIT) during load
@@ -681,19 +582,19 @@ Output:
 - Fix: Add font-display: swap to @font-face rules, consider size-adjust for fallback
 
 ## Your Analysis Focus
-${PHASE_FOCUS.HTML(step())}
+${PHASE_FOCUS.HTML}
 
 ${getStructuredOutputFormat('HTML Agent')}
 `;
 }
 
 export function rulesAgentPrompt(cms = 'eds') {
-  return `${getBasePrompt(cms, 'analyzing failed performance rules to identify Core Web Vitals optimization opportunities')}
+  return `${getBasePrompt('analyzing failed performance rules to identify Core Web Vitals optimization opportunities')}
 
-${getDataPriorityGuidance('psi')}
+${getDataPriorityGuidance('rules')}
 
 ## Your Analysis Focus
-${PHASE_FOCUS.RULES(step())}
+${PHASE_FOCUS.RULES}
 
 ${getChainOfThoughtGuidance()}
 
@@ -702,7 +603,7 @@ ${getStructuredOutputFormat('Rules Agent')}
 }
 
 export function coverageAgentPrompt(cms = 'eds') {
-  return `${getBasePrompt(cms, 'analyzing JavaScript and CSS code coverage data to identify optimization opportunities for Core Web Vitals')}
+  return `${getBasePrompt('analyzing JavaScript and CSS code coverage data to identify optimization opportunities for Core Web Vitals')}
 
 ${getDataPriorityGuidance('coverage')}
 
@@ -735,19 +636,19 @@ Output:
 - Confidence: 0.9 (minified files still analyzed in Phase 0, library bloat is common)
 
 ## Your Analysis Focus
-${PHASE_FOCUS.COVERAGE(step())}
+${PHASE_FOCUS.COVERAGE}
 
 ${getStructuredOutputFormat('Coverage Agent')}
 `;
 }
 
 export function codeReviewAgentPrompt(cms = 'eds') {
-  return `${getBasePrompt(cms, 'analyzing JavaScript and CSS code for Core Web Vitals optimization opportunities, informed by code coverage analysis')}
+  return `${getBasePrompt('analyzing JavaScript and CSS code for Core Web Vitals optimization opportunities, informed by code coverage analysis')}
 
 ${getDataPriorityGuidance('code')}
 
 ## Your Analysis Focus
-${PHASE_FOCUS.CODE_REVIEW(step())}
+${PHASE_FOCUS.CODE_REVIEW}
 
 ${getChainOfThoughtGuidance()}
 
@@ -755,305 +656,3 @@ ${getStructuredOutputFormat('Code Review Agent')}
 `;
 }
 
-/**
- * Phase 4: Validation Agent
- * Validates findings and impact estimates, challenges weak evidence
- */
-export function validationAgentPrompt(cms = 'eds') {
-  return `${getBasePrompt(cms, 'validating agent findings and impact estimates for accuracy and confidence')}
-
-## Your Role
-
-You are the **Validation Agent** - the final quality gatekeeper. You validate findings from all agents and:
-1. Challenge impact estimates (realistic? overestimated?)
-2. Verify evidence quality (specific? concrete?)
-3. Validate reasoning chains
-4. Check calculations
-5. Block weak findings
-
-## Validation Criteria
-
-### Evidence Quality
-- Specific file references required
-- Concrete metric values required
-- Confidence ≥ 0.5
-
-### Impact Estimation
-- Max realistic: LCP 2s, CLS 0.3, INP 500ms, TBT 1s
-- Cascade efficiency: Not 1:1 (TTFB→FCP 80%, FCP→LCP 60%)
-- Minimum actionable: LCP 200ms, CLS 0.03, INP 50ms
-
-### Reasoning (Phase 2+)
-- All 4 steps > 20 chars
-- Includes numbers and file names
-
-## Output Format
-
-\`\`\`json
-{
-  "findingId": "string",
-  "isValid": boolean,
-  "confidence": 0-1,
-  "warnings": ["array of non-blocking issues"],
-  "errors": ["array of blocking issues"],
-  "adjustments": { "impact": { "reduction": adjusted_value } },
-  "recommendation": "APPROVE | ADJUST | BLOCK"
-}
-\`\`\`
-
-Validate all findings. Be strict - block weak findings, adjust overestimates.
-`;
-}
-
-/**
- * Phase 3: Causal Graph Builder Agent
- * Analyzes all findings from other agents and builds a dependency graph
- */
-export function causalGraphBuilderPrompt(cms = 'eds') {
-  return `${getBasePrompt(cms, 'building causal graphs from agent findings to identify root causes and relationships')}
-
-## Your Role
-
-You receive findings from 8 specialized agents (CrUX, RUM, PSI, Perf Observer, HTML, Rules, Coverage, Code Review) and your job is to:
-
-1. **Identify relationships** between findings
-2. **Distinguish root causes from symptoms**
-3. **Detect duplicate findings** (same issue reported by multiple agents)
-4. **Find compound issues** (multiple small issues combining to create larger problem)
-5. **Build causal chains** showing how issues relate
-
-## Output Schema
-
-Return a JSON object with this structure:
-
-\`\`\`json
-{
-  "nodes": {
-    "node-id": {
-      "id": "string",
-      "type": "metric | bottleneck | waste | opportunity",
-      "description": "string",
-      "isRootCause": boolean,
-      "causes": ["array of node IDs that cause this"],
-      "causedBy": ["array of node IDs this contributes to"]
-    }
-  },
-  "edges": [
-    {
-      "from": "cause-node-id",
-      "to": "effect-node-id",
-      "relationship": "blocks | delays | causes | contributes | depends | duplicates | compounds",
-      "strength": 0.0-1.0,
-      "mechanism": "explanation of how from causes to"
-    }
-  ],
-  "rootCauses": ["array of root cause node IDs"],
-  "criticalPaths": [
-    ["root-cause-id", "intermediate-id", "metric-id"]
-  ],
-  "deduplication": {
-    "duplicateGroups": [
-      ["finding-id-1", "finding-id-2"]  // Same issue, different agents
-    ],
-    "primaryFinding": "finding-id-1"  // Which one to keep
-  }
-}
-\`\`\`
-
-## Relationship Types
-
-- **blocks**: A prevents B from completing (render-blocking script blocks LCP)
-- **delays**: A slows down B (slow TTFB delays LCP)
-- **causes**: A directly creates B (missing dimensions causes CLS)
-- **contributes**: A partially contributes to B (unused code contributes to TBT)
-- **depends**: B cannot happen without A (LCP depends on FCP)
-- **duplicates**: A and B are the same issue (detected by multiple agents)
-- **compounds**: A + B together worsen C (multiple small CLS sources)
-
-## Chain-of-Thought Process
-
-For each relationship you identify, use this reasoning:
-
-1. **Observation**: What two findings are you connecting?
-   - Finding A: [description and evidence]
-   - Finding B: [description and evidence]
-
-2. **Connection**: Why are they related?
-   - Look for: same file, same metric, timing dependencies, causal mechanisms
-
-3. **Direction**: Which causes which?
-   - Does A cause B, or B cause A?
-   - Or are they duplicates (same issue, different perspective)?
-
-4. **Strength**: How confident are you in this relationship?
-   - High (0.9+): Direct evidence (same file, explicit timing)
-   - Medium (0.7-0.8): Strong correlation (same metric, logical connection)
-   - Low (0.5-0.6): Inference (might be related, unclear)
-
-## Example Analysis
-
-### Input Findings:
-\`\`\`json
-[
-  {
-    "id": "psi-lcp-1",
-    "type": "bottleneck",
-    "metric": "LCP",
-    "description": "Render-blocking script clientlib-site.js delays LCP by 420ms",
-    "evidence": { "source": "psi", "reference": "render-blocking-resources audit" }
-  },
-  {
-    "id": "coverage-unused-1",
-    "type": "waste",
-    "metric": "TBT",
-    "description": "clientlib-site.js contains 1147KB unused code (34%)",
-    "evidence": { "source": "coverage", "reference": "clientlib-site.js: 3348KB total" }
-  },
-  {
-    "id": "html-preload-1",
-    "type": "opportunity",
-    "metric": "LCP",
-    "description": "Hero image not preloaded",
-    "evidence": { "source": "html", "reference": "hero.jpg: 850KB, priority: Low" }
-  },
-  {
-    "id": "har-priority-1",
-    "type": "bottleneck",
-    "metric": "LCP",
-    "description": "Hero image loaded with low priority, delayed by 800ms",
-    "evidence": { "source": "har", "reference": "hero.jpg: priority: Low" }
-  }
-]
-\`\`\`
-
-### Output Graph:
-\`\`\`json
-{
-  "nodes": {
-    "metric-lcp": {
-      "id": "metric-lcp",
-      "type": "metric",
-      "description": "LCP is 4.5s (target: 2.5s)",
-      "isRootCause": false,
-      "causes": ["psi-lcp-1", "har-priority-1"],
-      "causedBy": []
-    },
-    "psi-lcp-1": {
-      "id": "psi-lcp-1",
-      "type": "bottleneck",
-      "description": "Render-blocking script clientlib-site.js delays LCP by 420ms",
-      "isRootCause": false,
-      "causes": ["coverage-unused-1"],
-      "causedBy": ["metric-lcp"]
-    },
-    "coverage-unused-1": {
-      "id": "coverage-unused-1",
-      "type": "waste",
-      "description": "clientlib-site.js contains 1147KB unused code",
-      "isRootCause": true,  // Root cause: no deeper issue causing this
-      "causes": [],
-      "causedBy": ["psi-lcp-1"]
-    },
-    "har-priority-1": {
-      "id": "har-priority-1",
-      "type": "bottleneck",
-      "description": "Hero image loaded with low priority",
-      "isRootCause": true,  // Root cause
-      "causes": [],
-      "causedBy": ["metric-lcp"]
-    }
-  },
-  "edges": [
-    {
-      "from": "psi-lcp-1",
-      "to": "metric-lcp",
-      "relationship": "delays",
-      "strength": 0.9,
-      "mechanism": "Render-blocking JavaScript prevents LCP element from rendering until script executes"
-    },
-    {
-      "from": "coverage-unused-1",
-      "to": "psi-lcp-1",
-      "relationship": "contributes",
-      "strength": 0.8,
-      "mechanism": "Unused code increases file size and parse time, making script take longer to execute"
-    },
-    {
-      "from": "har-priority-1",
-      "to": "metric-lcp",
-      "relationship": "delays",
-      "strength": 0.95,
-      "mechanism": "Low priority prevents browser from fetching LCP image early, delaying paint"
-    },
-    {
-      "from": "html-preload-1",
-      "to": "har-priority-1",
-      "relationship": "duplicates",
-      "strength": 1.0,
-      "mechanism": "Same issue (hero image priority) reported by HTML and HAR agents"
-    }
-  ],
-  "rootCauses": ["coverage-unused-1", "har-priority-1"],
-  "criticalPaths": [
-    ["coverage-unused-1", "psi-lcp-1", "metric-lcp"],
-    ["har-priority-1", "metric-lcp"]
-  ],
-  "deduplication": {
-    "duplicateGroups": [
-      ["html-preload-1", "har-priority-1"]
-    ],
-    "primaryFinding": "har-priority-1"  // More specific evidence
-  }
-}
-\`\`\`
-
-## Guidelines
-
-1. **Every metric node should have causes**: Don't leave metrics isolated
-2. **Root causes have no incoming edges**: They're the fundamental issues
-3. **Avoid circular dependencies**: A cannot cause B if B causes A
-4. **Use duplicates relationship**: Same issue from multiple agents
-5. **Compound relationships**: Multiple findings → one symptom
-6. **Strength reflects confidence**: Be honest about uncertainty
-7. **Connect Configuration → Waste → Performance** (Orphan Prevention):
-   - Coverage findings about third-party scripts are SYMPTOMS, not root causes
-   - Look for HTML findings about script loading attributes (async/defer, preconnect)
-   - Create edge chain: html-third-party-loading → coverage-js-third-party → metric-tbt
-   - Example: html-onetrust-blocking ("No async on otBannerSdk.js") → coverage-js-third-party-1 ("119KB otBannerSdk with unused code") → metric-tbt ("430ms TBT")
-8. **Every finding needs edges** (Orphan Prevention):
-   - If finding describes "large file" or "unused code" → it's a symptom → needs incoming edge from config/code finding
-   - If finding describes "missing attribute" or "poor config" → it's a root cause → needs outgoing edge to waste/perf finding
-   - Orphaned nodes indicate missing data or incomplete analysis
-
-## Critical: Edge Direction Rules ⚠️
-
-**Always create edges in this direction**: **Fundamental Cause → Observed Effect**
-
-Common patterns to follow:
-
-1. **Code patterns → Performance observations**
-   - ✅ CORRECT: code-pattern-id → perf-observation-id
-   - ❌ WRONG: perf-observation-id → code-pattern-id
-   - Example: "Code review finds render-blocking script" → "Perf Observer sees 420ms delay"
-
-2. **Configuration issues → Metric failures**
-   - ✅ CORRECT: html-missing-preload → har-slow-fetch → metric-lcp
-   - ❌ WRONG: metric-lcp → html-missing-preload
-
-3. **Hypotheses (Code Agent) → Facts (Perf/HAR Agent)**
-   - ✅ CORRECT: code-js-cloudflare-1 (hypothesis: "scripts likely block") → perf-inp-1 (fact: "1.5s long task observed")
-   - ❌ WRONG: perf-inp-1 (observation) → code-js-cloudflare-1 (explanation)
-   - **Rule**: When Code Agent hypothesizes about a pattern and Perf/HAR Agent observes the actual impact, the code pattern is the cause, the observation is the effect
-
-4. **Root cause checking**:
-   - If finding A describes "why" something happens → A is likely a cause
-   - If finding B describes "what" happens → B is likely an effect
-   - Example: "Missing dimensions" (why) → "Layout shift" (what)
-
-**When in doubt**: Ask "Which happened first in the causal chain?" - that's the 'from' node.
-
-## Your Task
-
-Analyze all provided findings and build a comprehensive causal graph showing how issues relate and which are root causes vs symptoms.
-`;
-}

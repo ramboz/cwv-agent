@@ -40,31 +40,9 @@ export {
 } from './multi-agents/orchestrator.js';
 
 // ============================================================================
-// Parser and Transformer Functions
+// Transformer Functions
 // ============================================================================
-export { extractStructuredSuggestions } from './multi-agents/utils/json-parser.js';
 export {
     transformFindingsToSuggestions,
     formatSuggestionsToMarkdown
 } from './multi-agents/utils/transformers.js';
-
-// ============================================================================
-// Utility Functions
-// ============================================================================
-
-/**
- * Extract markdown portion from LLM output (strips structured data section)
- * @param {string} content - Raw LLM output
- * @return {string} Markdown content without structured data section
- */
-export function extractMarkdownSuggestions(content) {
-    if (!content || typeof content !== 'string') return '';
-    const marker = /\n## STRUCTURED DATA FOR AUTOMATION[\s\S]*$/;
-    const idx = content.search(marker);
-    if (idx === -1) {
-        // No structured section found; return as-is
-        return content.trim();
-    }
-    const md = content.slice(0, idx - 4);
-    return md.trim();
-}

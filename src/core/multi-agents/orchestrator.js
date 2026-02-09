@@ -22,8 +22,6 @@ import { RESOURCE_DENYLIST_REGEX } from '../../config/regex-patterns.js';
 
 // Import runMultiAgents from suggestions-engine
 import { runMultiAgents } from './suggestions-engine.js';
-// Import extractMarkdownSuggestions from parent module (still there for now)
-import { extractMarkdownSuggestions } from '../multi-agents.js';
 
 // Re-export DEVICE_THRESHOLDS as DEFAULT_THRESHOLDS for backward compatibility
 export const DEFAULT_THRESHOLDS = DEVICE_THRESHOLDS;
@@ -273,9 +271,8 @@ export async function runAgentFlow(pageUrl, deviceType, options = {}) {
     // Execute agent flow (force conditional multi-agent mode)
     const { markdown, structuredData } = await runMultiAgents(pageData, tokenLimits, llm, options.model, { mode: options.mode });
 
-    // Persist markdown report (strip structured data section if present)
-    const markdownData = extractMarkdownSuggestions(markdown);
-    const path = cacheResults(pageUrl, deviceType, 'report', markdownData, '', options.model);
+    // Persist markdown report
+    const path = cacheResults(pageUrl, deviceType, 'report', markdown, '', options.model);
     console.log('✅ CWV report generated at:', path);
 
     // Save structured JSON directly (no need to extract from markdown!)

@@ -141,6 +141,16 @@ export class ModelAdapter {
       try {
         const response = await this._baseLLM.invoke(messages, options);
 
+        // Debug: Log empty generation detection
+        if (!response.content && !response.generations?.[0]?.[0]) {
+          console.warn('⚠️  Empty generation detected:', {
+            hasContent: !!response.content,
+            hasGenerations: !!response.generations?.[0]?.[0],
+            responseMetadata: response.response_metadata,
+            modelName: this.modelName
+          });
+        }
+
         // Track token usage and cost
         if (response.response_metadata?.usage) {
           const usage = response.response_metadata.usage;
@@ -155,6 +165,16 @@ export class ModelAdapter {
         return response;
       } catch (error) {
         lastError = error;
+
+        // Enhanced error logging with full details
+        console.error('❌ LLM invoke failed:', {
+          message: error.message,
+          errorType: error.constructor.name,
+          model: this.modelName,
+          attempt: attempt + 1,
+          partialResponse: error?.response?.data,
+          generations: error?.response?.data?.generations
+        });
 
         // Don't retry on certain errors
         if (this.isNonRetryableError(error)) {

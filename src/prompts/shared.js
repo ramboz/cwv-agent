@@ -46,12 +46,13 @@ Do not provide recommendations for:
 }
 
 /**
- * Returns data priority guidance for agents
- * @param {string} agentType - Type of agent (psi, coverage, perf_observer, har, code, html, thirdparty)
+ * Common analysis priorities shared by all agents.
+ * Included once in the global system prompt (initializeSystemAgents) to avoid
+ * repeating ~100 lines in every agent's prompt.
  * @return {String}
  */
-export function getDataPriorityGuidance(agentType) {
-  const commonPriorities = `## CRITICAL: ANALYSIS PRIORITIES
+export function getCommonAnalysisPriorities() {
+  return `## CRITICAL: ANALYSIS PRIORITIES
 
 **Your task is to identify HIGH IMPACT optimizations that meaningfully improve Core Web Vitals.**
 
@@ -97,7 +98,15 @@ When you find an issue, provide SPECIFIC DETAILS that other agents can't:
 2. Focus analysis effort on HIGH PRIORITY items first
 3. Only suggest MEDIUM PRIORITY if no HIGH PRIORITY issues found
 4. Every suggestion must pass the filtering criteria (>300ms LCP, >100ms INP, >0.05 CLS)`;
+}
 
+/**
+ * Returns agent-specific data priority guidance.
+ * Common priorities are now in the global system prompt (initializeSystemAgents).
+ * @param {string} agentType - Type of agent (psi, coverage, perf_observer, har, code, html, crux, rum, rules)
+ * @return {String}
+ */
+export function getDataPriorityGuidance(agentType) {
   const agentSpecificGuidance = {
     psi: `
 
@@ -146,16 +155,32 @@ When you find an issue, provide SPECIFIC DETAILS that other agents can't:
 - HIGHEST: Render-blocking scripts/styles in <head>
 - Ignore meta tags, SEO tags, below-fold markup`,
 
-    thirdparty: `
+    crux: `
 
-**Third-Party Priorities:**
-- HIGHEST: Third-party scripts blocking LCP (>200ms in critical path)
-- HIGHEST: Third-party causing main thread blocking >100ms
-- MEDIUM: Long-tail scripts with cumulative impact >500ms
-- Ignore analytics loaded after LCP unless they affect INP`
+**CrUX-Specific Priorities:**
+- HIGHEST: Metrics with >60% users in "poor" bucket (critical regression)
+- HIGHEST: Field-lab gaps >2x (real users much worse than lab)
+- MEDIUM: URL-level vs origin-level discrepancies (page-specific issues)
+- Ignore metrics already in "good" bucket unless recently regressed`,
+
+    rum: `
+
+**RUM-Specific Priorities:**
+- HIGHEST: Recent regressions (7-day RUM worse than 28-day CrUX)
+- HIGHEST: Page-specific issues (current page worse than site average)
+- MEDIUM: Device/connection breakdown showing specific cohorts affected
+- Ignore other pages' metrics -- only analyze current page`,
+
+    rules: `
+
+**Rules-Specific Priorities:**
+- HIGHEST: Failed rules that directly map to CWV metric failures (LCP, CLS, INP)
+- HIGHEST: AEM configuration-level violations (clientlib, component, dispatcher)
+- MEDIUM: Rules that correlate with findings from other agents (PSI, HAR)
+- Ignore informational rules that don't impact CWV thresholds`
   };
 
-  return commonPriorities + (agentSpecificGuidance[agentType] || '');
+  return agentSpecificGuidance[agentType] || '';
 }
 
 /**
@@ -165,48 +190,9 @@ When you find an issue, provide SPECIFIC DETAILS that other agents can't:
 export function getDeliverableFormat() {
   return `## Deliverable Format
 
-**IMPORTANT**: You will generate ONLY structured JSON. The markdown report will be automatically formatted from your JSON output.
+**IMPORTANT**: You will generate ONLY structured JSON. The JSON schema is enforced automatically -- follow the field naming exactly.
 
-If any metric already meets Google's "good" thresholds, you may skip recommendations for that metric OR include low-priority maintenance suggestions.
-
-### Output Schema (Structured JSON)
-
-You must return a JSON object matching this exact schema:
-
-\`\`\`json
-{
-  "deviceType": "string - mobile or desktop",
-  "suggestions": [
-    {
-      "semanticType": "string - issue category: lcp-image | font-format | font-preload | image-sizing | unused-code | js-execution | layout-shift | blocking-resource | ttfb | third-party | etc. (optional)",
-      "title": "string - short, actionable title (required)",
-      "description": "string - business-friendly description of the issue (required)",
-      "solution": "string - clear explanation of the recommended fix in plain language (required)",
-      "metric": "string OR array - primary metric(s) affected: LCP, CLS, INP, TBT, TTFB, FCP (optional)",
-      "priority": "High | Medium | Low (optional)",
-      "effort": "Easy | Medium | Hard (optional)",
-      "estimatedImpact": "string - expected improvement range (optional)",
-      "confidence": "number - 0-1 confidence score (optional)",
-      "evidence": ["array of strings - specific evidence supporting this recommendation (optional)"],
-      "codeChanges": [
-        {
-          "file": "string - file path",
-          "line": "number - line number (optional)",
-          "before": "string - code before change (optional)",
-          "after": "string - code after change (optional)"
-        }
-      ],
-      "validationCriteria": ["array of strings - how to verify the fix worked (optional)"],
-      "verification": {
-        "tool": "lighthouse | chrome-devtools | web-vitals-library | crux | psi | manual",
-        "method": "string - step-by-step instructions to verify fix (e.g., '1. Open Chrome DevTools\\n2. Go to Lighthouse tab\\n3. Run Mobile audit\\n4. Check LCP metric')",
-        "expectedImprovement": "string - what user should see if fix is successful (e.g., 'LCP should decrease from 4.2s to ~3.0s')",
-        "acceptanceCriteria": "string - optional threshold to consider fix successful (e.g., 'LCP ≤ 2.5s to pass CWV')"
-      }
-    }
-  ]
-}
-\`\`\`
+If any metric already meets Google's "good" thresholds, skip recommendations for that metric or include low-priority maintenance suggestions.
 
 ### Guidelines for Suggestions
 
@@ -216,61 +202,15 @@ You must return a JSON object matching this exact schema:
 4. **Evidence-Based**: Each suggestion should reference specific data from agent findings
 5. **Actionable**: Focus on what to change, not just what's wrong
 6. **Confidence Scoring**: Provide realistic confidence based on evidence quality
-7. **Verification Instructions**: Include clear, step-by-step verification for each suggestion (see below)
+7. **Verification Instructions**: Include tool, method (step-by-step), expectedImprovement, and optional acceptanceCriteria
 
-### Verification Requirements (IMPORTANT)
-
-For EVERY suggestion, include a "verification" object to help customers validate fixes immediately:
-
-**Required fields:**
-- **tool**: Which tool to use (lighthouse, chrome-devtools, web-vitals-library, crux, psi, or manual)
-- **method**: Step-by-step instructions (use \\n for line breaks)
-- **expectedImprovement**: Specific numbers showing before/after state
-
-**Optional field:**
-- **acceptanceCriteria**: Threshold to consider fix successful (e.g., "LCP ≤ 2.5s")
-
-**Tool Selection Guide:**
-- **lighthouse**: For comprehensive CWV metrics (LCP, CLS, INP) - recommended for most cases
-- **chrome-devtools**: For detailed performance profiling (long tasks, layout shifts)
-- **web-vitals-library**: For programmatic metric collection in production
-- **crux**: For real-world field data (28-day P75 metrics)
-- **psi**: For combined lab + field data from PageSpeed Insights
-- **manual**: For visual inspection or accessibility checks
-
-**Example verification objects:**
-
-\`\`\`json
-{
-  "verification": {
-    "tool": "lighthouse",
-    "method": "1. Open Chrome DevTools (F12)\\n2. Navigate to Lighthouse tab\\n3. Select 'Mobile' device\\n4. Click 'Analyze page load'\\n5. Check LCP metric in report",
-    "expectedImprovement": "LCP should decrease from 4.2s to approximately 3.0s (1.2s improvement)",
-    "acceptanceCriteria": "LCP ≤ 2.5s to pass Core Web Vitals threshold"
-  }
-}
-\`\`\`
-
-\`\`\`json
-{
-  "verification": {
-    "tool": "chrome-devtools",
-    "method": "1. Open Performance tab in DevTools\\n2. Click record button\\n3. Reload page\\n4. Stop recording after 5 seconds\\n5. Check 'Long Tasks' in timeline for tasks >50ms",
-    "expectedImprovement": "Long task count should decrease from 8 tasks to 2-3 tasks",
-    "acceptanceCriteria": "No long tasks exceeding 200ms"
-  }
-}
-\`\`\`
-
-\`\`\`json
-{
-  "verification": {
-    "tool": "manual",
-    "method": "1. Clear browser cache\\n2. Open DevTools Network tab\\n3. Reload page\\n4. Visually observe when largest content appears\\n5. Check Network waterfall for image load timing",
-    "expectedImprovement": "Hero image should appear 800ms earlier in visual timeline"
-  }
-}
-\`\`\`
+**Verification Tool Selection:**
+- **lighthouse**: CWV metrics (LCP, CLS, INP) -- recommended for most suggestions
+- **chrome-devtools**: Performance profiling (long tasks, layout shifts)
+- **web-vitals-library**: Programmatic metric collection in production
+- **crux**: Real-world field data (28-day P75)
+- **psi**: Combined lab + field data
+- **manual**: Visual inspection
 
 ### Critical: Third-Party Resource Hint Rules
 
@@ -386,177 +326,44 @@ Include validation criteria so developers can verify the fix:
 }
 
 /**
- * Returns structured output format instructions for agent findings (Phase 1)
- * @param {string} agentName - Name of the agent
- * @return {string} Structured output format instructions
+ * Returns behavioral guidance for agent findings output quality.
+ * NOTE: The JSON schema is enforced by withStructuredOutput(agentOutputSchemaFlat)
+ * so we only provide behavioral instructions here, not the schema itself.
+ * @param {string} agentName - Name of the agent (for ID prefixing guidance)
+ * @return {string} Behavioral output guidance
  */
 export function getStructuredOutputFormat(agentName) {
   return `
-## Output Format (Phase 1 - Structured Findings)
+## Output Quality Guidelines
 
-You must output your findings as a JSON object with the following schema:
+**Finding Type Classification:**
+- **bottleneck**: Resources/code blocking critical metrics (render-blocking scripts, slow TTFB)
+- **waste**: Unnecessary resources (unused code, oversized images)
+- **opportunity**: Potential improvements not currently blocking (missing preload, better caching)
 
-\`\`\`json
-{
-  "agentName": "${agentName}",
-  "findings": [
-    {
-      "id": "string (unique ID, e.g., 'psi-lcp-1', 'har-ttfb-1')",
-      "type": "bottleneck | waste | opportunity",
-      "metric": "LCP | CLS | INP | TBT | TTFB | FCP | TTI | SI",
-      "description": "string (human-readable finding, min 10 chars)",
+**Evidence Confidence Scale:**
+- 0.9-1.0: Direct measurement, highly reliable data
+- 0.7-0.8: Strong correlation, reliable audit
+- 0.5-0.6: Reasonable inference, some uncertainty
+- <0.5: Speculative -- avoid reporting findings this low
 
-      "evidence": {
-        "source": "string (data source: psi, har, coverage, crux, rum, code, html, rules, perfEntries)",
-        "reference": "string (specific data point: audit name, file:line, timing breakdown, etc.)",
-        "confidence": number (0-1, your confidence in this finding)
-      },
-
-      "estimatedImpact": {
-        "metric": "string (which metric improves)",
-        "reduction": number (estimated improvement: ms, score, bytes, etc.)",
-        "confidence": number (0-1, confidence in estimate)",
-        "calculation": "string (optional: show your work)"
-      },
-
-      "reasoning": {
-        "observation": "string (what you observed in the data)",
-        "diagnosis": "string (why this is causing the problem)",
-        "mechanism": "string (how it impacts the metric)",
-        "solution": "string (why the proposed fix will work)",
-        "codeExample": "string (OPTIONAL: AEM-specific code example with file path, using \`\`\`lang\\ncode\`\`\` format)"
-      },
-
-      "relatedFindings": ["array of related finding IDs (optional)"],
-      "rootCause": boolean (true = root cause, false = symptom)
-    }
-  ],
-  "metadata": {
-    "executionTime": number (ms),
-    "dataSourcesUsed": ["array of data sources examined"],
-    "coverageComplete": boolean (did you examine all relevant data?)
-  }
-}
-\`\`\`
-
-### Finding Type Classification
-
-- **bottleneck**: Resources/code blocking critical metrics (render-blocking scripts, slow TTFB, etc.)
-- **waste**: Unnecessary resources that don't contribute to UX (unused code, oversized images, etc.)
-- **opportunity**: Optimization chances that aren't currently blocking but could improve metrics (missing preload, better caching, etc.)
-
-### Evidence Requirements
-
-- **source**: Must match your data source (e.g., "psi", "har", "coverage")
-- **reference**: Be specific - include audit names, file paths with line numbers, timing breakdowns, etc.
-- **confidence**:
-  - 0.9-1.0: Direct measurement, highly reliable data
-  - 0.7-0.8: Strong correlation, reliable audit
-  - 0.5-0.6: Reasonable inference, some uncertainty
-  - <0.5: Speculative, uncertain
-
-### Impact Estimation
-
-- Provide quantified estimates (not just "improves performance")
+**Impact Estimation:**
+- Quantify all estimates (ms, KB, score) -- never just "improves performance"
 - Show your calculation if non-obvious
-- Be conservative - under-promise, over-deliver
-- Consider cascading effects (e.g., FCP → LCP)
+- Be conservative -- under-promise, over-deliver
+- Account for cascading effects (e.g., FCP -> LCP is ~60-80% efficiency, not 1:1)
 
-### Root Cause vs Symptom
+**Root Cause vs Symptom:**
+- **Root cause (rootCause: true)**: Fundamental issue (e.g., "full library import instead of tree-shaking")
+- **Symptom (rootCause: false)**: Observable effect (e.g., "LCP is slow at 4.2s")
 
-- **Root cause (true)**: Fundamental issue causing the problem (e.g., "full library imports instead of tree-shaking")
-- **Symptom (false)**: Observable effect of underlying issue (e.g., "LCP is slow at 4.2s")
-
-### Chain-of-Thought Reasoning (Phase 2)
-
-The **reasoning** field captures your analytical process using a structured 4-step chain:
-
-1. **observation**: What specific data point did you observe?
-   - Example: "Hero image (hero.jpg, 850KB) loaded with priority: Low in HAR"
-
-2. **diagnosis**: Why is this observation problematic?
-   - Example: "Low priority prevents browser from prioritizing this LCP resource, causing delayed fetch"
-
-3. **mechanism**: How does this problem affect the metric?
-   - Example: "Image fetch delayed by ~800ms, directly delaying LCP paint event"
-
-4. **solution**: Why will your proposed fix address the root cause?
-   - Example: "Adding fetchpriority='high' signals browser to prioritize image, eliminating the 800ms delay"
-
-**Guidelines**:
-- Be specific with data references (file names, sizes, timings)
-- Connect observation → diagnosis → mechanism → solution
-- Use byte sizes from coverage (not just percentages)
-- Reference per-domain timings from HAR
-- Cite font-display values from font strategy
-
-### Code Example Guidelines (Optional in Findings)
-
-Agents MAY include a code example in \`reasoning.codeExample\` if the fix is implementation-specific:
-
-**Format**:
-\`\`\`lang
-File: /absolute/path/to/file.ext
-
-code here
-\`\`\`
-
-**When to include**:
-- Clear, actionable implementation (e.g., "add fetchpriority='high' to hero image")
-- AEM-specific patterns (clientlib, HTL, dispatcher config)
-- Simple fixes that don't require multi-file changes
-
-**When to skip**:
-- Complex architectural changes (defer to final synthesis)
-- Multi-step implementations
-- Requires extensive explanation
-
-**Example**:
-\`\`\`json
-"reasoning": {
-  "solution": "Adding fetchpriority='high' to the hero image will signal the browser to prioritize it",
-  "codeExample": "File: /apps/myproject/components/content/hero/hero.html\\n\\n<img src=\\"\\$\{image.src\}\\"\\n     fetchpriority=\\"high\\"\\n     loading=\\"eager\\" />"
-}
-\`\`\`
-
-### Example Finding (Phase 2 with Reasoning)
-
-\`\`\`json
-{
-  "id": "psi-lcp-1",
-  "type": "bottleneck",
-  "metric": "LCP",
-  "description": "Three render-blocking scripts delay LCP by 850ms",
-  "evidence": {
-    "source": "psi.audits.render-blocking-resources",
-    "reference": "app.js (420ms), analytics.js (280ms), vendor.js (150ms)",
-    "confidence": 0.85
-  },
-  "estimatedImpact": {
-    "metric": "LCP",
-    "reduction": 650,
-    "confidence": 0.75,
-    "calculation": "850ms blocking → ~600-700ms LCP improvement (not 1:1 due to cascading)"
-  },
-  "reasoning": {
-    "observation": "PSI reports 3 render-blocking scripts: app.js (420ms), analytics.js (280ms), vendor.js (150ms), total 850ms",
-    "diagnosis": "Scripts without async/defer block HTML parsing until they execute, preventing LCP element from rendering",
-    "mechanism": "Render blocking delays FCP by 850ms, which cascades to delay LCP by ~600-700ms (not 1:1 due to parallel resource loading)",
-    "solution": "Adding async/defer attributes allows parsing to continue, eliminating blocking time and improving LCP"
-  },
-  "relatedFindings": ["coverage-unused-1"],
-  "rootCause": true
-}
-\`\`\`
-
-**IMPORTANT**: Output ONLY valid JSON. Do not include any text before or after the JSON object.
+**ID Convention:** Use "${agentName.toLowerCase().replace(/\s+/g, '-')}-{metric}-{n}" format (e.g., "psi-lcp-1", "har-ttfb-2")
 `;
 }
 
-// Centralized per-phase bullet lists (no headings), used by both
-// initializeSystem (single-shot) and agent prompts (multi-agent)
+// Centralized per-agent focus instructions used by agent prompts (multi-agent)
 export const PHASE_FOCUS = {
-  CRUX: (n) => `### Step ${n}: CrUX Data Analysis
+  CRUX: `### CrUX Data Analysis
 - Analyze Chrome User Experience Report (CrUX) field data for the URL
 - Evaluate historical Core Web Vitals trends from real users
 - Identify distribution patterns for LCP, CLS, and INP metrics
@@ -573,37 +380,42 @@ export const PHASE_FOCUS = {
 - Include distribution data when relevant: "75% of users experience CLS > 0.25"
 - Reference histogram bins for severity context: "good: 15%, needs-improvement: 20%, poor: 65%"`,
 
-  RUM: (n) => `### Step ${n}: Real User Monitoring (RUM) Analysis
-- Analyze recent RUM data (last 7 days) for the specific page being analyzed
-- Compare RUM metrics to CrUX aggregate data to identify page-specific issues
+  RUM: `### Real User Monitoring (RUM) Analysis
+- **PRIMARY FOCUS**: Analyze "Current Page Metrics" section for the page being analyzed
+- Compare current page RUM metrics to site-wide p75 to identify page-specific issues
 - Identify temporal trends: Is performance improving or degrading over the 7-day period?
 - Analyze device/connection breakdown if available (mobile vs desktop, connection types)
-- Look for outliers: Are there specific user sessions with extremely poor metrics?
-- Identify interaction patterns: Which elements trigger poor INP?
-- Correlate LCP targets with actual LCP elements observed in RUM
+- Look for outliers in current page data: specific user sessions with extremely poor metrics
+- Identify interaction patterns: Which elements trigger poor INP on THIS page?
+- Correlate LCP targets with actual LCP elements observed in RUM for THIS page
+
+**CRITICAL RULE**:
+- ONLY report findings for metrics from "Current Page Metrics" section
+- DO NOT report issues from "Other Pages on Site" unless marked "CURRENT PAGE"
+- Site-wide metrics and other pages are for context/comparison only
 
 **Key Differences from CrUX**:
 - RUM is page-specific, CrUX is origin-level or URL-level aggregate
 - RUM is recent (7 days), CrUX is 28-day rolling average
 - RUM may have more granular attribution data (targets, interaction types)
-- Use RUM to validate or contradict CrUX findings
+- Use RUM to validate or contradict CrUX findings FOR THE CURRENT PAGE
 
 **Evidence Requirements for RUM Data**:
-- RUM evidence must include metric name, value, sample size, and time context
-- ✅ GOOD: "RUM INP p75: 450ms (n=1,234 samples over 7 days), worst: 1200ms on /checkout"
-- ✅ GOOD: "RUM LCP trending worse: 2.1s → 2.8s over past week"
+- RUM evidence must include metric name, value, sample size, and time context FOR CURRENT PAGE
+- ✅ GOOD: "Current page RUM INP p75: 450ms (n=234 samples over 7 days)"
+- ✅ GOOD: "Current page LCP: 2.8s (vs. site-wide p75: 2.1s) - page-specific issue"
 - ❌ BAD: "INP is slow" (no specifics)
-- Include comparison to CrUX when relevant: "RUM INP (450ms) worse than CrUX (380ms) - recent regression?"
-- Reference specific pages/URLs if performance varies across the site`,
+- ❌ BAD: "Page X has 11s TTFB" (if X is not the current page being analyzed)
+- Include comparison to site-wide when relevant: "Current page INP (450ms) worse than site p75 (380ms)"`,
 
-  PSI: (n) => `### Step ${n}: PageSpeed Assessment
+  PSI: `### PageSpeed Assessment
 - Evaluate PSI/Lighthouse mobile results
 - Identify key bottlenecks for each metric
 - Establish baseline performance measurements
 - Record current values for LCP, CLS, and INP
 - Note any immediate red flags in the results`,
 
-  PERF_OBSERVER: (n) => `### Step ${n}: Performance Observer Analysis
+  PERF_OBSERVER: `### Performance Observer Analysis
 - Analyze performance entries captured during page load simulation
 - Examine largest-contentful-paint entries to identify LCP candidates, their timings, elements, and potential delays
 - **PRIORITY 2: Use CSS-to-CLS Attribution for layout shift analysis**
@@ -631,7 +443,7 @@ export const PHASE_FOCUS = {
 - Review resource timing entries for critical resources, comparing with HAR data for discrepancies or finer details
 - Correlate paint timings (first-paint, first-contentful-paint) with resource loading and rendering events`,
 
-  HAR: (n) => `### Step ${n}: HAR File Analysis
+  HAR: `### HAR File Analysis
 - Examine network waterfall for resource loading sequence and timing
 - Identify critical path resources that block rendering
 - Analyze request/response headers for optimization opportunities
@@ -686,7 +498,7 @@ export const PHASE_FOCUS = {
   * Example finding: "3-level JS chain (main.js → translations.js → adobe.js) adds 3.3s sequential delay. Preloading translations.js and adobe.js would allow parallel download, saving ~2s of network waterfall time"
   * Only recommend preloading for core framework/library scripts — not for individual page-specific blocks or components`,
 
-  HTML: (n) => `### Step ${n}: Markup Analysis
+  HTML: `### Markup Analysis
 - Examine provided HTML for the page
 - Identify the LCP element and verify its loading attributes
 - Review resource hints (preload, preconnect, prefetch) implementation
@@ -714,7 +526,7 @@ export const PHASE_FOCUS = {
   - Include category (consent, analytics, tag-manager, social, monitoring)
   - Example: "OneTrust consent script (otBannerSdk.js) in <head> without async/defer, category: consent"`,
 
-  RULES: (n) => `### Step ${n}: Rule Violation Analysis
+  RULES: `### Rule Violation Analysis
 - Review the provided summary of failed, manually evaluated rules
 - Correlate specific rule violations with findings from previous phases (PSI, PerfObserver, HAR, Markup)
 - Use these violations as targeted pointers for deeper investigation, particularly in the Code Review phase
@@ -722,7 +534,7 @@ export const PHASE_FOCUS = {
 - Note any AEM-specific rule failures that might point to configuration-level, component-level or platform-level optimizations
 - Assess the potential impact of each reported violation on CWV metrics`,
 
-  COVERAGE: (n) => `### Step ${n}: Code Coverage Analysis
+  COVERAGE: `### Code Coverage Analysis
 - Analyze JavaScript and CSS coverage data from page load simulation
 - Identify unused code portions that can be safely removed or deferred
 - Correlate unused code with resource loading performance impact
@@ -738,7 +550,7 @@ export const PHASE_FOCUS = {
 - Evaluate trade-offs between code removal complexity and performance gains
 - Identify patterns where entire third-party libraries are loaded but minimally used`,
 
-  CODE_REVIEW: (n) => `### Step ${n}: Code Review
+  CODE_REVIEW: `### Code Review
 - Analyze provided JS/CSS for optimization opportunities, informed by coverage analysis in Phase 7
 - Evaluate rendering sequence and execution patterns in scripts.js
 - Identify load phase assignments (eager, lazy, delayed) for resources

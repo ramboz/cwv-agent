@@ -42,11 +42,11 @@ export async function collectRUMData(url, deviceType, options = {}) {
   try {
     const domain = new URL(url).hostname;
 
-    // Fetch last 7 days of RUM data (bundles are indexed by date)
+    // Fetch last N days of RUM data starting from yesterday (bundles are indexed by date)
     const dates = getLast7Days(daysBack);
     const allRumData = [];
 
-    console.log(`Fetching RUM data for ${domain} from last ${daysBack} days...`);
+    console.log(`Fetching RUM data for ${domain} (${daysBack} days ending yesterday)...`);
 
     for (const date of dates) {
       const rumApiUrl = `https://bundles.aem.page/bundles/${domain}/${date}?domainkey=${domainKey}`;
@@ -192,15 +192,17 @@ export async function collectRUMData(url, deviceType, options = {}) {
 }
 
 /**
- * Generates array of date strings for the last N days in YYYY/MM/DD format
+ * Generates array of date strings for the last N days in YYYY/MM/DD format.
+ * Starts from yesterday to avoid partial data for the current day.
  * @param {number} daysBack - Number of days to go back
- * @returns {Array<string>} Array of date strings
+ * @return {String[]} Array of date strings (most recent first)
  */
 function getLast7Days(daysBack = 7) {
   const dates = [];
   const today = new Date();
 
-  for (let i = 0; i < daysBack; i++) {
+  // Start from yesterday (i=1) to avoid partial data for the current day
+  for (let i = 1; i <= daysBack; i++) {
     const date = new Date(today);
     date.setDate(today.getDate() - i);
 
@@ -396,9 +398,10 @@ function calculateP75(values) {
 /**
  * Summarizes RUM data for agent consumption
  * @param {Object} rumData - RUM data object with summary
+ * @param {string} currentPageUrl - URL of the page being analyzed (to filter metrics)
  * @returns {string} Markdown formatted summary
  */
-export function summarizeRUM(rumData) {
+export function summarizeRUM(rumData, currentPageUrl = null) {
   if (!rumData?.summary) {
     return '**RUM Data:** Not available (site may not use Helix RUM, or no recent data)';
   }
@@ -409,8 +412,35 @@ export function summarizeRUM(rumData) {
   report += `* **Data Collection:** ${bundleCount} bundles from last ${daysAnalyzed} days\n`;
   report += `* **Advantage:** More recent than CrUX (28-day rolling average)\n\n`;
 
-  // Core Web Vitals Summary
-  report += `**Core Web Vitals (p75):**\n\n`;
+  // Find current page data if URL provided
+  const currentPage = currentPageUrl && byUrl ? byUrl.find(u => u.url === currentPageUrl) : null;
+
+  if (currentPage) {
+    report += `**Current Page Metrics (${new URL(currentPageUrl).pathname}):**\n\n`;
+    report += `* **Bundle Count:** ${currentPage.bundleCount} samples\n`;
+    if (currentPage.inp !== null) {
+      const inpStatus = currentPage.inp <= CWV_METRICS.INP.good ? '✅ GOOD' : currentPage.inp <= CWV_METRICS.INP.needsImprovement ? '⚠️ NEEDS IMPROVEMENT' : '❌ POOR';
+      report += `* **INP:** ${currentPage.inp}ms ${inpStatus}\n`;
+    }
+    if (currentPage.lcp !== null) {
+      const lcpStatus = currentPage.lcp <= CWV_METRICS.LCP.good ? '✅ GOOD' : currentPage.lcp <= CWV_METRICS.LCP.needsImprovement ? '⚠️ NEEDS IMPROVEMENT' : '❌ POOR';
+      report += `* **LCP:** ${currentPage.lcp}ms ${lcpStatus}\n`;
+    }
+    if (currentPage.cls !== null) {
+      const clsStatus = currentPage.cls <= CWV_METRICS.CLS.good ? '✅ GOOD' : currentPage.cls <= CWV_METRICS.CLS.needsImprovement ? '⚠️ NEEDS IMPROVEMENT' : '❌ POOR';
+      report += `* **CLS:** ${currentPage.cls.toFixed(3)} ${clsStatus}\n`;
+    }
+    if (currentPage.ttfb !== null) {
+      const ttfbStatus = currentPage.ttfb <= CWV_METRICS.TTFB.good ? '✅ GOOD' : currentPage.ttfb <= CWV_METRICS.TTFB.needsImprovement ? '⚠️ NEEDS IMPROVEMENT' : '❌ POOR';
+      report += `* **TTFB:** ${currentPage.ttfb}ms ${ttfbStatus}\n`;
+    }
+    report += `\n`;
+  } else if (currentPageUrl) {
+    report += `**Current Page:** No RUM data found for ${new URL(currentPageUrl).pathname} in last ${daysAnalyzed} days\n\n`;
+  }
+
+  // Core Web Vitals Summary (site-wide p75)
+  report += `**Site-Wide Core Web Vitals (p75 across all pages):**\n\n`;
 
   // INP
   if (metrics.inp) {
@@ -489,12 +519,17 @@ export function summarizeRUM(rumData) {
     report += `\n`;
   }
 
-  // Worst performing pages (by combined score)
+  // Worst performing pages (by combined score) - for context only
   if (byUrl && byUrl.length > 0) {
-    report += `**Worst Performing Pages (Combined CWV Score):**\n\n`;
+    report += `**Other Pages on Site (for context - NOT findings for current page):**\n\n`;
+    report += `ℹ️  **Note:** The following are OTHER pages on the site, included for comparison only.\n`;
+    report += `**Do NOT report these as issues** unless the current page being analyzed appears in this list.\n\n`;
+
     byUrl.slice(0, DISPLAY_LIMITS.RUM.MAX_WORST_PAGES).forEach(({ url, bundleCount, inp, lcp, cls, ttfb, score }, idx) => {
       const urlPath = new URL(url).pathname;
-      report += `${idx + 1}. \`${urlPath}\` (${bundleCount} bundles, score: ${score.toFixed(2)})\n`;
+      const isCurrentPage = currentPageUrl && url === currentPageUrl;
+      const marker = isCurrentPage ? ' ⬅️ **CURRENT PAGE**' : '';
+      report += `${idx + 1}. \`${urlPath}\`${marker} (${bundleCount} bundles, score: ${score.toFixed(2)})\n`;
       if (inp !== null) report += `   * INP: ${inp}ms\n`;
       if (lcp !== null) report += `   * LCP: ${lcp}ms\n`;
       if (cls !== null) report += `   * CLS: ${cls.toFixed(3)}\n`;

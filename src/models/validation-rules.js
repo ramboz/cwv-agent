@@ -53,8 +53,13 @@ export const ValidationRules = {
     requiresFileReference: true,       // Must mention file names
     requiresMetricValues: true,        // Must include actual numbers
     allowedSources: [
+      // Base formats (exact match)
       'psi', 'crux', 'rum', 'har', 'coverage',
-      'perfEntries', 'html', 'rules', 'code'
+      'perfEntries', 'html', 'rules', 'code',
+      // Agent output formats (partial match)
+      'PSI Audit', 'PerformanceObserver', 'html-analysis',
+      'Custom Rule Evaluation', 'RUM Data Summary',
+      'Code Coverage Analysis', 'HAR', 'Code Review',
     ],
   },
 
@@ -64,9 +69,9 @@ export const ValidationRules = {
     maxRealisticImpact: {
       LCP: 2000,          // 2s max LCP improvement
       CLS: 0.3,           // 0.3 max CLS improvement
-      INP: 500,           // 500ms max INP improvement
+      INP: 2000,          // 2s max INP improvement (long tasks can be 1700-3200ms)
       TBT: 1000,          // 1s max TBT improvement
-      TTFB: 1500,         // 1.5s max TTFB improvement
+      TTFB: 10000,        // 10s max TTFB improvement (measured 19.5s TTFB exists)
       FCP: 1500,          // 1.5s max FCP improvement
     },
 
@@ -124,11 +129,55 @@ export const ValidationRules = {
 function getSourceTier(source) {
   if (!source) return 'speculative';
 
-  // Handle prefixed sources like 'psi.audits'
+  // Normalize source string for matching
+  const normalizedSource = source.toLowerCase();
+
+  // Try exact match first (handles 'psi', 'crux', 'psi.audits.X', etc.)
   const baseSource = source.split('.')[0];
   const reliability = ValidationRules.EVIDENCE_RELIABILITY[baseSource];
 
-  return reliability?.tier || 'speculative';
+  if (reliability) {
+    return reliability.tier;
+  }
+
+  // Handle agent output formats with flexible substring matching
+  // Field tier (0.95 confidence)
+  if (normalizedSource.includes('crux') || normalizedSource.includes('chrome ux report')) {
+    return 'field';
+  }
+  if (normalizedSource.includes('rum') || normalizedSource.includes('real user monitoring')) {
+    return 'field';
+  }
+
+  // Lab tier (0.80-0.85 confidence)
+  if (normalizedSource.includes('psi') || normalizedSource.includes('pagespeed') || normalizedSource.includes('page speed')) {
+    return 'lab';
+  }
+  if (normalizedSource.includes('har') || normalizedSource.includes('http archive')) {
+    return 'lab';
+  }
+  if (normalizedSource.includes('performance') && (normalizedSource.includes('observer') || normalizedSource.includes('entries'))) {
+    return 'lab';
+  }
+  if (normalizedSource.includes('coverage') || normalizedSource.includes('code coverage')) {
+    return 'lab';
+  }
+
+  // Static tier (0.75 confidence)
+  if (normalizedSource.includes('html')) {
+    return 'static';
+  }
+  if (normalizedSource.includes('rule') || normalizedSource.includes('custom rule')) {
+    return 'static';
+  }
+
+  // Speculative tier (0.65 confidence)
+  if (normalizedSource.includes('code review') || normalizedSource.includes('code-review')) {
+    return 'speculative';
+  }
+
+  // Default to speculative for unknown sources
+  return 'speculative';
 }
 
 /**
@@ -142,13 +191,24 @@ function getSourceTier(source) {
 function calibrateConfidenceBySource(rawConfidence, source) {
   if (!source) return rawConfidence;
 
-  // Handle prefixed sources like 'psi.audits'
+  // Try exact match first (handles 'psi', 'crux', 'psi.audits.X', etc.)
   const baseSource = source.split('.')[0];
-  const reliability = ValidationRules.EVIDENCE_RELIABILITY[baseSource];
+  let reliability = ValidationRules.EVIDENCE_RELIABILITY[baseSource];
 
+  // If no exact match, determine tier from source string and lookup max confidence
   if (!reliability) {
-    // Unknown source - apply conservative cap
-    return Math.min(rawConfidence, 0.6);
+    const tier = getSourceTier(source);
+
+    // Map tier to max confidence using first matching source in that tier
+    const tierMatches = Object.entries(ValidationRules.EVIDENCE_RELIABILITY)
+      .filter(([_, rel]) => rel.tier === tier);
+
+    if (tierMatches.length > 0) {
+      reliability = tierMatches[0][1];
+    } else {
+      // Unknown source - apply conservative cap
+      return Math.min(rawConfidence, 0.6);
+    }
   }
 
   // Cap confidence at the source's maximum reliability
@@ -253,10 +313,16 @@ function validateEvidence(evidence) {
     return { warnings, errors };
   }
 
-  // Check source validity (allow prefixes like 'psi.audits' to match 'psi')
-  const isValidSource = ValidationRules.EVIDENCE.allowedSources.some(allowed =>
-    evidence.source === allowed || evidence.source.startsWith(allowed + '.')
-  );
+  // Check source validity (allow partial matches for flexible agent output formats)
+  const sourceNormalized = (evidence.source || '').toLowerCase();
+  const isValidSource = ValidationRules.EVIDENCE.allowedSources.some(allowed => {
+    const allowedNormalized = allowed.toLowerCase();
+    // Match if source contains allowed string or vice versa
+    return evidence.source === allowed ||
+           evidence.source.startsWith(allowed + '.') ||
+           sourceNormalized.includes(allowedNormalized) ||
+           allowedNormalized.includes(sourceNormalized);
+  });
   if (!isValidSource) {
     warnings.push(`Unusual evidence source: ${evidence.source}`);
   }
@@ -271,19 +337,31 @@ function validateEvidence(evidence) {
     errors.push('Evidence reference too vague (must be >10 chars with specifics)');
   }
 
-  // Check for file names (not required for field data sources)
+  // Check for file names (not required for field data sources or PSI audits)
   if (ValidationRules.EVIDENCE.requiresFileReference) {
-    const isFieldData = evidence.source === 'crux' || evidence.source === 'rum';
+    const sourceNormalized = (evidence.source || '').toLowerCase();
+    const isFieldData = sourceNormalized.includes('crux') || sourceNormalized.includes('rum');
+    const isPSIAudit = sourceNormalized.includes('psi') || sourceNormalized.includes('pagespeed');
     const hasFileName = /\.(js|css|html|woff2?|jpg|png|webp|svg)/i.test(ref);
-    if (!hasFileName && !isFieldData) {
+
+    // PSI audits reference audit names (e.g., "Reduce unused JavaScript"), not files
+    // Field data is aggregate metrics, not file-specific
+    if (!hasFileName && !isFieldData && !isPSIAudit) {
       warnings.push('Evidence lacks specific file reference');
     }
   }
 
   // Check for metric values (not required for field data/perf entries - they are metrics)
   if (ValidationRules.EVIDENCE.requiresMetricValues) {
-    const isMetricSource = evidence.source === 'crux' || evidence.source === 'rum' || evidence.source === 'perfEntries';
-    const hasNumbers = /\d+\s*(ms|KB|MB|s|%)/i.test(ref);
+    const sourceNormalized = (evidence.source || '').toLowerCase();
+    const isMetricSource = sourceNormalized.includes('crux') ||
+                           sourceNormalized.includes('rum') ||
+                           sourceNormalized.includes('performance') ||
+                           sourceNormalized.includes('perfentries');
+
+    // Match numbers with units (ms, KB, MB, s, %) or numbers with ms/s decimal notation
+    const hasNumbers = /\d+(\.\d+)?\s*(ms|KB|MB|s|%)/i.test(ref) || /\d+\.\d+\s?ms/i.test(ref);
+
     if (!hasNumbers && !isMetricSource) {
       warnings.push('Evidence lacks concrete metric values');
     }

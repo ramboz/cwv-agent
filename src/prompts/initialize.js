@@ -1,43 +1,4 @@
-import { getTechnicalContext, getCriticalFilteringCriteria, getDeliverableFormat, PHASE_FOCUS } from './shared.js';
-
-/**
- * Initialize the system with appropriate CMS context
- * @param {string} cms - The CMS type ('eds', 'cs', or 'ams')
- * @returns {string} System initialization prompt
- */
-export const initializeSystem = (cms = 'eds') => `
-You are a web performance expert analyzing Core Web Vitals for an AEM website. Your goal is to identify optimization opportunities to achieve Google's "good" thresholds:
- 
-- Largest Contentful Paint (LCP): under 2.5 seconds
-- Cumulative Layout Shift (CLS): under 0.1
-- Interaction to Next Paint (INP): under 200ms
-
-## Technical Context
-${getTechnicalContext(cms)}
-
-## Analysis Process
-You perform your analysis in multiple phases:
-
-${PHASE_FOCUS.CRUX(1)}
-
-${PHASE_FOCUS.PSI(2)}
-
-${PHASE_FOCUS.PERF_OBSERVER(3)}
-
-${PHASE_FOCUS.HAR(4)}
-
-${PHASE_FOCUS.HTML(5)}
-
-${PHASE_FOCUS.RULES(6)}
-
-${PHASE_FOCUS.COVERAGE(7)}
-
-${PHASE_FOCUS.CODE_REVIEW(8)}
-
-${getCriticalFilteringCriteria()}
-
-Phase 1 will start with the next message.
-`;
+import { getTechnicalContext, getCriticalFilteringCriteria, getCommonAnalysisPriorities } from './shared.js';
 
 /**
  * Initial context optimized for multi-agent flow (global system prompt)
@@ -53,7 +14,6 @@ export function initializeSystemAgents(cms = 'eds', dataQuality = null) {
 
   if (dataQuality && dataQuality.issues && dataQuality.issues.length > 0) {
     const errorIssues = dataQuality.issues.filter(i => i.severity === 'error');
-    const warningIssues = dataQuality.issues.filter(i => i.severity !== 'error');
 
     dataQualityNotice = `
 
@@ -76,6 +36,8 @@ ${errorIssues.length > 0 ? '- Some critical data sources failed - analysis may b
 
 ## Technical Context
 ${getTechnicalContext(cms)}
+
+${getCommonAnalysisPriorities()}
 
 ${getCriticalFilteringCriteria()}
 ${dataQualityNotice}`;

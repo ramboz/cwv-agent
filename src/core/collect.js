@@ -52,8 +52,8 @@ export async function getRUM(pageUrl, deviceType, options) {
   const data = result.data;
   const { source } = result.metadata;
 
-  // Generate markdown summary for agents
-  const summary = summarizeRUM(data);
+  // Generate markdown summary for agents (pass pageUrl for filtering)
+  const summary = summarizeRUM(data, pageUrl);
 
   if (source === 'cache') {
     console.log('✓ Loaded RUM data from cache. Estimated token size: ~', estimateTokenSize(summary, options.model));
