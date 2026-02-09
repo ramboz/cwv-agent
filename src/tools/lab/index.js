@@ -64,7 +64,7 @@ export async function collect(pageUrl, deviceType, { skipCache, blockRequests, c
     return Result.ok(
       {
         har: collectHar ? harFile : null,
-        harSummary: collectHar && harFile ? summarizeHAR(harFile, deviceType, thirdPartyAnalysis) : null,
+        harSummary: collectHar && harFile ? summarizeHAR(harFile, deviceType, { thirdPartyAnalysis, pageUrl }) : null,
         perfEntries,
         perfEntriesSummary: summarizePerformanceEntries(perfEntries, deviceType, null, clsAttributionSummary),
         fullHtml,
@@ -230,8 +230,8 @@ export async function collect(pageUrl, deviceType, { skipCache, blockRequests, c
   let perfEntriesSummary = summarizePerformanceEntries(perfEntries, deviceType, null, clsAttribution);
   cacheResults(pageUrl, deviceType, 'perf', perfEntriesSummary);
 
-  // Generate HAR summary (with Priority 1 third-party analysis)
-  const harSummary = collectHar && harFile ? summarizeHAR(harFile, deviceType, thirdPartyAnalysis) : null;
+  // Generate HAR summary (with Priority 1 third-party analysis and pageUrl)
+  const harSummary = collectHar && harFile ? summarizeHAR(harFile, deviceType, { thirdPartyAnalysis, pageUrl }) : null;
   if (collectHar && harFile) {
     cacheResults(pageUrl, deviceType, 'har', harFile);
     cacheResults(pageUrl, deviceType, 'har', harSummary);

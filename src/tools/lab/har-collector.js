@@ -28,7 +28,11 @@ export class HARCollector extends LabDataCollector {
     return har;
   }
 
-  summarize(harData, { thirdPartyAnalysis = null } = {}) {
+  summarize(harData, { thirdPartyAnalysis = null, pageUrl = null } = {}) {
+    // Store for use in analyze methods
+    this.thirdPartyAnalysis = thirdPartyAnalysis;
+    this.pageUrl = pageUrl;
+
     // Validate data
     const error = this.validateOrDefault(
       harData?.log?.entries,
@@ -679,6 +683,24 @@ export class HARCollector extends LabDataCollector {
   }
 
   /**
+   * Determine resource type from HAR entry
+   * @param {Object} entry - HAR entry
+   * @returns {string} Resource type: script, stylesheet, font, image, fetch, document, other
+   */
+  getResourceType(entry) {
+    const mime = entry.response?.content?.mimeType?.toLowerCase() || '';
+    const url = entry.request?.url || '';
+
+    if (mime.includes('javascript') || url.endsWith('.js')) return 'script';
+    if (mime.includes('css') || url.endsWith('.css')) return 'stylesheet';
+    if (mime.includes('font') || /\.(woff2?|ttf|otf|eot)$/.test(url)) return 'font';
+    if (mime.includes('image') || /\.(png|jpg|jpeg|gif|svg|webp|avif)$/.test(url)) return 'image';
+    if (mime.includes('json') || url.includes('/api/')) return 'fetch';
+    if (mime.includes('html')) return 'document';
+    return 'other';
+  }
+
+  /**
    * Build request chains from HAR entries by tracing initiator relationships.
    * Returns a tree structure where each node has children that it initiated.
    * @param {Array} entries - HAR entries
@@ -687,14 +709,26 @@ export class HARCollector extends LabDataCollector {
   buildRequestChains(entries) {
     // Build a map of URL -> entry (first occurrence) and URL -> node
     const urlToEntry = new Map();
-    const nodes = new Map(); // url -> { url, entry, children: [], initiatorUrl }
+    const nodes = new Map(); // url -> { url, entry, children: [], initiatorUrl, resourceType, isThirdParty }
+
+    // Determine page origin for third-party detection
+    const pageOrigin = this.pageUrl ? new URL(this.pageUrl).origin : null;
 
     for (const entry of entries) {
       const url = entry.request?.url;
       if (!url) continue;
       if (!urlToEntry.has(url)) {
         urlToEntry.set(url, entry);
-        nodes.set(url, { url, entry, children: [], initiatorUrl: null });
+
+        const resourceOrigin = new URL(url).origin;
+        nodes.set(url, {
+          url,
+          entry,
+          children: [],
+          initiatorUrl: null,
+          resourceType: this.getResourceType(entry),
+          isThirdParty: pageOrigin ? resourceOrigin !== pageOrigin : false
+        });
       }
     }
 
@@ -743,16 +777,37 @@ export class HARCollector extends LabDataCollector {
       ? new Date(node.entry.startedDateTime).getTime()
       : 0;
 
-    const current = { url: node.url, startTime, fanOut: node.children.length };
+    const current = {
+      url: node.url,
+      startTime,
+      fanOut: node.children.length,
+      resourceType: node.resourceType,
+      isThirdParty: node.isThirdParty
+    };
     const path = [...ancestors, current];
 
     for (const child of node.children) {
       const childStart = child.entry?.startedDateTime
         ? new Date(child.entry.startedDateTime).getTime()
         : 0;
-      // Sequential: child started >50ms after parent (not loaded in parallel with parent)
-      if (childStart > startTime + 50) {
+
+      // Special handling for stylesheet and font chains (lower threshold)
+      // CSS → font chains often have small timing gaps but are sequential by definition
+      const isStylesheetOrFont = node.resourceType === 'stylesheet' || node.resourceType === 'font';
+      const threshold = isStylesheetOrFont ? 20 : 50;
+
+      // Use parent completion time for more accurate sequential detection
+      // A child can't be caused by a parent that hasn't finished yet
+      const parentDuration = node.entry?.time || 0;
+      const parentEnd = startTime + parentDuration;
+
+      // Sequential: child started after parent completes + threshold
+      if (childStart > parentEnd + threshold) {
         this.collectChainSegments(child, path, segments);
+      } else {
+        // Parallel child - still explore its subtree for secondary chains
+        // Don't accumulate this node's delay, but check if it has sequential children
+        this.collectChainSegments(child, [], segments);
       }
     }
 
@@ -841,18 +896,26 @@ export class HARCollector extends LabDataCollector {
     // Report sequential chains
     if (uniqueChains.length > 0) {
       uniqueChains.slice(0, 3).forEach(({ path, totalDelay }) => {
-        report += `    * Chain depth: ${path.length}, sequential delay: ~${Math.round(totalDelay)}ms\n`;
+        const classification = this.classifyChain(path, this.thirdPartyAnalysis);
+
+        report += `    * Chain depth: ${path.length}, sequential delay: ~${Math.round(totalDelay)}ms`;
+        report += ` [${classification}]\n`;
+
         const baseTime = path[0].startTime;
         path.forEach((step, i) => {
           const relativeTime = i === 0 ? '0ms' : `+${Math.round(step.startTime - baseTime)}ms`;
           const urlShort = this.truncate(step.url);
-          report += `        ${i + 1}. ${urlShort} (${relativeTime})`;
+          const typeLabel = step.resourceType ? ` (${step.resourceType})` : '';
+          const thirdPartyLabel = step.isThirdParty ? ' [3P]' : '';
+
+          report += `        ${i + 1}. ${urlShort}${typeLabel}${thirdPartyLabel} (${relativeTime})`;
           if (step.fanOut > 1) {
             report += ` → fans out to ${step.fanOut} resources`;
           }
           report += '\n';
         });
-        report += `    * **Recommendation**: Preload scripts in this chain via \`<link rel="preload" as="script">\` in the HTML \`<head>\` to enable parallel downloading\n`;
+
+        report += `    * ${this.generateChainRecommendation(path, classification)}\n`;
       });
     }
 
@@ -888,6 +951,74 @@ export class HARCollector extends LabDataCollector {
       if (!current) break;
     }
     return path;
+  }
+
+  /**
+   * Classify a chain as critical, deferrable, or mixed
+   * @param {Array} path - Chain path array [{url, startTime, resourceType, isThirdParty, ...}]
+   * @param {Object} thirdPartyAnalysis - Third-party analysis data
+   * @returns {string} 'critical', 'deferrable', or 'mixed'
+   */
+  classifyChain(path, thirdPartyAnalysis) {
+    // Extract third-party categories for each node
+    const categories = path.map(node => {
+      if (!node.isThirdParty) return 'first-party';
+
+      try {
+        const hostname = new URL(node.url).hostname;
+        const analysis = thirdPartyAnalysis?.byDomain?.[hostname];
+        return analysis?.category || 'unknown';
+      } catch {
+        return 'unknown';
+      }
+    });
+
+    // Check if entire chain is non-critical third-parties
+    const allNonCritical = categories.every(cat =>
+      ['analytics', 'consent', 'tag-manager', 'monitoring', 'advertising'].includes(cat)
+    );
+
+    // Check if chain contains critical-path resources
+    const hasCriticalResources = path.some(node =>
+      node.resourceType === 'stylesheet' ||
+      node.resourceType === 'font' ||
+      (node.resourceType === 'script' && !node.isThirdParty)
+    );
+
+    if (allNonCritical) return 'deferrable';
+    if (hasCriticalResources) return 'critical';
+    return 'mixed';
+  }
+
+  /**
+   * Generate recommendation based on chain classification and resource types
+   * @param {Array} path - Chain path
+   * @param {string} classification - 'critical', 'deferrable', or 'mixed'
+   * @returns {string} Recommendation text
+   */
+  generateChainRecommendation(path, classification) {
+    if (classification === 'deferrable') {
+      return '**Recommendation**: Defer these third-party scripts to post-LCP using `async` or `defer` attributes, or lazy load them after user interaction';
+    }
+
+    const types = [...new Set(path.map(n => n.resourceType))];
+    const recommendations = [];
+
+    if (types.includes('stylesheet')) {
+      recommendations.push('`<link rel="preload" as="style" href="...">`');
+    }
+    if (types.includes('font')) {
+      recommendations.push('`<link rel="preload" as="font" type="font/woff2" crossorigin href="...">`');
+    }
+    if (types.includes('script') && classification === 'critical') {
+      recommendations.push('`<link rel="preload" as="script" href="...">`');
+    }
+
+    if (recommendations.length > 0) {
+      return `**Recommendation**: Preload critical resources in the HTML \`<head>\` to enable parallel downloading: ${recommendations.join(', ')}`;
+    }
+
+    return '**Recommendation**: Consider removing or deferring non-critical resources in this chain';
   }
 
   // Helper methods
@@ -941,7 +1072,7 @@ export function cleanupHarData(har) {
   return collector.cleanupHarData(har);
 }
 
-export function summarizeHAR(harData, deviceType, thirdPartyAnalysis = null) {
+export function summarizeHAR(harData, deviceType, options = {}) {
   const collector = new HARCollector(deviceType);
-  return collector.summarize(harData, { thirdPartyAnalysis });
+  return collector.summarize(harData, options);
 }
