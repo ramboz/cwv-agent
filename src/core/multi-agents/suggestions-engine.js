@@ -406,6 +406,14 @@ export async function runMultiAgents(pageData, tokenLimits, llm, model, options 
     const tasks = agentsConfig.map(agent => ({ agent: agent.name }));
     const responses = await system.executeParallelTasks(tasks);
 
+    // Cooldown before synthesis to avoid API burst after batched agent calls
+    // Agent batching uses AGENT_BATCH_DELAY between batches (default 2000ms)
+    // Last batch has NO delay, so synthesis would fire immediately after
+    // This pause reuses the same delay to give Gemini API time to recover
+    const SYNTHESIS_COOLDOWN = parseInt(process.env.AGENT_BATCH_DELAY || '2000', 10);
+    console.log(`⏳ Waiting ${SYNTHESIS_COOLDOWN / 1000}s before synthesis to avoid API burst...`);
+    await new Promise(resolve => setTimeout(resolve, SYNTHESIS_COOLDOWN));
+
     // Phase 1: Collect quality metrics from agent outputs
     // Parse agent outputs to extract structured findings (if present)
     // Note: responses now contain Result objects from agent system
