@@ -674,7 +674,17 @@ export const PHASE_FOCUS = {
   * Forms (typeform, jotform) → preconnect ONLY if form above-fold (Issue #4 fix)
   * Video (wistia, vidyard, brightcove) → preconnect ONLY if video is LCP element (Issue #4 fix)
 - Reference the \`getCategoryRecommendation()\` function output for each category
-- Example: "session-replay category (clarity.microsoft.com): NEVER preconnect, action: defer, reason: 200-500ms overhead"`,
+- Example: "session-replay category (clarity.microsoft.com): NEVER preconnect, action: defer, reason: 200-500ms overhead"
+- **PRIORITY 3: Analyze JS Request Chains for Sequential Loading Patterns**
+  * Look for the "JS Request Chains" section in the HAR summary — it shows sequential script loading chains
+  * Sequential chains create waterfall delays: each script must be downloaded AND executed before triggering the next level's imports
+  * Common pattern in bundled sites: main.js imports translations.js which imports adobe.js which loads alloy.js
+  * Each level in the chain adds the script's download time + execution time before the next level can start
+  * For chains with depth >= 3 and total delay > 500ms, recommend preloading the chain scripts
+  * Recommendation: Add \`<link rel="preload" as="script">\` in the HTML \`<head>\` (or via HTTP Link headers) for the scripts in the chain. This allows the browser to download ALL scripts in parallel while still executing them in dependency order
+  * This is different from removing scripts — the scripts still need to run, they just don't need to be discovered sequentially
+  * Example finding: "3-level JS chain (main.js → translations.js → adobe.js) adds 3.3s sequential delay. Preloading translations.js and adobe.js would allow parallel download, saving ~2s of network waterfall time"
+  * Only recommend preloading for core framework/library scripts — not for individual page-specific blocks or components`,
 
   HTML: (n) => `### Step ${n}: Markup Analysis
 - Examine provided HTML for the page

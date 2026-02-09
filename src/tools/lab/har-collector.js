@@ -70,6 +70,7 @@ export class HARCollector extends LabDataCollector {
       () => this.findRedirects(entries),
       () => this.analyzeServerHeaders(entries),
       () => this.analyzeCacheHeaders(entries),
+      () => this.analyzeRequestChains(entries),
       () => this.generatePerDomainSummary(entries)
     ];
 
@@ -636,6 +637,257 @@ export class HARCollector extends LabDataCollector {
     }
 
     return report;
+  }
+
+  /**
+   * Resolve the initiator URL for a HAR entry.
+   * puppeteer-har stores initiator data in two fields:
+   * - _initiator: simple URL string (may be absent)
+   * - _initiator_detail: JSON-stringified object with {type, url, lineNumber}
+   *   or {type, stack: {callFrames: [{url, lineNumber, ...}]}}
+   * @param {Object} entry - HAR entry
+   * @returns {string|null} Initiator URL or null
+   */
+  resolveInitiatorUrl(entry) {
+    const entryUrl = entry.request?.url;
+
+    // Try _initiator_detail first (richer data)
+    const detail = entry._initiator_detail;
+    if (detail) {
+      try {
+        const parsed = typeof detail === 'string' ? JSON.parse(detail) : detail;
+
+        // Stack frames: use the first (most recent) frame as initiator
+        if (parsed.stack?.callFrames?.length > 0) {
+          const frame = parsed.stack.callFrames.find(f =>
+            f.url && f.url.startsWith('http') && f.url !== entryUrl
+          );
+          if (frame) return frame.url;
+        }
+
+        // Direct url field (no stack, e.g., parser-initiated)
+        if (parsed.url && parsed.url !== entryUrl) return parsed.url;
+      } catch {
+        // ignore parse errors
+      }
+    }
+    // Fall back to _initiator (simple URL string or object with .url)
+    const initiator = entry._initiator;
+    if (typeof initiator === 'string' && initiator.startsWith('http')) return initiator;
+    if (initiator?.url) return initiator.url;
+    return null;
+  }
+
+  /**
+   * Build request chains from HAR entries by tracing initiator relationships.
+   * Returns a tree structure where each node has children that it initiated.
+   * @param {Array} entries - HAR entries
+   * @returns {Object} { chains: Map<url, {entry, children}>, roots: string[] }
+   */
+  buildRequestChains(entries) {
+    // Build a map of URL -> entry (first occurrence) and URL -> node
+    const urlToEntry = new Map();
+    const nodes = new Map(); // url -> { url, entry, children: [], initiatorUrl }
+
+    for (const entry of entries) {
+      const url = entry.request?.url;
+      if (!url) continue;
+      if (!urlToEntry.has(url)) {
+        urlToEntry.set(url, entry);
+        nodes.set(url, { url, entry, children: [], initiatorUrl: null });
+      }
+    }
+
+    // Build parent-child relationships
+    const roots = [];
+    for (const entry of entries) {
+      const url = entry.request?.url;
+      if (!url || !nodes.has(url)) continue;
+
+      const node = nodes.get(url);
+      const initiatorUrl = this.resolveInitiatorUrl(entry);
+
+      if (initiatorUrl && nodes.has(initiatorUrl) && initiatorUrl !== url) {
+        node.initiatorUrl = initiatorUrl;
+        const parent = nodes.get(initiatorUrl);
+        // Avoid duplicates
+        if (!parent.children.some(c => c.url === url)) {
+          parent.children.push(node);
+        }
+      } else if (initiatorUrl && !nodes.has(initiatorUrl)) {
+        // Initiated by something outside HAR entries (e.g., the HTML document)
+        roots.push(url);
+      }
+    }
+
+    // Find root nodes: entries with no parent in the tree
+    for (const [url, node] of nodes) {
+      if (!node.initiatorUrl && !roots.includes(url)) {
+        roots.push(url);
+      }
+    }
+
+    return { nodes, roots };
+  }
+
+  /**
+   * Walk the initiator tree and collect all sequential chain segments.
+   * A segment is a parent->child link where the child started significantly
+   * after the parent (indicating the parent had to execute first).
+   * @param {Object} node - Tree node
+   * @param {Array} ancestors - Ancestor path to this node [{url, startTime}]
+   * @param {Array} segments - Accumulator for chain segments
+   */
+  collectChainSegments(node, ancestors = [], segments = []) {
+    const startTime = node.entry?.startedDateTime
+      ? new Date(node.entry.startedDateTime).getTime()
+      : 0;
+
+    const current = { url: node.url, startTime, fanOut: node.children.length };
+    const path = [...ancestors, current];
+
+    for (const child of node.children) {
+      const childStart = child.entry?.startedDateTime
+        ? new Date(child.entry.startedDateTime).getTime()
+        : 0;
+      // Sequential: child started >50ms after parent (not loaded in parallel with parent)
+      if (childStart > startTime + 50) {
+        this.collectChainSegments(child, path, segments);
+      }
+    }
+
+    // If this is a leaf or all children are parallel, record the full path as a chain
+    if (path.length >= 3) {
+      const totalDelay = path[path.length - 1].startTime - path[0].startTime;
+      if (totalDelay > 500) {
+        segments.push({ path, totalDelay });
+      }
+    }
+  }
+
+  /**
+   * Analyze request chains to find sequential loading patterns
+   * that could benefit from preloading.
+   *
+   * Detects two types of issues:
+   * 1. Deep sequential chains (A->B->C) where preloading B and C would parallelize downloads
+   * 2. High-fanout bottleneck nodes: a single script that triggers many dependent scripts,
+   *    all delayed because the parent had to be fetched and executed first
+   *
+   * @param {Array} entries - HAR entries
+   * @returns {string|null} Report section or null
+   */
+  analyzeRequestChains(entries) {
+    const { nodes, roots } = this.buildRequestChains(entries);
+
+    // --- Part 1: Find sequential chains (depth >= 3) ---
+    const chains = [];
+    for (const rootUrl of roots) {
+      const rootNode = nodes.get(rootUrl);
+      if (!rootNode) continue;
+      this.collectChainSegments(rootNode, [], chains);
+    }
+
+    // Deduplicate: many chains share the same backbone (e.g., HTML->main->get-translations)
+    // but differ only in the leaf node. Keep one chain per unique backbone.
+    chains.sort((a, b) => b.totalDelay - a.totalDelay || b.path.length - a.path.length);
+    const seenBackbones = new Set();
+    const uniqueChains = chains.filter(({ path }) => {
+      // Backbone = all nodes except the leaf (which varies)
+      const backbone = path.slice(0, -1).map(s => s.url).join('->');
+      if (seenBackbones.has(backbone)) return false;
+      seenBackbones.add(backbone);
+      return true;
+    });
+
+    // --- Part 2: Find high-fanout bottleneck nodes ---
+    // A node that triggers many children (>5) all delayed by >200ms
+    const bottlenecks = [];
+    for (const [, node] of nodes) {
+      if (node.children.length < 5) continue;
+      const parentStart = node.entry?.startedDateTime
+        ? new Date(node.entry.startedDateTime).getTime()
+        : 0;
+      const delayedChildren = node.children.filter(child => {
+        const childStart = child.entry?.startedDateTime
+          ? new Date(child.entry.startedDateTime).getTime()
+          : 0;
+        return childStart > parentStart + 200;
+      });
+      if (delayedChildren.length >= 5) {
+        const childStarts = delayedChildren.map(c =>
+          new Date(c.entry.startedDateTime).getTime()
+        );
+        const minDelay = Math.min(...childStarts) - parentStart;
+        const maxDelay = Math.max(...childStarts) - parentStart;
+        bottlenecks.push({
+          url: node.url,
+          parentStart,
+          delayedCount: delayedChildren.length,
+          totalChildren: node.children.length,
+          minDelay: Math.round(minDelay),
+          maxDelay: Math.round(maxDelay),
+          // trace the initiator path back to root
+          initiatorChain: this.traceInitiatorPath(node, nodes),
+        });
+      }
+    }
+    bottlenecks.sort((a, b) => b.delayedCount - a.delayedCount);
+
+    if (uniqueChains.length === 0 && bottlenecks.length === 0) return null;
+
+    let report = '* **JS Request Chains (Sequential Loading Detected):**\n';
+
+    // Report sequential chains
+    if (uniqueChains.length > 0) {
+      uniqueChains.slice(0, 3).forEach(({ path, totalDelay }) => {
+        report += `    * Chain depth: ${path.length}, sequential delay: ~${Math.round(totalDelay)}ms\n`;
+        const baseTime = path[0].startTime;
+        path.forEach((step, i) => {
+          const relativeTime = i === 0 ? '0ms' : `+${Math.round(step.startTime - baseTime)}ms`;
+          const urlShort = this.truncate(step.url);
+          report += `        ${i + 1}. ${urlShort} (${relativeTime})`;
+          if (step.fanOut > 1) {
+            report += ` → fans out to ${step.fanOut} resources`;
+          }
+          report += '\n';
+        });
+        report += `    * **Recommendation**: Preload scripts in this chain via \`<link rel="preload" as="script">\` in the HTML \`<head>\` to enable parallel downloading\n`;
+      });
+    }
+
+    // Report high-fanout bottlenecks
+    if (bottlenecks.length > 0) {
+      report += `    * **High-Fanout Bottleneck Nodes:**\n`;
+      bottlenecks.slice(0, 3).forEach(bn => {
+        report += `        * ${this.truncate(bn.url)} triggers ${bn.delayedCount} delayed resources (${bn.minDelay}-${bn.maxDelay}ms after parent)\n`;
+        if (bn.initiatorChain.length > 1) {
+          report += `          Initiator path: ${bn.initiatorChain.map(u => this.truncate(u, 50)).join(' → ')}\n`;
+        }
+      });
+      report += `    * **Recommendation**: Preload the bottleneck scripts so the browser can discover and download their dependencies earlier\n`;
+    }
+
+    return report;
+  }
+
+  /**
+   * Trace the initiator path from a node back to its root.
+   * @param {Object} node - Tree node
+   * @param {Map} nodes - All nodes map
+   * @returns {Array<string>} Path of URLs from root to this node
+   */
+  traceInitiatorPath(node, nodes) {
+    const path = [node.url];
+    let current = node;
+    const visited = new Set();
+    while (current.initiatorUrl && !visited.has(current.initiatorUrl)) {
+      visited.add(current.initiatorUrl);
+      path.unshift(current.initiatorUrl);
+      current = nodes.get(current.initiatorUrl);
+      if (!current) break;
+    }
+    return path;
   }
 
   // Helper methods
