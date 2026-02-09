@@ -12,6 +12,7 @@
 import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { RunnableSequence } from '@langchain/core/runnables';
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
+import { zodToJsonSchema } from 'zod-to-json-schema';
 import { cacheResults, estimateTokenSize } from '../../utils.js';
 import { actionPrompt } from '../../prompts/index.js';
 import {
@@ -655,8 +656,21 @@ ${i + 1}. **${rc.description}**
         }
     };
 
-    // Use withStructuredOutput() for guaranteed schema compliance
-    const structuredLLM = baseLLM.withStructuredOutput(suggestionSchema);
+    // Convert Zod schema to JSON Schema with dereferenced $defs
+    // This fixes Gemini protobuf compatibility (see https://github.com/langchain-ai/langchain-google/issues/659)
+    const jsonSchema = zodToJsonSchema(suggestionSchema, { $refStrategy: 'none' });
+
+    // Remove $defs and $schema (Gemini doesn't support them)
+    // Error: "Invalid JSON payload received. Unknown name \"$schema\""
+    delete jsonSchema.$defs;
+    delete jsonSchema.$schema;
+
+    // Use dereferenced schema for structured output
+    const structuredLLM = baseLLM.withStructuredOutput(jsonSchema, {
+        method: 'json_schema',
+        name: 'generate_suggestions'
+    });
+
     const finalChain = RunnableSequence.from([
         ChatPromptTemplate.fromMessages([
             new SystemMessage(finalPrompt),
