@@ -5,7 +5,7 @@ This is a Core Web Vitals (CWV) performance analysis agent that uses multi-agent
 
 ## Architecture Principles
 - **Multi-agent system**: Parallel specialized agents (CrUX, PSI, HAR, Coverage, Code, HTML, Perf Observer, Rules, RUM)
-- **LangChain-based**: Uses LangChain for LLM orchestration with Gemini 2.5 Pro (default, recommended)
+- **LangChain v1.0**: Uses LangChain v1.0 for LLM orchestration with Gemini 2.5 Pro (default, recommended)
 - **Data-driven**: Collects comprehensive performance data before analysis
 - **Device-aware**: Separate mobile/desktop analysis with different thresholds
 - **Conditional execution**: PSI-gated analysis to avoid expensive operations when not needed
@@ -57,12 +57,16 @@ This is a Core Web Vitals (CWV) performance analysis agent that uses multi-agent
 
 ## Code Quality Standards
 
-### LangChain Patterns (2026 Best Practices)
+### LangChain v1.0 Patterns (February 2026)
 - **USE** `withStructuredOutput()` with Zod schemas for guaranteed JSON
+  - **CRITICAL**: Use `method: 'jsonSchema'` (camelCase), NOT `'json_schema'` (v0.3 syntax)
+  - Valid methods: `'jsonSchema'` or `'functionCalling'`
 - **USE** `bindTools()` for native tool calling (not manual shouldUseTool())
 - **USE** few-shot examples in prompts for better agent output
 - **AVOID** manual JSON parsing with regex (lines like `.replace(/```json|```/gi, "")`)
 - **AVOID** shared Zod constants across schemas (Gemini doesn't support $ref in JSON Schema)
+- **AVOID** union types in schemas (z.union, z.discriminatedUnion) - Gemini v1.0 rejects anyOf/oneOf
+  - Use arrays instead: `z.array(z.enum([...]))` not `z.union([z.enum([...]), z.array(...)])`
 
 ### Performance Data Handling
 - **NEVER** truncate data arbitrarily (no "top 5" filtering without justification)

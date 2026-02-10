@@ -28,12 +28,10 @@ export const suggestionSchema = z.object({
         description: z.string().min(1),
         // Solution: Plain language explanation of the fix (required)
         solution: z.string().min(1),
-        // Allow either single metric or array of metrics (for multi-metric improvements)
+        // Array of metrics (for multi-metric improvements)
+        // NOTE: Always an array (not union) - LangChain v1.0 Gemini rejects union/anyOf/oneOf types
         // NOTE: Enums are inlined (not shared) to avoid $ref in JSON Schema which Gemini doesn't support
-        metric: z.union([
-            z.enum(['LCP', 'CLS', 'INP', 'TBT', 'TTFB', 'FCP', 'TTI', 'SI']),
-            z.array(z.enum(['LCP', 'CLS', 'INP', 'TBT', 'TTFB', 'FCP', 'TTI', 'SI']))
-        ]).optional(),
+        metric: z.array(z.enum(['LCP', 'CLS', 'INP', 'TBT', 'TTFB', 'FCP', 'TTI', 'SI'])).optional(),
         priority: z.enum(['High', 'Medium', 'Low']).optional(),
         effort: z.enum(['Easy', 'Medium', 'Hard']).optional(),
         estimatedImpact: z.string().optional(),

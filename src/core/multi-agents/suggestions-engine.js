@@ -101,6 +101,14 @@ function generateConditionalAgentConfig(pageData, cms) {
             ? coverageSignals.filter(Boolean).length >= 2
             : coverageSignals.some(Boolean));
 
+    // Extract chain signal from HAR summary
+    // HAR summary is already generated at this point (from pageData.harSummary)
+    const hasSequentialChains = harSummary &&
+        harSummary.includes('Chain depth:') &&
+        harSummary.includes('sequential delay:') &&
+        // Ensure it's a significant chain (not just "Chain depth: 1")
+        /Chain depth: [3-9]|Chain depth: \d{2,}/.test(harSummary);
+
     // HAR Agent Gating - Unified logic with lower thresholds
     const harDecision = gating.shouldRunAgent('har', {
         data: {
@@ -111,6 +119,9 @@ function generateConditionalAgentConfig(pageData, cms) {
             redirects: signals.redirects,
             serverResponseSlow: signals.serverResponseSlow,
             renderBlocking: signals.renderBlocking
+        },
+        summary: {
+            hasSequentialChains
         }
     });
 
@@ -674,8 +685,9 @@ ${i + 1}. **${rc.description}**
     delete jsonSchema.$schema;
 
     // Use dereferenced schema for structured output
+    // v1.0: method must be 'jsonSchema' (camelCase) or 'functionCalling', not 'json_schema'
     const structuredLLM = baseLLM.withStructuredOutput(jsonSchema, {
-        method: 'json_schema',
+        method: 'jsonSchema',
         name: 'generate_suggestions'
     });
 
@@ -730,7 +742,6 @@ ${i + 1}. **${rc.description}**
 
             // Cache structured suggestions
             await cacheResults(pageData.pageUrl, pageData.deviceType, 'suggestions', structuredData);
-            console.log(`📝 Cached ${structuredData.suggestions.length} structured suggestions to .cache/`);
             break; // Success — exit retry loop
         } catch (error) {
             const errorMessage = error?.message || String(error ?? 'Unknown error');
