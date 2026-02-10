@@ -524,7 +524,9 @@ export async function runMultiAgents(pageData, tokenLimits, llm, model, options 
             const metricsData = {};
             allFindings.forEach(f => {
                 if (f.metric && f.estimatedImpact?.metric) {
-                    metricsData[f.metric] = f.estimatedImpact.current || 0;
+                    // Handle metric as array (from suggestionSchema) or string (from agentFindingSchema)
+                    const metricValue = Array.isArray(f.metric) ? f.metric[0] : f.metric;
+                    metricsData[metricValue] = f.estimatedImpact.current || 0;
                 }
             });
 
@@ -639,13 +641,17 @@ export async function runMultiAgents(pageData, tokenLimits, llm, model, options 
 
 The causal graph has identified ${rootCauseImpacts.length} root causes. Focus your recommendations on these fundamental issues:
 
-${rootCauseImpacts.slice(0, 10).map((rc, i) => `
+${rootCauseImpacts.slice(0, 10).map((rc, i) => {
+    // Handle metric as array or string
+    const metricValue = Array.isArray(rc.metric) ? rc.metric.join('/') : rc.metric;
+    return `
 ${i + 1}. **${rc.description}**
-   - Primary metric: ${rc.metric}
+   - Primary metric: ${metricValue}
    - Total downstream impact: ${rc.totalImpact > 0 ? `~${Math.round(rc.totalImpact)}ms` : 'multiple metrics'}
    - Affects ${rc.affectedFindings} other finding(s)
    - Graph depth: ${rc.depth} (${rc.depth === 1 ? 'immediate cause' : rc.depth === 2 ? 'fundamental cause' : 'deep root cause'})
-`).join('\n')}
+`;
+}).join('\n')}
 
 **IMPORTANT**: Prioritize suggestions that address these root causes over symptoms. When multiple findings share the same root cause, combine them into a single holistic recommendation.`;
         }
@@ -702,14 +708,50 @@ ${i + 1}. **${rc.description}**
     let structuredData;
     const SYNTHESIS_MAX_RETRIES = 3;
     const SYNTHESIS_RETRY_DELAY = 5000; // 5 seconds
+    const originalFindingsCount = allFindings.length;
+    let reducedFindings = allFindings;
 
     for (let attempt = 0; attempt < SYNTHESIS_MAX_RETRIES; attempt++) {
+        // If findings were reduced, rebuild the context
+        let currentContext = graphEnhancedContext;
+        if (reducedFindings.length < originalFindingsCount) {
+            // Rebuild context with reduced findings
+            const reducedIds = new Set(reducedFindings.map(f => f.id));
+            const reducedOutputs = agentOutputs.map(output => ({
+                ...output,
+                findings: output.findings?.filter(f => reducedIds.has(f.id)) || []
+            }));
+
+            currentContext = '';
+            reducedOutputs.forEach((output, index) => {
+                const agentName = output.agentName || `agent_${index}`;
+                const findingsJson = JSON.stringify(output.findings, null, 2);
+                currentContext += `\n## Phase ${index + 1} - ${agentName}:\n${findingsJson}`;
+            });
+
+            if (graphSummary) {
+                currentContext += `\n\nCausal Graph Analysis:\n${graphSummary}`;
+            }
+            if (validationSummary) {
+                currentContext += validationSummary;
+            }
+        }
+
         try {
             // Log context size before synthesis attempt
-            const contextSize = JSON.stringify(allFindings).length;
-            console.log(`🔍 Synthesis attempt ${attempt + 1}/${SYNTHESIS_MAX_RETRIES} (context: ${contextSize} bytes, ${allFindings.length} findings)`);
+            const contextSize = currentContext.length;
+            console.log(`🔍 Synthesis attempt ${attempt + 1}/${SYNTHESIS_MAX_RETRIES} (context: ${contextSize} bytes, ${reducedFindings.length} findings)`);
 
-            structuredData = await finalChain.invoke({});
+            // Update the chain with current context
+            const currentChain = RunnableSequence.from([
+                ChatPromptTemplate.fromMessages([
+                    new SystemMessage(finalPrompt),
+                    new HumanMessage(`Here is the context from previous agents:\n${currentContext}`)
+                ]),
+                structuredLLM
+            ]).withConfig({ callbacks: [debugCallback] });
+
+            structuredData = await currentChain.invoke({});
 
             // Validate response structure BEFORE accessing properties
             if (!structuredData) {
@@ -729,6 +771,11 @@ ${i + 1}. **${rc.description}**
             structuredData.url = pageData.pageUrl;
             structuredData.timestamp = new Date().toISOString();
             console.log(`✅ Generated ${structuredData.suggestions.length} recommendations`);
+
+            // Add note if findings were reduced due to token limits
+            if (reducedFindings.length < originalFindingsCount) {
+                console.log(`⚠️  Note: Synthesis used top ${reducedFindings.length}/${originalFindingsCount} findings (${Math.round((reducedFindings.length/originalFindingsCount)*100)}%) due to output complexity`);
+            }
 
             // Filter suggestions in light mode
             if (mode === 'light') {
@@ -769,6 +816,31 @@ ${i + 1}. **${rc.description}**
                 errorMessage.includes('429') ||
                 errorMessage.includes('Resource exhausted') ||
                 errorMessage.includes('rateLimitExceeded');
+
+            // JSON truncation errors indicate output token limit hit
+            const isTruncated = errorMessage.includes('Unterminated string') ||
+                errorMessage.includes('Unexpected end of JSON') ||
+                errorMessage.includes('Unexpected token') ||
+                errorMessage.includes('not valid JSON');
+
+            // If JSON truncated and we have more attempts, reduce context by dropping low-confidence findings
+            if (isTruncated && attempt < SYNTHESIS_MAX_RETRIES - 1 && originalFindingsCount > 3) {
+                const reductionPercent = 0.2 * (attempt + 1); // 20% per attempt (20%, 40%, 60%)
+                const targetCount = Math.max(3, Math.floor(originalFindingsCount * (1 - reductionPercent)));
+
+                // Sort by confidence (descending) - findings without confidence get 0.5
+                const sortedFindings = [...allFindings].sort((a, b) =>
+                    (b.confidence || 0.5) - (a.confidence || 0.5)
+                );
+
+                // Keep top N findings
+                reducedFindings = sortedFindings.slice(0, targetCount);
+
+                console.warn(`⚠️  Synthesis failed due to output size. Reducing context: keeping top ${targetCount}/${originalFindingsCount} findings (${Math.round((1-reductionPercent)*100)}% by confidence)`);
+
+                // Retry immediately (no delay needed for size reduction)
+                continue;
+            }
 
             if (isTransient && attempt < SYNTHESIS_MAX_RETRIES - 1) {
                 const retryDelay = SYNTHESIS_RETRY_DELAY * Math.pow(2, attempt);

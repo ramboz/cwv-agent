@@ -181,7 +181,9 @@ export class CWVSuggestionManager {
   }
 
   addToMergedCategory(suggestion) {
-    const category = suggestion.metric;
+    // Handle both single metric (string) and multiple metrics (array) - v1.0 uses arrays
+    const metricValue = Array.isArray(suggestion.metric) ? suggestion.metric[0] : suggestion.metric;
+    const category = metricValue;
     if (this.mergedSuggestions[category]) {
       this.mergedSuggestions[category].push(suggestion);
     }
@@ -439,7 +441,9 @@ export class CWVSuggestionManager {
       .filter(([category]) => this.categoryApprovalStatus[category] === 'approved')
       .forEach(([, suggestions]) => {
         suggestions.forEach((s, i) => {
-          const metricType = s.metric.toLowerCase();
+          // Handle both single metric (string) and multiple metrics (array) - v1.0 uses arrays
+          const metricValue = Array.isArray(s.metric) ? s.metric[0] : s.metric;
+          const metricType = metricValue?.toLowerCase();
           if (!groupedByMetric[metricType]) {
             groupedByMetric[metricType] = [];
           }

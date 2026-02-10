@@ -64,15 +64,16 @@ export function transformFindingsToSuggestions(findings) {
             }
         }
 
-        // Determine category from metric
-        const category = finding.metric?.toLowerCase() || 'general';
+        // Determine category from metric (handle both string and array from v1.0)
+        const metricValue = Array.isArray(finding.metric) ? finding.metric[0] : finding.metric;
+        const category = metricValue?.toLowerCase() || 'general';
 
         return {
             id: index + 1,
-            title: finding.description || `${finding.metric} Optimization`,
+            title: finding.description || `${metricValue} Optimization`,
             description: finding.reasoning?.observation || finding.description,
             // Solution field: clear explanation of the fix in plain language
-            solution: implementation || `Address the ${finding.metric || 'performance'} issue by implementing the recommended optimizations.`,
+            solution: implementation || `Address the ${metricValue || 'performance'} issue by implementing the recommended optimizations.`,
             metric: finding.metric,
             priority,
             effort,

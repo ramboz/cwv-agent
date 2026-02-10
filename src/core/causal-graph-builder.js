@@ -21,6 +21,16 @@ import {
 } from '../models/causal-graph.js';
 
 /**
+ * Helper to extract metric value from either string or array format
+ * (v1.0 LangChain uses arrays for metrics to support multi-metric suggestions)
+ * @param {string|string[]} metric - The metric value
+ * @returns {string|undefined} First metric value or undefined
+ */
+function getMetricValue(metric) {
+  return Array.isArray(metric) ? metric[0] : metric;
+}
+
+/**
  * Classifies a finding into a semantic type for better relationship detection
  * @param {Object} finding - The finding to classify
  * @returns {string} Finding type
@@ -118,8 +128,16 @@ function classifyFindingType(finding) {
     return 'compression';
   }
 
+  // Request chain issues
+  if (combined.includes('request chain') || combined.includes('sequential chain') ||
+      combined.includes('chain delay') || combined.includes('js chain') ||
+      combined.includes('script chain') || combined.includes('waterfall')) {
+    return 'request-chain';
+  }
+
   // If we still can't classify, use the metric as a fallback type
-  const metric = finding.metric?.toLowerCase();
+  const metricValue = getMetricValue(finding.metric);
+  const metric = metricValue?.toLowerCase();
   if (metric && metric !== 'unknown') {
     return `${metric}-issue`;
   }
@@ -201,7 +219,8 @@ function addMetricNodes(graph, metricsData) {
  */
 function connectFindingsToMetrics(graph, allFindings) {
   allFindings.forEach(finding => {
-    const metricId = `metric-${finding.metric.toLowerCase()}`;
+    const metricValue = getMetricValue(finding.metric);
+    const metricId = `metric-${metricValue?.toLowerCase()}`;
     const metricNode = graph.nodes[metricId];
 
     if (metricNode) {
@@ -281,6 +300,10 @@ function detectRelationship(findingA, findingB) {
   const timingRelationship = detectTimingRelationship(findingA, findingB);
   if (timingRelationship) return timingRelationship;
 
+  // Check for chain-specific relationships
+  const chainRelationship = detectChainRelationship(findingA, findingB);
+  if (chainRelationship) return chainRelationship;
+
   return null;
 }
 
@@ -292,7 +315,9 @@ function detectRelationship(findingA, findingB) {
  */
 function areDuplicates(findingA, findingB) {
   // Same metric and very similar descriptions
-  if (findingA.metric !== findingB.metric) return false;
+  const metricA = getMetricValue(findingA.metric);
+  const metricB = getMetricValue(findingB.metric);
+  if (metricA !== metricB) return false;
 
   // First check: must be same semantic type
   const typeA = classifyFindingType(findingA);
@@ -409,8 +434,8 @@ function detectMetricRelationship(findingA, findingB) {
     'TBT': ['INP'],
   };
 
-  const metricA = findingA.metric;
-  const metricB = findingB.metric;
+  const metricA = getMetricValue(findingA.metric);
+  const metricB = getMetricValue(findingB.metric);
 
   if (dependencies[metricA]?.includes(metricB)) {
     return {
@@ -440,6 +465,9 @@ function detectMetricRelationship(findingA, findingB) {
  * @returns {Object|null} Relationship or null
  */
 function detectTimingRelationship(findingA, findingB) {
+  const metricA = getMetricValue(findingA.metric);
+  const metricB = getMetricValue(findingB.metric);
+
   // Check if both mention pre-LCP or render-blocking
   const descA = findingA.description.toLowerCase();
   const descB = findingB.description.toLowerCase();
@@ -447,7 +475,7 @@ function detectTimingRelationship(findingA, findingB) {
   const isPreLcpA = descA.includes('pre-lcp') || descA.includes('render-blocking');
   const isPreLcpB = descB.includes('pre-lcp') || descB.includes('render-blocking');
 
-  if (isPreLcpA && isPreLcpB && findingA.metric === 'LCP' && findingB.metric === 'LCP') {
+  if (isPreLcpA && isPreLcpB && metricA === 'LCP' && metricB === 'LCP') {
     // Get semantic types
     const typeA = classifyFindingType(findingA);
     const typeB = classifyFindingType(findingB);
@@ -467,6 +495,64 @@ function detectTimingRelationship(findingA, findingB) {
       type: 'compounds',
       strength: 0.65,
       mechanism: `Multiple pre-LCP rendering issues (${typeA} + ${typeB}) compound to delay LCP`
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Detects chain-specific relationships
+ * @param {Object} findingA - First finding
+ * @param {Object} findingB - Second finding
+ * @returns {Object|null} Relationship or null
+ */
+function detectChainRelationship(findingA, findingB) {
+  const typeA = classifyFindingType(findingA);
+  const typeB = classifyFindingType(findingB);
+  const metricA = getMetricValue(findingA.metric);
+  const metricB = getMetricValue(findingB.metric);
+
+  // Chain + unused-code relationship: Chain contains unused code
+  // The unused-code finding contributes to the chain finding
+  if (typeA === 'request-chain' && typeB === 'unused-code') {
+    const descA = findingA.description.toLowerCase();
+    const refB = findingB.evidence?.reference || '';
+
+    // Check if chain description mentions the file from unused-code finding
+    if (descA.includes(extractFileName(refB))) {
+      return {
+        from: findingB.id,
+        to: findingA.id,
+        type: 'contributes',
+        strength: 0.8,
+        mechanism: 'Unused code in chain exacerbates sequential delay'
+      };
+    }
+  } else if (typeA === 'unused-code' && typeB === 'request-chain') {
+    const descB = findingB.description.toLowerCase();
+    const refA = findingA.evidence?.reference || '';
+
+    if (descB.includes(extractFileName(refA))) {
+      return {
+        from: findingA.id,
+        to: findingB.id,
+        type: 'contributes',
+        strength: 0.8,
+        mechanism: 'Unused code in chain exacerbates sequential delay'
+      };
+    }
+  }
+
+  // Multiple chains affecting same metric: Compound effect
+  if (typeA === 'request-chain' && typeB === 'request-chain' &&
+      metricA === metricB) {
+    return {
+      from: findingA.id,
+      to: findingB.id,
+      type: 'compounds',
+      strength: 0.6,
+      mechanism: `Multiple request chains compound to delay ${metricA}`
     };
   }
 
@@ -542,13 +628,38 @@ function generateDeduplicationKey(finding) {
   // Extract file reference from multiple possible locations
   const file = extractFileFromFinding(finding) || 'no-file';
 
-  // Get metric
-  const metric = finding.metric || 'unknown';
+  // Get metric (handle both string and array formats from v1.0)
+  const metricValue = getMetricValue(finding.metric);
+  const metric = metricValue || 'unknown';
 
   // Get semantic type
   const type = classifyFindingType(finding);
 
+  // Special handling for chain findings
+  // Use a hash of the chain path from evidence reference instead of file
+  if (type === 'request-chain') {
+    const chainPath = finding.evidence?.reference || finding.description || '';
+    // Create a simple hash of the chain path for deduplication
+    const hash = hashString(chainPath);
+    return `${metric}:request-chain:${hash}`;
+  }
+
   return `${metric}:${type}:${file}`;
+}
+
+/**
+ * Simple string hash for deduplication keys
+ * @param {string} str - String to hash
+ * @returns {string} Hash string
+ */
+function hashString(str) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  return Math.abs(hash).toString(36);
 }
 
 /**
