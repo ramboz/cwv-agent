@@ -6,7 +6,8 @@
 // Model token limits
 export const MAX_TOKENS = {
   // Gemini models (Google Vertex AI)
-  'gemini-2.5-pro': { input: 2_000_000, output: 8_192 },
+  // Note: Increased output from 8_192 to 16_384 for v1.0 - synthesis needs ~4000-5000 tokens for 5-7 suggestions
+  'gemini-2.5-pro': { input: 2_000_000, output: 16_384 },
   'gemini-2.5-pro-preview-05-06': { input: 1_048_576, output: 65_535 }, // Legacy preview
   'gemini-2.5-flash': { input: 1_000_000, output: 8_192 },
   'gemini-2.5-flash-preview-05-20': { input: 1_048_576, output: 65_535 }, // Legacy preview

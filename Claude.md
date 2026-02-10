@@ -89,7 +89,9 @@ This is a Core Web Vitals (CWV) performance analysis agent that uses multi-agent
 - **Measure quality**: Track false positive rate, confidence calibration
 
 ## Common Gotchas
-1. **Token limits**: Gemini 2.5 Pro has 2M context, but watch for output limits (8K tokens)
+1. **Token limits**: Gemini 2.5 Pro has 2M input, 16K output tokens (increased from 8K for v1.0)
+   - Synthesis needs ~4000-5000 tokens for 5-7 detailed suggestions with codeChanges
+   - If hitting limits, the fallback strategy is to reduce suggestions (drop lowest confidence)
 2. **Cache invalidation**: Use `--skip-cache` when testing data collection changes
 3. **Device thresholds**: Mobile/desktop have different performance thresholds (see DEFAULT_THRESHOLDS)
 4. **PSI gating**: Heavy collectors (HAR, Coverage, Code) only run if PSI shows poor metrics
