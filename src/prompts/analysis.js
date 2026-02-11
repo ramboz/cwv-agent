@@ -462,9 +462,7 @@ Output:
 export function htmlAgentPrompt(cms = 'eds', options = {}) {
   const { lightMode = false } = options;
 
-  let focusInstruction = '';
-  if (lightMode) {
-    focusInstruction = `
+  const additionalContext = lightMode ? `
 **LIGHT MODE** - Focus on low-hanging fruit performance issues:
 
 This analysis focuses ONLY on these issue types:
@@ -473,17 +471,9 @@ This analysis focuses ONLY on these issue types:
 - **Image Sizing** (CLS): Missing width/height/aspect-ratio attributes
 
 ONLY report findings that match these patterns. Ignore all other issues.
-`;
-  }
+` : '';
 
-  return `${getBasePrompt('analyzing HTML markup for Core Web Vitals optimization opportunities')}
-${focusInstruction}
-
-${getDataPriorityGuidance('html')}
-
-${getChainOfThoughtGuidance()}
-
-## Few-Shot Examples
+  const examples = `
 
 **Example 1: Missing LCP Image Preload**
 Input: LCP element is <img src="hero.jpg">, no preload hint in <head>
@@ -561,39 +551,32 @@ Before recommending any preload/preconnect hints:
    - DO NOT recommend preconnecting to domains in deferrable chains
    - DO recommend async/defer for deferrable chains instead
 
-**Example**: HAR shows "4-level chain [deferrable]: cookielaw → analytics → tracking" → DO NOT recommend preload/preconnect to cookielaw.org
+**Example**: HAR shows "4-level chain [deferrable]: cookielaw → analytics → tracking" → DO NOT recommend preload/preconnect to cookielaw.org`;
 
-## Your Analysis Focus
-${PHASE_FOCUS.HTML}
-
-${getStructuredOutputFormat('HTML Agent')}
-`;
+  return createAgentPrompt({
+    agentName: 'HTML Agent',
+    role: 'analyzing HTML markup for Core Web Vitals optimization opportunities',
+    dataSource: 'html',
+    focusKey: 'HTML',
+    examples,
+    additionalContext,
+  });
 }
 
 export function rulesAgentPrompt(cms = 'eds') {
-  return `${getBasePrompt('analyzing failed performance rules to identify Core Web Vitals optimization opportunities')}
+  const examples = ''; // Rules agent currently has no examples
 
-${getDataPriorityGuidance('rules')}
-
-## Your Analysis Focus
-${PHASE_FOCUS.RULES}
-
-${getChainOfThoughtGuidance()}
-
-${getStructuredOutputFormat('Rules Agent')}
-`;
+  return createAgentPrompt({
+    agentName: 'Rules Agent',
+    role: 'analyzing failed performance rules to identify Core Web Vitals optimization opportunities',
+    dataSource: 'rules',
+    focusKey: 'RULES',
+    examples,
+  });
 }
 
 export function coverageAgentPrompt(cms = 'eds') {
-  return `${getBasePrompt('analyzing JavaScript and CSS code coverage data to identify optimization opportunities for Core Web Vitals')}
-
-${getDataPriorityGuidance('coverage')}
-
-${getChainOfThoughtGuidance()}
-
-## Few-Shot Examples
-
-**Example 1: High Unused JavaScript Post-LCP**
+  const examples = `**Example 1: High Unused JavaScript Post-LCP**
 Input: app.bundle.js = 420KB, 65% unused overall, 280KB (70%) executes post-LCP
 Output:
 - Finding: Majority of app.bundle.js (280KB/70%) executes after LCP, delaying interactivity
@@ -631,26 +614,30 @@ Output:
   2. app-features.js (280KB, lazy-loaded non-critical code)
 - Then preload only app-core.js in the chain
 - Root Cause: Bundling strategy includes all features upfront without code-splitting
-- DO NOT recommend preloading bloated bundles — fix the bloat first
+- DO NOT recommend preloading bloated bundles — fix the bloat first`;
 
-## Your Analysis Focus
-${PHASE_FOCUS.COVERAGE}
-
-${getStructuredOutputFormat('Coverage Agent')}
-`;
+  return createAgentPrompt({
+    agentName: 'Coverage Agent',
+    role: 'analyzing JavaScript and CSS code coverage data to identify optimization opportunities for Core Web Vitals',
+    dataSource: 'coverage',
+    focusKey: 'COVERAGE',
+    examples,
+  });
 }
 
 export function codeReviewAgentPrompt(cms = 'eds') {
-  return `${getBasePrompt('analyzing JavaScript and CSS code for Core Web Vitals optimization opportunities, informed by code coverage analysis')}
+  const examples = ''; // Code Review agent currently has no examples
 
-${getDataPriorityGuidance('code')}
+  const additionalContext = `## Your Analysis Focus
+${PHASE_FOCUS.CODE_REVIEW}`;
 
-## Your Analysis Focus
-${PHASE_FOCUS.CODE_REVIEW}
-
-${getChainOfThoughtGuidance()}
-
-${getStructuredOutputFormat('Code Review Agent')}
-`;
+  return createAgentPrompt({
+    agentName: 'Code Review Agent',
+    role: 'analyzing JavaScript and CSS code for Core Web Vitals optimization opportunities, informed by code coverage analysis',
+    dataSource: 'code',
+    focusKey: 'CODE_REVIEW',
+    examples,
+    additionalContext,
+  });
 }
 

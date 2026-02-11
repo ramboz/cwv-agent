@@ -38,11 +38,7 @@ ${getDataPriorityGuidance(dataSource)}
 
 ${getChainOfThoughtGuidance()}
 
-## Few-Shot Examples
-
-${examples}
-
-${additionalContext ? `${additionalContext}\n\n` : ''}## Your Analysis Focus
+${examples ? `## Few-Shot Examples\n\n${examples}\n\n` : ''}${additionalContext ? `${additionalContext}\n\n` : ''}## Your Analysis Focus
 ${PHASE_FOCUS[focusKey]}
 
 ${getStructuredOutputFormat(agentName)}
