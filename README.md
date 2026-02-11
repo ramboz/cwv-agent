@@ -178,31 +178,67 @@ Findings are processed through a causal graph that:
 - **Boosts confidence** for cross-validated findings
 - **Traces critical paths** from metrics to actionable fixes
 
+## 🔍 Advanced Analysis Features
+
+### Request Chain Analysis
+Detects sequential JavaScript loading patterns that delay interactivity:
+- **Chain Detection**: Identifies multi-step request sequences in HAR data
+- **Unused Code**: Highlights unnecessary code within blocking chains
+- **RUM Correlation**: Maps chains to real-user INP interactions
+- **Prioritization**: Focuses on chains with measurable user impact
+
+**Example Output**:
+```
+JS Request Chain: 3-step sequence (1,247ms total delay)
+  1. app.js → 2. vendor.js → 3. analytics.js
+  ⚠️ Unused Code: 127KB (68%) unused in step 2
+  ⚠️ RUM Impact: 89.5% of INP samples correlate with this chain
+     - button.cta-primary (pointerdown): p75 847ms, 156 samples
+```
+
+### Multi-Agent Orchestration
+9 specialized AI agents analyze performance from different angles:
+- **CrUX Agent**: Real-user field data (28-day aggregates)
+- **PSI Agent**: Lighthouse lab audits
+- **HAR Agent**: Network waterfall analysis + chain detection
+- **Coverage Agent**: Unused JavaScript/CSS detection
+- **Code Agent**: Repository code analysis (AEM/EDS patterns)
+- **HTML Agent**: CWV-relevant HTML extraction
+- **Perf Observer Agent**: Performance API entries (LCP, CLS, LoAF)
+- **RUM Agent**: Real-user monitoring correlation
+- **Rules Agent**: 18+ heuristic performance rules
+
+**Deduplication & Causal Analysis**:
+- Merges duplicate findings across agents
+- Builds causal dependency graph
+- Identifies root causes vs symptoms
+- Validates evidence quality and confidence
+
 ## 🤖 Supported AI Models
 
 ### Gemini Models (via Vertex AI) - Recommended
 | Model | Context | Notes |
 |-------|---------|-------|
-| `gemini-2.5-pro` | 2M input | **Default** - best balance |
-| `gemini-2.5-flash` | 1M input | Faster, good quality |
-| `gemini-exp-1206` | 2M input | Experimental 2.0 Flash Thinking |
-| `gemini-1.5-flash` | 1M input | Legacy, still supported |
+| `gemini-2.5-pro` | 2M input, 16K output | **Default** - best balance |
+| `gemini-2.5-flash` | 1M input, 8K output | Faster, good quality |
+| `gemini-exp-1206` | 2M input, 8K output | Experimental 2.0 Flash Thinking |
+| `gemini-1.5-flash` | 1M input, 8K output | Legacy, still supported |
 
 ### OpenAI Models (via Azure)
 | Model | Context | Notes |
 |-------|---------|-------|
-| `o1` | 200K input | Latest reasoning model |
-| `o1-mini` | 128K input | Faster reasoning |
-| `gpt-4o` | 128K input | Good general purpose |
-| `gpt-4o-mini` | 128K input | Faster, smaller |
-| `o3-mini` | 200K input | If available in your region |
+| `o1` | 200K input, 100K output | Latest reasoning model |
+| `o1-mini` | 128K input, 65K output | Faster reasoning |
+| `gpt-4o` | 128K input, 16K output | Good general purpose |
+| `gpt-4o-mini` | 128K input, 16K output | Faster, smaller |
+| `o3-mini` | 200K input, 100K output | If available in your region |
 
 ### Claude Models (via AWS Bedrock)
 | Model | Context | Notes |
 |-------|---------|-------|
-| `claude-sonnet-4-5-20250929` | 200K input | Claude Sonnet 4.5 - recommended |
-| `claude-opus-4-5-20251101` | 200K input | Claude Opus 4.5 - most capable |
-| `claude-haiku-4-0-20250514` | 200K input | Claude Haiku 4.0 - fastest |
+| `claude-sonnet-4-5-20250929` | 200K input, 16K output | Claude Sonnet 4.5 - recommended |
+| `claude-opus-4-5-20251101` | 200K input, 128K output | Claude Opus 4.5 - most capable |
+| `claude-haiku-4-0-20250514` | 200K input, 16K output | Claude Haiku 4.0 - fastest |
 
 ## 🎯 Interactive MCP Reviewer
 

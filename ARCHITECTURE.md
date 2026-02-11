@@ -219,7 +219,7 @@ Validates and adjusts findings before synthesis:
 
 | Provider | Models | Token Limits |
 |----------|--------|--------------|
-| **Gemini** (Vertex AI) | gemini-2.5-pro, gemini-2.5-flash | 2M input, 8K output |
+| **Gemini** (Vertex AI) | gemini-2.5-pro, gemini-2.5-flash | 2M input, 16K output (Pro), 8K (Flash) |
 | **OpenAI** (Azure) | o1, o1-mini, gpt-4o | 128K-200K input, 16K-100K output |
 | **Bedrock** (AWS) | claude-opus-4.5, claude-sonnet-4.5 | 200K input, 16K-128K output |
 
@@ -234,7 +234,9 @@ const suggestionSchema = z.object({
     title: z.string().min(1),
     description: z.string().min(1),
     solution: z.string().min(1),         // Plain language fix explanation
-    metric: z.enum(['LCP', 'CLS', 'INP', 'TBT', 'TTFB', 'FCP']).optional(),
+    // Array of metrics (supports multi-metric improvements)
+    // NOTE: Always array in v1.0 - Gemini rejects union types
+    metric: z.array(z.enum(['LCP', 'CLS', 'INP', 'TBT', 'TTFB', 'FCP', 'TTI', 'SI'])).optional(),
     priority: z.enum(['High', 'Medium', 'Low']).optional(),
     effort: z.enum(['Easy', 'Medium', 'Hard']).optional(),
     estimatedImpact: z.string().optional(),
@@ -250,6 +252,21 @@ const suggestionSchema = z.object({
   }))
 });
 ```
+
+### LangChain v1.0 Migration Notes
+
+**Method Parameter** (February 2026):
+- Use `method: 'jsonSchema'` (camelCase), NOT `method: 'json_schema'`
+- Valid methods: `'jsonSchema'` or `'functionCalling'`
+
+**Schema Constraints**:
+- Avoid union types (`z.union`, `z.discriminatedUnion`) - Gemini v1.0 rejects anyOf/oneOf
+- Inline enum definitions (don't use shared constants) - Gemini doesn't support $ref in JSON Schema
+- Use `zodToJsonSchema()` with `$refStrategy: 'none'` to dereference nested schemas
+
+**Token Limits**:
+- Gemini 2.5 Pro: 2M input, 16K output (increased from 8K for synthesis)
+- Synthesis needs ~4000-5000 tokens for 5-7 detailed suggestions with codeChanges
 
 ## Rules Engine
 
@@ -284,6 +301,50 @@ const suggestionSchema = z.object({
 
 ### Config Rules
 - `csp.js` - Content Security Policy analysis
+
+## Request Chain Analysis (Phase 4)
+
+### JS Request Chain Detection
+**File**: `src/tools/lab/har-collector.js`
+
+Detects sequential JavaScript loading patterns:
+- Analyzes initiator chains in HAR data
+- Identifies blocking request sequences
+- Classifies chains: critical-path, render-blocking, deferred
+- Correlates chains with unused code from coverage data
+
+**Chain Classification**:
+- **Critical Path**: Chains in LCP path (>1 second total delay)
+- **Render Blocking**: Pre-LCP chains blocking render
+- **Deferred**: Post-LCP chains that can be optimized
+
+### Chain-RUM Correlation
+**File**: `src/core/chain-rum-correlator.js`
+
+Correlates JS chains with RUM INP data:
+- Maps which user interactions are impacted by specific JS chains
+- Groups RUM interactions by target element
+- Calculates p75 latency for each interaction type
+- Provides concrete evidence of real-user impact
+
+**Output Example**:
+```
+⚠️ RUM Impact: 89.5% of INP samples on this page correlate with this chain
+   - Primary interaction: button.cta-primary (pointerdown): p75 847ms, 156 samples
+```
+
+### Enhanced HAR Recommendations
+Combines multiple data sources for holistic recommendations:
+- Chain structure (sequential delays)
+- Coverage data (unused code within chain)
+- RUM correlation (real-user impact)
+- Pre-LCP timing (render-blocking classification)
+
+**Recommendation Logic**:
+1. If chain has >50% unused code → recommend code-splitting first
+2. If chain correlates with RUM INP → prioritize based on p75 latency
+3. If chain is render-blocking → recommend preload or defer
+4. Otherwise → suggest removing non-critical resources
 
 ## CMS-Specific Contexts
 

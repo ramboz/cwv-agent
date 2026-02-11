@@ -33,10 +33,11 @@ This is a Core Web Vitals (CWV) performance analysis agent that uses multi-agent
 
 ### Data Collection
 - `src/core/collect.js`: Orchestrates data collection (CrUX, PSI, HAR, Coverage, etc.)
+- `src/core/chain-rum-correlator.js`: Chain-to-RUM correlation logic
 - `src/tools/crux.js`: Chrome UX Report API client
 - `src/tools/psi.js`: PageSpeed Insights API client
 - `src/tools/rum.js`: RUM Bundler client
-- `src/tools/lab/har-collector.js`: Puppeteer HAR collection
+- `src/tools/lab/har-collector.js`: Puppeteer HAR collection + JS chain detection
 - `src/tools/lab/coverage-collector.js`: Code coverage collection
 - `src/tools/lab/performance-collector.js`: Performance entries (LCP, CLS, LoAF)
 - `src/tools/lab/html-extractor.js`: CWV-relevant HTML extraction
@@ -91,7 +92,9 @@ This is a Core Web Vitals (CWV) performance analysis agent that uses multi-agent
 ## Common Gotchas
 1. **Token limits**: Gemini 2.5 Pro has 2M input, 16K output tokens (increased from 8K for v1.0)
    - Synthesis needs ~4000-5000 tokens for 5-7 detailed suggestions with codeChanges
-   - If hitting limits, the fallback strategy is to reduce suggestions (drop lowest confidence)
+   - Synthesis fallback strategy reduces findings by 20% per retry on token limit
+   - Maximum 3 synthesis attempts before falling back to aggregated findings
+   - If hitting limits, the fallback strategy drops lowest confidence findings first
 2. **Cache invalidation**: Use `--skip-cache` when testing data collection changes
 3. **Device thresholds**: Mobile/desktop have different performance thresholds (see DEFAULT_THRESHOLDS)
 4. **PSI gating**: Heavy collectors (HAR, Coverage, Code) only run if PSI shows poor metrics
