@@ -1,9 +1,15 @@
 /**
  * Model configuration for different LLM providers
- * Updated January 2026
+ * Updated February 2026
+ *
+ * This is the SINGLE SOURCE OF TRUTH for model token limits, provider mappings,
+ * and capability flags. All other modules derive from these definitions.
  */
 
+// ============================================================================
 // Model token limits
+// ============================================================================
+
 export const MAX_TOKENS = {
   // Gemini models (Google Vertex AI)
   // Note: Increased output from 8_192 to 16_384 for v1.0 - synthesis needs ~4000-5000 tokens for 5-7 suggestions
@@ -36,7 +42,10 @@ export const MAX_TOKENS = {
 // Default model - Use gemini-2.5-pro for best balance of performance and cost
 export const DEFAULT_MODEL = 'gemini-2.5-pro';
 
-// Model provider types
+// ============================================================================
+// Provider types and detection
+// ============================================================================
+
 export const PROVIDERS = {
   GEMINI: 'gemini',
   OPENAI: 'openai',
@@ -44,29 +53,124 @@ export const PROVIDERS = {
 };
 
 /**
+ * Model name prefix → provider mapping
+ * Order matters: more specific prefixes should come first
+ */
+const MODEL_PREFIX_TO_PROVIDER = [
+  { prefix: 'gemini', provider: PROVIDERS.GEMINI },
+  { prefix: 'gpt', provider: PROVIDERS.OPENAI },
+  { prefix: 'o1', provider: PROVIDERS.OPENAI },
+  { prefix: 'o3', provider: PROVIDERS.OPENAI },
+  { prefix: 'claude', provider: PROVIDERS.BEDROCK },
+];
+
+/**
  * Get the provider for a given model
- * @param {string} model - The model name
- * @returns {string} The provider name
+ * @param {String} model - The model name
+ * @return {String} The provider name
  */
 export function getProviderForModel(model) {
-  if (model.startsWith('gemini-')) {
-    return PROVIDERS.GEMINI;
-  } else if (model.startsWith('gpt-')) {
-    return PROVIDERS.OPENAI;
-  } else if (model.startsWith('claude-')) {
-    return PROVIDERS.BEDROCK;
+  for (const { prefix, provider } of MODEL_PREFIX_TO_PROVIDER) {
+    if (model.startsWith(prefix)) {
+      return provider;
+    }
   }
   throw new Error(`Unknown model: ${model}`);
 }
 
+// ============================================================================
+// Model capabilities (non-token features)
+// ============================================================================
+
+/**
+ * Provider-level capability defaults
+ * These apply to all models from a given provider unless overridden
+ */
+const PROVIDER_CAPABILITIES = {
+  [PROVIDERS.GEMINI]: {
+    nativeJSON: true,
+    supportsTools: true,
+    supportsStreaming: true,
+    supportsVision: true,
+  },
+  [PROVIDERS.OPENAI]: {
+    nativeJSON: false,
+    supportsTools: true,
+    supportsStreaming: true,
+    supportsVision: true,
+  },
+  [PROVIDERS.BEDROCK]: {
+    nativeJSON: false,
+    supportsTools: true,
+    supportsStreaming: true,
+    supportsVision: true,
+  },
+};
+
+/**
+ * Model-specific capability overrides (exceptions to provider defaults)
+ * Only list models that differ from their provider defaults
+ */
+const MODEL_CAPABILITY_OVERRIDES = {
+  // Gemini 1.5 and experimental models don't support native JSON
+  'gemini-1.5-flash': { nativeJSON: false },
+  'gemini-exp-1206': { nativeJSON: false },
+
+  // OpenAI reasoning models support native JSON but not tool calling
+  'o1': { nativeJSON: true, supportsTools: false },
+  'o1-mini': { nativeJSON: true, supportsTools: false },
+  'o3-mini': { nativeJSON: true, supportsTools: false },
+};
+
+/** Default capability fallbacks for unknown providers */
+const DEFAULT_CAPABILITIES = {
+  nativeJSON: false,
+  supportsTools: true,
+  supportsStreaming: true,
+  supportsVision: false,
+};
+
+/** Default token limits for unknown models */
+const DEFAULT_TOKEN_LIMITS = { input: 128_000, output: 4_096 };
+
+/**
+ * Get full capabilities for a model (token limits + feature flags)
+ * Merges: default → provider defaults → model overrides → token limits
+ *
+ * @param {String} model - The model name
+ * @return {Object} Complete capabilities object
+ */
+export function getModelCapabilities(model) {
+  const tokenLimits = MAX_TOKENS[model] || DEFAULT_TOKEN_LIMITS;
+
+  let providerDefaults = DEFAULT_CAPABILITIES;
+  try {
+    const provider = getProviderForModel(model);
+    providerDefaults = PROVIDER_CAPABILITIES[provider] || DEFAULT_CAPABILITIES;
+  } catch {
+    // Unknown provider — use defaults
+    console.warn(`getModelCapabilities: unknown provider for model "${model}", using defaults`);
+  }
+
+  const modelOverrides = MODEL_CAPABILITY_OVERRIDES[model] || {};
+
+  return {
+    ...DEFAULT_CAPABILITIES,
+    ...providerDefaults,
+    ...modelOverrides,
+    maxContextTokens: tokenLimits.input,
+    maxOutputTokens: tokenLimits.output,
+  };
+}
+
 /**
  * Get the token limits for a model
- * @param {string} model - The model name
- * @returns {Object} The token limits
+ * @param {String} model - The model name
+ * @return {Object} The token limits { input, output }
  */
 export function getTokenLimits(model) {
   if (!MAX_TOKENS[model]) {
     throw new Error(`Unknown model: ${model}`);
   }
   return MAX_TOKENS[model];
-} 
+}

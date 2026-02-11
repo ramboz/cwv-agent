@@ -1,73 +1,38 @@
 import { getConfig } from '../config/index.js';
+import { getModelCapabilities } from './config.js';
 
 /**
  * Model capabilities detection and abstraction
+ * Derives all values from the centralized config (models/config.js)
+ *
+ * All capability flags (nativeJSON, supportsTools, etc.) and token limits
+ * (maxContextTokens, maxOutputTokens) are exposed as direct properties.
  */
 export class ModelCapabilities {
-  constructor(modelName, provider) {
+  /**
+   * @param {String} modelName - The model identifier
+   */
+  constructor(modelName) {
     this.modelName = modelName;
-    this.provider = provider;
-    this.capabilities = this.detectCapabilities();
+    // Expose all capabilities as direct properties on this instance
+    Object.assign(this, getModelCapabilities(modelName));
   }
 
-  detectCapabilities() {
-    const caps = {
-      nativeJSON: false,
-      maxContextTokens: 128000,
-      maxOutputTokens: 4096,
-      supportsTools: true,
-      supportsStreaming: true,
-      supportsVision: false,
-    };
-
-    // Gemini capabilities
-    if (this.modelName.startsWith('gemini-2.5')) {
-      caps.nativeJSON = true;
-      caps.maxContextTokens = 2000000;
-      caps.maxOutputTokens = 8192;
-      caps.supportsVision = true;
-    } else if (this.modelName.startsWith('gemini-1.5')) {
-      caps.maxContextTokens = 1000000;
-      caps.maxOutputTokens = 8192;
-      caps.supportsVision = true;
-    }
-
-    // Claude capabilities
-    if (this.modelName.includes('claude-sonnet-4')) {
-      caps.maxContextTokens = 200000;
-      caps.maxOutputTokens = 8192;
-      caps.supportsVision = true;
-    } else if (this.modelName.includes('claude-opus')) {
-      caps.maxContextTokens = 200000;
-      caps.maxOutputTokens = 4096;
-      caps.supportsVision = true;
-    }
-
-    // OpenAI capabilities
-    if (this.modelName.includes('gpt-4o')) {
-      caps.maxContextTokens = 128000;
-      caps.maxOutputTokens = 16384;
-      caps.supportsVision = true;
-    } else if (this.modelName.includes('o1')) {
-      caps.nativeJSON = true;
-      caps.maxContextTokens = 200000;
-      caps.maxOutputTokens = 100000;
-      caps.supportsTools = false; // o1 doesn't support function calling
-    }
-
-    return caps;
-  }
-
+  /**
+   * Check if model can handle a specific requirement
+   * @param {String} requirement - Requirement key
+   * @return {Boolean} Whether the model supports the requirement
+   */
   canHandle(requirement) {
     switch (requirement) {
       case 'large_context':
-        return this.capabilities.maxContextTokens >= 500000;
+        return this.maxContextTokens >= 500000;
       case 'native_json':
-        return this.capabilities.nativeJSON;
+        return this.nativeJSON;
       case 'tools':
-        return this.capabilities.supportsTools;
+        return this.supportsTools;
       case 'vision':
-        return this.capabilities.supportsVision;
+        return this.supportsVision;
       default:
         return false;
     }
@@ -85,8 +50,7 @@ export class ModelAdapter {
     this.retryAttempts = options.retryAttempts || 2;
     this.retryDelay = options.retryDelay || 1000;
 
-    const provider = this.detectProvider(modelName);
-    this.capabilities = new ModelCapabilities(modelName, provider);
+    this.capabilities = new ModelCapabilities(modelName);
 
     // Track costs
     const config = getConfig();
@@ -94,13 +58,6 @@ export class ModelAdapter {
     this.totalCost = 0;
     this.totalInputTokens = 0;
     this.totalOutputTokens = 0;
-  }
-
-  detectProvider(modelName) {
-    if (modelName.startsWith('gemini')) return 'gemini';
-    if (modelName.startsWith('gpt') || modelName.startsWith('o1')) return 'openai';
-    if (modelName.includes('claude')) return 'bedrock';
-    return 'unknown';
   }
 
   /**

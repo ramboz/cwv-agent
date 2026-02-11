@@ -2,7 +2,7 @@ import fs from 'fs';
 import { ChatVertexAI } from '@langchain/google-vertexai';
 import { AzureChatOpenAI } from '@langchain/openai';
 import { Bedrock } from '@langchain/community/llms/bedrock';
-import { getProviderForModel, getTokenLimits } from './config.js';
+import { getProviderForModel, getTokenLimits, getModelCapabilities } from './config.js';
 import { ModelAdapter, modelRegistry } from './model-adapter.js';
 import { getConfig } from '../config/index.js';
 
@@ -174,8 +174,8 @@ export class LLMFactory {
           temperature: 0, // Deterministic for consistency
           topP: 0.95,
           topK: 40,
-          // Use native JSON mode for Gemini 2.5+ models
-          ...(model.startsWith('gemini-2.5') && {
+          // Use native JSON mode for models that support it (e.g., Gemini 2.5+)
+          ...(getModelCapabilities(model).nativeJSON && {
             modelKwargs: {
               response_mime_type: "application/json"
             }

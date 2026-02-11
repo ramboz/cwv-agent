@@ -848,13 +848,55 @@ ${pathDescriptions.join('\n\n')}
                 errorMessage.includes('Resource exhausted') ||
                 errorMessage.includes('rateLimitExceeded');
 
-            // JSON truncation errors indicate output token limit hit
-            const isTruncated = errorMessage.includes('Unterminated string') ||
+            // Detect JSON parse errors and diagnose: malformation vs truncation
+            // JSON.parse errors include character position (e.g., "at position 26028")
+            // Compare against output token limit to decide retry strategy
+            const isJsonError = errorMessage.includes('Unterminated string') ||
                 errorMessage.includes('Unexpected end of JSON') ||
                 errorMessage.includes('Unexpected token') ||
-                errorMessage.includes('not valid JSON');
+                errorMessage.includes('not valid JSON') ||
+                errorMessage.includes('Expected') ||
+                errorMessage.includes('JSON.parse');
 
-            // If JSON truncated and we have more attempts, reduce context by dropping low-confidence findings
+            let isTruncated = false;
+            let isMalformed = false;
+
+            if (isJsonError) {
+                const CHARS_PER_TOKEN = 4;
+                const TRUNCATION_THRESHOLD = 0.8; // 80% of max output tokens
+
+                // Extract character position from JSON.parse error message
+                const positionMatch = errorMessage.match(/at position (\d+)/);
+                const errorPosition = positionMatch ? parseInt(positionMatch[1], 10) : null;
+
+                if (errorPosition !== null) {
+                    const estimatedTokens = Math.round(errorPosition / CHARS_PER_TOKEN);
+                    const maxOutputTokens = tokenLimits.output;
+                    const ratio = estimatedTokens / maxOutputTokens;
+
+                    if (ratio >= TRUNCATION_THRESHOLD) {
+                        isTruncated = true;
+                        console.warn(`⚠️  JSON error at ~${estimatedTokens}/${maxOutputTokens} tokens (${Math.round(ratio * 100)}%) — likely output truncation`);
+                    } else {
+                        isMalformed = true;
+                        console.warn(`⚠️  JSON error at ~${estimatedTokens}/${maxOutputTokens} tokens (${Math.round(ratio * 100)}%) — likely transient malformation`);
+                    }
+                } else {
+                    // No position extractable — treat as malformation first, truncation on repeat
+                    isMalformed = true;
+                    console.warn('⚠️  JSON parse error (no position) — retrying as transient malformation');
+                }
+            }
+
+            // Strategy 1: Malformed JSON — retry as-is (transient, context is fine)
+            if (isMalformed && attempt < SYNTHESIS_MAX_RETRIES - 1) {
+                const retryDelay = SYNTHESIS_RETRY_DELAY;
+                console.warn(`⚠️  Synthesis attempt ${attempt + 1}/${SYNTHESIS_MAX_RETRIES} failed (malformed JSON), retrying in ${retryDelay / 1000}s...`);
+                await new Promise(resolve => setTimeout(resolve, retryDelay));
+                continue;
+            }
+
+            // Strategy 2: Truncated JSON — reduce context by dropping low-confidence findings
             if (isTruncated && attempt < SYNTHESIS_MAX_RETRIES - 1 && originalFindingsCount > 3) {
                 const reductionPercent = 0.2 * (attempt + 1); // 20% per attempt (20%, 40%, 60%)
                 const targetCount = Math.max(3, Math.floor(originalFindingsCount * (1 - reductionPercent)));
@@ -867,12 +909,13 @@ ${pathDescriptions.join('\n\n')}
                 // Keep top N findings
                 reducedFindings = sortedFindings.slice(0, targetCount);
 
-                console.warn(`⚠️  Synthesis failed due to output size. Reducing context: keeping top ${targetCount}/${originalFindingsCount} findings (${Math.round((1-reductionPercent)*100)}% by confidence)`);
+                console.warn(`⚠️  Synthesis failed due to output truncation. Reducing context: keeping top ${targetCount}/${originalFindingsCount} findings (${Math.round((1-reductionPercent)*100)}% by confidence)`);
 
                 // Retry immediately (no delay needed for size reduction)
                 continue;
             }
 
+            // Strategy 3: Transient API errors — retry with exponential backoff
             if (isTransient && attempt < SYNTHESIS_MAX_RETRIES - 1) {
                 const retryDelay = SYNTHESIS_RETRY_DELAY * Math.pow(2, attempt);
                 console.warn(`⚠️  Synthesis attempt ${attempt + 1}/${SYNTHESIS_MAX_RETRIES} failed (${errorMessage}), retrying in ${retryDelay / 1000}s...`);
