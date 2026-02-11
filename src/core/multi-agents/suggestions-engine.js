@@ -655,6 +655,42 @@ ${i + 1}. **${rc.description}**
 
 **IMPORTANT**: Prioritize suggestions that address these root causes over symptoms. When multiple findings share the same root cause, combine them into a single holistic recommendation.`;
         }
+
+        // Add critical path information to synthesis context
+        if (causalGraph && causalGraph.criticalPaths && causalGraph.criticalPaths.length > 0) {
+            // Build path descriptions with node details
+            const pathDescriptions = causalGraph.criticalPaths.slice(0, 5).map((path, i) => {
+                const nodeDescriptions = path.map(nodeId => {
+                    const node = causalGraph.nodes[nodeId];
+                    if (!node) return nodeId;
+
+                    const impact = node.estimatedImpact?.reduction || 0;
+                    const impactStr = impact > 0 ? ` (${Math.round(impact)}ms)` : '';
+                    return `${node.description}${impactStr}`;
+                });
+
+                const pathStr = nodeDescriptions.join(' → ');
+
+                // Calculate total cascading impact
+                const totalImpact = path.reduce((sum, nodeId) => {
+                    const node = causalGraph.nodes[nodeId];
+                    return sum + (node?.estimatedImpact?.reduction || 0);
+                }, 0);
+
+                return `${i + 1}. **${pathStr}**
+   - Total cascading impact: ${totalImpact > 0 ? `~${Math.round(totalImpact)}ms` : 'multiple metrics affected'}
+   - Chain depth: ${path.length} levels
+   - **Priority**: Fixing the first issue in this chain prevents all downstream delays`;
+            });
+
+            graphEnhancedContext += `\n\n## Critical Dependency Paths
+
+The following paths show the longest causal chains from root causes to metric impacts:
+
+${pathDescriptions.join('\n\n')}
+
+**IMPORTANT**: When recommending fixes, prioritize the earliest issue in each critical path (the root cause). Fixing root causes eliminates all downstream symptoms in the chain.`;
+        }
     }
 
     // Step 1: Generate structured JSON suggestions using withStructuredOutput()

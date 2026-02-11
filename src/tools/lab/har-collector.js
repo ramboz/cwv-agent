@@ -20,11 +20,31 @@ export class HARCollector extends LabDataCollector {
   }
 
   cleanupHarData(har) {
-    // Remove preflight requests (OPTIONS) from HAR data
+    // Remove unnecessary requests from HAR data
+    // Note: We filter POST-collection rather than using CDP request interception
+    // because puppeteer-har requires exclusive request interception access.
+    // This still provides optimal performance as filtering happens before any analysis.
     if (har?.log?.entries) {
-      har.log.entries = har.log.entries.filter(entry =>
-        !(entry.request && entry.request.method === 'OPTIONS')
-      );
+      har.log.entries = har.log.entries.filter(entry => {
+        if (!entry.request) return true;
+
+        const method = entry.request.method;
+        const url = entry.request.url || '';
+
+        // Filter OPTIONS preflight requests (CORS)
+        if (method === 'OPTIONS') return false;
+
+        // Filter common analytics/tracking beacons that don't affect CWV
+        const isAnalyticsBeacon = (
+          url.includes('google-analytics.com/collect') ||
+          url.includes('analytics.google.com/g/collect') ||
+          url.includes('doubleclick.net/activity') ||
+          url.includes('/analytics/beacon')
+        );
+        if (isAnalyticsBeacon && method === 'POST') return false;
+
+        return true;
+      });
     }
     return har;
   }
