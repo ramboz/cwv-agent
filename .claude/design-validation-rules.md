@@ -1,4 +1,14 @@
-# Validation Improvements - Reducing Blocked Findings
+# Validation Rules & Quality Checks
+
+**Status:** Implemented
+**Date:** 2026-01-29
+**Author:** (from Phase 4: Validation & Quality)
+
+> Evidence quality checks and confidence calibration to reduce false positives while preserving valuable findings.
+
+---
+
+## Context
 
 **Date**: January 29, 2026
 **Context**: User found 2 findings blocked by validation that seemed like "obvious fixes"

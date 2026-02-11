@@ -1,4 +1,14 @@
-# Unified Gating Module - Implementation Code
+# Conditional Gating System
+
+**Status:** Implemented
+**Date:** 2025-XX-XX
+**Author:** (from core architecture)
+
+> PSI-gated collection to avoid expensive operations when performance is acceptable. Unified gating module for agents and collectors.
+
+---
+
+## Implementation
 
 **Complete implementation for `src/core/gating.js`**
 

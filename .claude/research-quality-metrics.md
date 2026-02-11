@@ -1,6 +1,14 @@
-# Quality Metrics Analysis - Understanding the Relationship
+# Quality Metrics Analysis
 
-## Your Question
+**Status:** Research
+**Date:** 2025-XX-XX
+**Author:** (exploratory analysis)
+
+> Understanding the relationship between agent output quality, validation metrics, and synthesis quality.
+
+---
+
+## Research Question
 
 You ran a test and got quality metrics showing:
 - **19 total findings** from agents

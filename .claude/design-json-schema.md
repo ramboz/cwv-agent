@@ -1,6 +1,15 @@
-# JSON-First Architecture - Implementation Complete
+# JSON-First Architecture
 
-**Date**: January 28, 2026
+**Status:** Implemented
+**Date:** 2026-01-28
+**Author:** (from LangChain v1.0 migration)
+
+> Generate JSON first with structured output, then format markdown from JSON (single source of truth). Fixes token limit causing JSON/MD corruption.
+
+---
+
+## Context
+
 **Issue**: Token limit causing JSON/MD corruption, suggestions mismatch
 **Solution**: Generate JSON first, format MD from JSON (single source of truth)
 

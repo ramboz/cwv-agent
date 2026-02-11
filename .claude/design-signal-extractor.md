@@ -1,4 +1,12 @@
-# Week 4: Signal Extraction Service - Complete ✅
+# Signal Extraction Service
+
+**Status:** Implemented
+**Date:** 2026-01-XX
+**Author:** (from Week 4 improvement plan)
+
+> Extract scattered signal extraction logic from orchestrator and suggestions-engine into a testable SignalExtractor service class.
+
+---
 
 ## Summary
 
