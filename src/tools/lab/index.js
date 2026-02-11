@@ -5,21 +5,21 @@
 
 import { cacheResults, getCachedResults } from '../../utils.js';
 import { setupBrowser, waitForLCP } from './browser-utils.js';
-import { summarizeHAR, startHARRecording, stopHARRecording } from './har-collector.js';
-import { summarizePerformanceEntries, collectPerformanceEntries } from './performance-collector.js';
+import { startHARRecording, stopHARRecording } from './har-collector.js';
+import { collectPerformanceEntries } from './performance-collector.js';
 import {
-  summarizeCoverageData,
   setupCodeCoverage,
   collectLcpCoverage,
   collectPageCoverage,
 } from './coverage-collector.js';
 import { collectJSApiData, setupCSPViolationTracking } from './js-api-collector.js';
-import { collectFontData, summarizeFontAnalysis } from './font-analyzer.js';
+import { collectFontData } from './font-analyzer.js';
 import { extractCwvRelevantHtml } from './html-extractor.js';
 import { analyzeThirdPartyScripts } from './third-party-attributor.js';
-import { attributeCLStoCSS, summarizeCLSAttribution } from './cls-attributor.js';
+import { attributeCLStoCSS } from './cls-attributor.js';
 import { Result } from '../../core/result.js';
 import { ErrorCodes } from '../../core/error-codes.js';
+import { CollectorFactory, CollectorConfig } from '../../core/factories/collector-factory.js';
 
 /**
  * Main Lab Data Collection Function
@@ -61,18 +61,27 @@ export async function collect(pageUrl, deviceType, { skipCache, blockRequests, c
     // Extract summary from cached CLS attribution if it exists
     const clsAttributionSummary = clsAttribution?.summary || clsAttribution || null;
 
+    // Create factory config for summarization
+    const config = new CollectorConfig(deviceType);
+
     return Result.ok(
       {
         har: collectHar ? harFile : null,
-        harSummary: collectHar && harFile ? summarizeHAR(harFile, deviceType, { thirdPartyAnalysis, pageUrl, coverageData }) : null,
+        harSummary: collectHar && harFile
+          ? CollectorFactory.createCollector('har', config).summarize(harFile, { thirdPartyAnalysis, pageUrl, coverageData })
+          : null,
         perfEntries,
-        perfEntriesSummary: summarizePerformanceEntries(perfEntries, deviceType, null, clsAttributionSummary),
+        perfEntriesSummary: CollectorFactory.createCollector('performance', config).summarize(perfEntries, { clsAttribution: clsAttributionSummary }),
         fullHtml,
         fontData,
-        fontDataSummary: fontData ? summarizeFontAnalysis(fontData) : null,
+        fontDataSummary: fontData
+          ? CollectorFactory.createCollector('font', config).summarize(fontData)
+          : null,
         jsApi,
         coverageData: collectCoverage ? coverageData : null,
-        coverageDataSummary: collectCoverage && coverageData ? summarizeCoverageData(coverageData, deviceType) : null,
+        coverageDataSummary: collectCoverage && coverageData
+          ? CollectorFactory.createCollector('coverage', config).summarize(coverageData)
+          : null,
         thirdPartyAnalysis,
         clsAttribution: clsAttributionSummary,
         fromCache: true,
@@ -170,7 +179,8 @@ export async function collect(pageUrl, deviceType, { skipCache, blockRequests, c
   if (needPerf && perfEntries && perfEntries.layoutShifts && perfEntries.layoutShifts.length > 0) {
     try {
       clsAttribution = await attributeCLStoCSS(perfEntries.layoutShifts, page);
-      const clsSummary = summarizeCLSAttribution(clsAttribution);
+      const config = new CollectorConfig(deviceType);
+      const clsSummary = CollectorFactory.createCollector('cls', config).summarize(clsAttribution);
       cacheResults(pageUrl, deviceType, 'cls-attribution', { detailed: clsAttribution, summary: clsSummary });
     } catch (err) {
       console.warn(`⚠️  CLS attribution failed: ${err.message}`);
@@ -224,25 +234,34 @@ export async function collect(pageUrl, deviceType, { skipCache, blockRequests, c
   // Close browser and save results
   await browser.close();
 
+  // Create factory config for summarization
+  const config = new CollectorConfig(deviceType);
+
   // Generate performance summary (with Priority 2 CLS attribution)
-  let perfEntriesSummary = summarizePerformanceEntries(perfEntries, deviceType, null, clsAttribution);
+  let perfEntriesSummary = CollectorFactory.createCollector('performance', config).summarize(perfEntries, { clsAttribution });
   cacheResults(pageUrl, deviceType, 'perf', perfEntriesSummary);
 
   // Generate HAR summary (with Priority 1 third-party analysis, pageUrl, and coverage data)
-  const harSummary = collectHar && harFile ? summarizeHAR(harFile, deviceType, { thirdPartyAnalysis, pageUrl, coverageData }) : null;
+  const harSummary = collectHar && harFile
+    ? CollectorFactory.createCollector('har', config).summarize(harFile, { thirdPartyAnalysis, pageUrl, coverageData })
+    : null;
   if (collectHar && harFile) {
     cacheResults(pageUrl, deviceType, 'har', harFile);
     cacheResults(pageUrl, deviceType, 'har', harSummary);
   }
 
   // Generate font analysis summary
-  const fontDataSummary = fontData ? summarizeFontAnalysis(fontData) : null;
+  const fontDataSummary = fontData
+    ? CollectorFactory.createCollector('font', config).summarize(fontData)
+    : null;
   if (fontData) {
     cacheResults(pageUrl, deviceType, 'fonts', fontDataSummary);
   }
 
   // Generate coverage usage summary
-  const coverageDataSummary = collectCoverage && coverageData ? summarizeCoverageData(coverageData, deviceType) : null;
+  const coverageDataSummary = collectCoverage && coverageData
+    ? CollectorFactory.createCollector('coverage', config).summarize(coverageData)
+    : null;
   if (collectCoverage && coverageData) {
     cacheResults(pageUrl, deviceType, 'coverage', coverageData);
     cacheResults(pageUrl, deviceType, 'coverage', coverageDataSummary);
