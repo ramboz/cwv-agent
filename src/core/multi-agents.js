@@ -30,14 +30,12 @@ export { runMultiAgents, generateConditionalAgentConfig } from './multi-agents/s
 // ============================================================================
 // Helper Functions (from orchestrator)
 // ============================================================================
-export {
-    extractPsiSignals,
-    computeHarStats,
-    computePerfSignals,
-    selectCodeResources,
-    getPsiAudit,
-    DEFAULT_THRESHOLDS
-} from './multi-agents/orchestrator.js';
+export { DEFAULT_THRESHOLDS } from './multi-agents/orchestrator.js';
+
+// Note: Signal extraction functions (extractPsiSignals, computeHarStats, computePerfSignals,
+// selectCodeResources, getPsiAudit) were moved to SignalExtractor service in Week 4.
+// If you need signal extraction, use:
+// import { SignalExtractor } from './services/signal-extractor.js';
 
 // ============================================================================
 // Transformer Functions
