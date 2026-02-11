@@ -11,7 +11,6 @@
 
 import { cacheResults, estimateTokenSize } from '../../utils.js';
 import { getCrux, getPsi, getRUM, getLabData, getCode } from '../collect.js';
-import { summarizeHAR } from '../../tools/lab/har-collector.js';
 import { detectAEMVersion } from '../../tools/aem.js';
 import { detectFramework } from '../../tools/code.js';
 import merge from '../../tools/merge.js';
@@ -20,6 +19,7 @@ import { LLMFactory } from '../../models/llm-factory.js';
 import { getTokenLimits, DEFAULT_MODEL } from '../../models/config.js';
 import { DEVICE_THRESHOLDS } from '../../config/thresholds.js';
 import { SignalExtractor } from '../services/signal-extractor.js';
+import { CollectorFactory, CollectorConfig } from '../factories/collector-factory.js';
 
 // Import runMultiAgents from suggestions-engine
 import { runMultiAgents } from './suggestions-engine.js';
@@ -153,7 +153,8 @@ export async function runAgentFlow(pageUrl, deviceType, options = {}) {
     // The initial HAR summary was generated without RUM, so recreate it now that RUM is available
     let harSummaryWithRUM = harSummary;
     if (harHeavy && rum && thirdPartyAnalysis) {
-        harSummaryWithRUM = summarizeHAR(harHeavy, deviceType, {
+        const harCollector = CollectorFactory.createCollector('har', new CollectorConfig(deviceType));
+        harSummaryWithRUM = harCollector.summarize(harHeavy, {
             thirdPartyAnalysis,
             pageUrl,
             coverageData,
