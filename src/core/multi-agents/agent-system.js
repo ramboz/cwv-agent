@@ -13,9 +13,17 @@ import { DynamicTool } from '@langchain/core/tools';
 import { RunnableSequence } from '@langchain/core/runnables';
 import { StringOutputParser } from '@langchain/core/output_parsers';
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
+import { zodToJsonSchema } from 'zod-to-json-schema';
 import { Result } from '../result.js';
 import { ErrorCodes } from '../error-codes.js';
 import { agentOutputSchemaFlat } from './schemas.js';
+
+// Pre-compute dereferenced JSON Schema from Zod once at module load
+// This fixes Gemini protobuf compatibility: $ref/$defs/$schema are not supported
+// (same approach as synthesis step in suggestions-engine.js)
+const agentOutputJsonSchema = zodToJsonSchema(agentOutputSchemaFlat, { $refStrategy: 'none' });
+delete agentOutputJsonSchema.$defs;
+delete agentOutputJsonSchema.$schema;
 
 /**
  * Tool Wrapper
@@ -57,12 +65,13 @@ export class Agent {
         // Extract the base LLM from ModelAdapter if needed for RunnableSequence
         const baseLLM = llm.getBaseLLM ? llm.getBaseLLM() : llm;
 
-        // Use structured output with Zod schema for guaranteed JSON structure
+        // Use structured output with dereferenced JSON Schema for guaranteed JSON structure
         // This prevents intermittent failures where agents return plain text instead of valid JSON
         // (Issue #1 from architectural review - CRITICAL fix)
-        // LangChain v1.0 requires explicit method parameter to enforce JSON mode
+        // IMPORTANT: Use pre-computed agentOutputJsonSchema (not raw Zod) to avoid
+        // $ref/$defs/$schema that Gemini's API doesn't support
         if (useStructuredOutput) {
-            const llmWithStructuredOutput = baseLLM.withStructuredOutput(agentOutputSchemaFlat, {
+            const llmWithStructuredOutput = baseLLM.withStructuredOutput(agentOutputJsonSchema, {
                 method: 'jsonSchema',
                 name: 'agent_findings'
             });
@@ -146,12 +155,21 @@ export class Agent {
                 const isEmptyGenerationError = errorMessage.includes("reading 'message'") &&
                     error?.stack?.includes('chat_models');
 
-                const isRetryable = isRateLimitError || isEmptyGenerationError;
+                // JSON parse errors from structured output: Gemini occasionally ignores
+                // the JSON schema constraint and returns plain text (e.g., HTML).
+                // This is transient — other agents with the same schema succeed.
+                const isJsonParseError = errorMessage.includes('Unexpected token') ||
+                    errorMessage.includes('is not valid JSON') ||
+                    errorMessage.includes('JSON.parse');
+
+                const isRetryable = isRateLimitError || isEmptyGenerationError || isJsonParseError;
 
                 // If retryable and retries remaining, retry with exponential backoff
                 if (isRetryable && attempt < maxRetries - 1) {
                     const retryDelay = INITIAL_RETRY_DELAY * Math.pow(2, attempt);
-                    const reason = isRateLimitError ? 'rate limit' : 'empty LLM generation';
+                    const reason = isRateLimitError ? 'rate limit'
+                        : isJsonParseError ? 'invalid JSON response'
+                        : 'empty LLM generation';
                     console.warn(`⚠️  ${this.name} hit ${reason}, retrying in ${retryDelay / 1000}s (attempt ${attempt + 2}/${maxRetries})`);
                     await new Promise(resolve => setTimeout(resolve, retryDelay));
                     continue;
