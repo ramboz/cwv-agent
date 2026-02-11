@@ -3,6 +3,59 @@ import { AEMCSContext } from './contexts/aemcs.js';
 import { AMSContext } from './contexts/ams.js';
 
 /**
+ * Chain-of-Thought reasoning instructions shared by all agents
+ * @returns {string} Reasoning guidance for all agents
+ */
+export function getChainOfThoughtGuidance() {
+  return `
+## Chain-of-Thought Reasoning (MANDATORY)
+
+For EVERY finding, provide structured reasoning in the 4-step chain: observation -> diagnosis -> mechanism -> solution.
+Be concrete with file names, sizes (KB), timings (ms), and metric values. Reference exact sources.
+
+**Examples**:
+
+### Good Reasoning (Coverage with Bytes):
+{
+  "observation": "clientlib-site.js is 3348KB total, with 1147KB unused code (34% waste)",
+  "diagnosis": "Unused JavaScript is downloaded, parsed, and kept in memory despite never executing, wasting bandwidth and processing time",
+  "mechanism": "1147KB unused code adds ~400ms download time on 3G and ~150ms parse time, directly delaying TBT and indirectly delaying LCP",
+  "solution": "Tree-shaking and code splitting removes 1147KB, eliminating download/parse overhead and improving TBT by ~550ms"
+}
+
+### Good Reasoning (HAR Per-Domain):
+{
+  "observation": "fonts.googleapis.com domain: 8 requests, 340KB, 1800ms total (225ms avg), with DNS: 120ms, SSL: 95ms",
+  "diagnosis": "High connection overhead (215ms for DNS+SSL) for external font domain delays font loading",
+  "mechanism": "Fonts block text rendering when not using font-display: swap, delaying FCP and potentially LCP",
+  "solution": "Adding <link rel='preconnect' href='https://fonts.googleapis.com' crossorigin> eliminates 215ms connection overhead"
+}
+
+### Good Reasoning (Font Strategy):
+{
+  "observation": "Proximanova font (400 weight, normal style) has font-display: swap but is not preloaded",
+  "diagnosis": "Critical font without preload hint is discovered late (after CSS parse), delaying text rendering",
+  "mechanism": "Late font discovery adds ~300-500ms to FCP as browser must parse CSS, discover font, then fetch it",
+  "solution": "Preloading with <link rel='preload' href='/fonts/ProximaNova-Regular.woff2' as='font' type='font/woff2' crossorigin> eliminates discovery delay"
+}
+
+### Bad Reasoning (Vague):
+{
+  "observation": "Site has unused code",  // ❌ No specifics
+  "diagnosis": "Unused code is bad for performance",  // ❌ Doesn't explain why
+  "mechanism": "It makes things slower",  // ❌ No causal path
+  "solution": "Remove it"  // ❌ Doesn't justify approach
+}
+
+**Remember**:
+- Use byte sizes from coverage (not just percentages)
+- Reference per-domain timings from HAR
+- Cite font-display values and preload status from font strategy
+- Connect observations to specific metric impacts (LCP ms, CLS score, INP ms)
+`;
+}
+
+/**
  * Returns CMS-specific technical context text
  * @param {String} cms
  * @return {String}

@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node index.js:*)",
+      "Bash(ls:*)",
+      "WebFetch(domain:blog.langchain.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:python.langchain.com)",
+      "WebFetch(domain:docs.langchain.com)",
+      "Bash(npm install:*)",
+      "Bash(npm view:*)",
+      "Bash(node -e:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "WebFetch(domain:www.npmjs.com)",
+      "Bash(curl:*)",
+      "WebFetch(domain:registry.npmjs.org)",
+      "Bash(npm ls:*)",
+      "Bash(tee:*)"
+    ]
+  }
+}

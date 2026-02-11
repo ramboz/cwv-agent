@@ -1,5 +1,11 @@
 import { estimateTokenSize } from '../utils.js';
-import { PHASE_FOCUS, getStructuredOutputFormat, getDataPriorityGuidance } from './shared.js';
+import {
+  PHASE_FOCUS,
+  getStructuredOutputFormat,
+  getDataPriorityGuidance,
+  getChainOfThoughtGuidance,
+} from './shared.js';
+import { createAgentPrompt } from './templates/base-agent-template.js';
 
 /**
  * Prompt for CrUX summary analysis
@@ -134,69 +140,9 @@ function getBasePrompt(role) {
   return `You are ${role} for Core Web Vitals optimization.`;
 }
 
-/**
- * Phase 2: Chain-of-Thought reasoning instructions
- * @returns {string} Reasoning guidance for all agents
- */
-function getChainOfThoughtGuidance() {
-  return `
-## Chain-of-Thought Reasoning (MANDATORY)
-
-For EVERY finding, provide structured reasoning in the 4-step chain: observation -> diagnosis -> mechanism -> solution.
-Be concrete with file names, sizes (KB), timings (ms), and metric values. Reference exact sources.
-
-**Examples**:
-
-### Good Reasoning (Coverage with Bytes):
-{
-  "observation": "clientlib-site.js is 3348KB total, with 1147KB unused code (34% waste)",
-  "diagnosis": "Unused JavaScript is downloaded, parsed, and kept in memory despite never executing, wasting bandwidth and processing time",
-  "mechanism": "1147KB unused code adds ~400ms download time on 3G and ~150ms parse time, directly delaying TBT and indirectly delaying LCP",
-  "solution": "Tree-shaking and code splitting removes 1147KB, eliminating download/parse overhead and improving TBT by ~550ms"
-}
-
-### Good Reasoning (HAR Per-Domain):
-{
-  "observation": "fonts.googleapis.com domain: 8 requests, 340KB, 1800ms total (225ms avg), with DNS: 120ms, SSL: 95ms",
-  "diagnosis": "High connection overhead (215ms for DNS+SSL) for external font domain delays font loading",
-  "mechanism": "Fonts block text rendering when not using font-display: swap, delaying FCP and potentially LCP",
-  "solution": "Adding <link rel='preconnect' href='https://fonts.googleapis.com' crossorigin> eliminates 215ms connection overhead"
-}
-
-### Good Reasoning (Font Strategy):
-{
-  "observation": "Proximanova font (400 weight, normal style) has font-display: swap but is not preloaded",
-  "diagnosis": "Critical font without preload hint is discovered late (after CSS parse), delaying text rendering",
-  "mechanism": "Late font discovery adds ~300-500ms to FCP as browser must parse CSS, discover font, then fetch it",
-  "solution": "Preloading with <link rel='preload' href='/fonts/ProximaNova-Regular.woff2' as='font' type='font/woff2' crossorigin> eliminates discovery delay"
-}
-
-### Bad Reasoning (Vague):
-{
-  "observation": "Site has unused code",  // ❌ No specifics
-  "diagnosis": "Unused code is bad for performance",  // ❌ Doesn't explain why
-  "mechanism": "It makes things slower",  // ❌ No causal path
-  "solution": "Remove it"  // ❌ Doesn't justify approach
-}
-
-**Remember**:
-- Use byte sizes from coverage (not just percentages)
-- Reference per-domain timings from HAR
-- Cite font-display values and preload status from font strategy
-- Connect observations to specific metric impacts (LCP ms, CLS score, INP ms)
-`;
-}
 
 export function cruxAgentPrompt(cms = 'eds') {
-  return `${getBasePrompt('analyzing Chrome User Experience Report (CrUX) field data')}
-
-${getDataPriorityGuidance('crux')}
-
-${getChainOfThoughtGuidance()}
-
-## Few-Shot Examples
-
-**Example 1: Field vs Lab Gap Analysis**
+  const examples = `**Example 1: Field vs Lab Gap Analysis**
 Input: CrUX LCP p75 = 4.2s (poor), PSI Lab LCP = 2.1s (good)
 Output:
 - Finding: Significant field-lab gap indicates real-world conditions differ from lab
@@ -231,25 +177,19 @@ Output:
 - Evidence: CrUX API returned no data for this URL
 - Impact: Cannot validate lab findings with field data
 - Confidence: N/A
-- Recommendation: Use PSI lab data as primary source, consider enabling RUM for field insights
+- Recommendation: Use PSI lab data as primary source, consider enabling RUM for field insights`;
 
-## Your Analysis Focus
-${PHASE_FOCUS.CRUX}
-
-${getStructuredOutputFormat('CrUX Agent')}
-`;
+  return createAgentPrompt({
+    agentName: 'CrUX Agent',
+    role: 'analyzing Chrome User Experience Report (CrUX) field data',
+    dataSource: 'crux',
+    focusKey: 'CRUX',
+    examples,
+  });
 }
 
 export function rumAgentPrompt(cms = 'eds') {
-  return `${getBasePrompt('analyzing Real User Monitoring (RUM) field data')}
-
-${getDataPriorityGuidance('rum')}
-
-${getChainOfThoughtGuidance()}
-
-## Few-Shot Examples
-
-**Example 1: RUM Shows Recent Regression**
+  const examples = `**Example 1: RUM Shows Recent Regression**
 Input: RUM LCP p75 = 3.2s (7-day), CrUX LCP p75 = 2.4s (28-day)
 Output:
 - Finding: LCP has regressed significantly in the past week
@@ -273,25 +213,19 @@ Output:
 - Finding: CLS issue confirmed by both CrUX and RUM, attributed to hero image
 - Evidence: RUM CLS (0.28) aligns with CrUX (0.25), RUM shows hero image as top shifter
 - Impact: Hero image without dimensions is consistent root cause
-- Confidence: 0.95 (cross-validated by two field data sources)
+- Confidence: 0.95 (cross-validated by two field data sources)`;
 
-## Your Analysis Focus
-${PHASE_FOCUS.RUM}
-
-${getStructuredOutputFormat('RUM Agent')}
-`;
+  return createAgentPrompt({
+    agentName: 'RUM Agent',
+    role: 'analyzing Real User Monitoring (RUM) field data',
+    dataSource: 'rum',
+    focusKey: 'RUM',
+    examples,
+  });
 }
 
 export function psiAgentPrompt(cms = 'eds') {
-  return `${getBasePrompt('analyzing PageSpeed Insights/Lighthouse results')}
-
-${getDataPriorityGuidance('psi')}
-
-${getChainOfThoughtGuidance()}
-
-## Few-Shot Examples
-
-**Example 1: LCP Issue with Render-Blocking Resources**
+  const examples = `**Example 1: LCP Issue with Render-Blocking Resources**
 Input: LCP = 4.2s, render-blocking-resources audit shows 3 scripts (850ms savings)
 Output:
 - Finding: Three render-blocking scripts delay LCP by 850ms
@@ -312,21 +246,21 @@ Output:
 - Finding: 12 images lack explicit dimensions, causing layout shifts during load
 - Evidence: PSI unsized-images audit identifies 12 instances
 - Impact: Adding dimensions would prevent shifts, reducing CLS from 0.35 to ~0.10 (estimated 70% reduction)
-- Confidence: 0.9 (dimensions fix is direct cause-effect)
+- Confidence: 0.9 (dimensions fix is direct cause-effect)`;
 
-## Your Analysis Focus
-${PHASE_FOCUS.PSI}
-
-${getStructuredOutputFormat('PSI Agent')}
-`;
+  return createAgentPrompt({
+    agentName: 'PSI Agent',
+    role: 'analyzing PageSpeed Insights/Lighthouse results',
+    dataSource: 'psi',
+    focusKey: 'PSI',
+    examples,
+  });
 }
 
 export function perfObserverAgentPrompt(cms = 'eds', options = {}) {
   const { lightMode = false } = options;
 
-  let focusInstruction = '';
-  if (lightMode) {
-    focusInstruction = `
+  const additionalContext = lightMode ? `
 **LIGHT MODE** - Focus on low-hanging fruit performance issues:
 
 This analysis focuses ONLY on:
@@ -334,19 +268,9 @@ This analysis focuses ONLY on:
 - **CLS Attribution**: Identify layout shifts caused by unsized images or font swaps
 
 ONLY report findings related to LCP timing or CLS attribution. Ignore long tasks, INP, and other issues.
-`;
-  }
+` : '';
 
-  return `${getBasePrompt('analyzing Performance Observer data captured during page load simulation')}
-${focusInstruction}
-
-${getDataPriorityGuidance('perf_observer')}
-
-${getChainOfThoughtGuidance()}
-
-## Few-Shot Examples
-
-**Example 1: Long Tasks Blocking Main Thread**
+  const examples = `**Example 1: Long Tasks Blocking Main Thread**
 Input: 5 long tasks detected, total 850ms, largest at 320ms attributed to "app.bundle.js"
 Output:
 - Finding: Main thread blocked by long tasks totaling 850ms, largest from app.bundle.js
@@ -408,21 +332,22 @@ Output:
 - Evidence: first-input entry shows 130ms input delay + 50ms processing time
 - Impact: Reducing main-thread blocking could improve FID by ~100-150ms
 - Confidence: 0.85 (first-input provides reliable FID measurement)
-- Recommendation: Defer or break up long tasks blocking main thread during page load
+- Recommendation: Defer or break up long tasks blocking main thread during page load`;
 
-## Your Analysis Focus
-${PHASE_FOCUS.PERF_OBSERVER}
-
-${getStructuredOutputFormat('Performance Observer Agent')}
-`;
+  return createAgentPrompt({
+    agentName: 'Performance Observer Agent',
+    role: 'analyzing Performance Observer data captured during page load simulation',
+    dataSource: 'perf_observer',
+    focusKey: 'PERF_OBSERVER',
+    examples,
+    additionalContext,
+  });
 }
 
 export function harAgentPrompt(cms = 'eds', options = {}) {
   const { lightMode = false } = options;
 
-  let focusInstruction = '';
-  if (lightMode) {
-    focusInstruction = `
+  const additionalContext = lightMode ? `
 **LIGHT MODE** - Focus on low-hanging fruit performance issues:
 
 This analysis focuses ONLY on:
@@ -430,19 +355,9 @@ This analysis focuses ONLY on:
 - **Font Network Timing**: Identify font CDN timing, missing preconnect
 
 ONLY report findings related to hero image or font network timing. Ignore other network issues.
-`;
-  }
+` : '';
 
-  return `${getBasePrompt('analyzing HAR (HTTP Archive) file data for Core Web Vitals optimization focused on network performance')}
-${focusInstruction}
-
-${getDataPriorityGuidance('har')}
-
-${getChainOfThoughtGuidance()}
-
-## Few-Shot Examples
-
-**Example 1: High TTFB Due to Server Processing**
+  const examples = `**Example 1: High TTFB Due to Server Processing**
 Input: HAR shows main document TTFB = 1200ms, timing breakdown: DNS=10ms, TCP=15ms, SSL=20ms, Wait=1100ms, Download=55ms
 Output:
 - Finding: Server processing time (Wait phase) is primary bottleneck at 1100ms (92% of total)
@@ -532,13 +447,16 @@ Output:
   * Diagnosis: Chain executes during page load, blocking main thread and delaying interactivity
   * Mechanism: Non-critical third-party scripts compete with critical resources for bandwidth and CPU
   * Solution: Defer entire chain using async/defer attributes or load post-LCP via setTimeout
-  * CodeExample: \`<script src="cookielaw.js" defer></script>\` or load after window.onload
+  * CodeExample: \`<script src="cookielaw.js" defer></script>\` or load after window.onload`;
 
-## Your Analysis Focus
-${PHASE_FOCUS.HAR}
-
-${getStructuredOutputFormat('HAR Agent')}
-`;
+  return createAgentPrompt({
+    agentName: 'HAR Agent',
+    role: 'analyzing HAR (HTTP Archive) file data for Core Web Vitals optimization focused on network performance',
+    dataSource: 'har',
+    focusKey: 'HAR',
+    examples,
+    additionalContext,
+  });
 }
 
 export function htmlAgentPrompt(cms = 'eds', options = {}) {
