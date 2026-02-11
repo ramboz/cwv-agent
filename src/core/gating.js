@@ -85,10 +85,19 @@ const AGENT_RULES = {
       }
     ],
 
+    // HAR summary signals (from pre-generated HAR summary)
+    summarySignals: [
+      {
+        name: 'Sequential Chains',
+        metric: 'hasSequentialChains',
+        description: 'HAR summary detected sequential request chains (depth >= 3, delay > 500ms)'
+      }
+    ],
+
     // Minimum signals required to trigger agent
     minSignals: 1,  // Any single signal triggers (was: 2)
 
-    // Logic: OR across all signals (any data signal OR any PSI signal)
+    // Logic: OR across all signals (any data signal OR any PSI signal OR any summary signal)
     logic: 'OR'
   },
 
@@ -182,6 +191,7 @@ export class AgentGating {
    * @param {object} signals - Signal values
    * @param {object} signals.data - Data-based signals (e.g., { entriesCount: 85, transferBytes: 2200000 })
    * @param {object} signals.psi - PSI-based signals (e.g., { redirects: false, serverResponseSlow: false })
+   * @param {object} signals.summary - Summary-based signals (e.g., { hasSequentialChains: true })
    * @returns {object} Decision object with shouldRun, reason, signalsPassed, signalsTotal
    */
   shouldRunAgent(agentType, signals) {
@@ -212,6 +222,19 @@ export class AgentGating {
         reason: result.reason,
         type: 'psi'
       });
+    }
+
+    // Evaluate summary signals (if present)
+    if (rules.summarySignals && signals.summary) {
+      for (const signal of rules.summarySignals) {
+        const result = this.evaluateSummarySignal(signal, signals.summary);
+        results.push({
+          name: signal.name,
+          passed: result.passed,
+          reason: result.reason,
+          type: 'summary'
+        });
+      }
     }
 
     // Count passed signals
@@ -300,6 +323,21 @@ export class AgentGating {
     return {
       passed,
       reason: `${signal.name}: ${passed ? '✅ PASS (audit fails)' : '❌ FAIL (audit passes)'}`
+    };
+  }
+
+  /**
+   * Evaluate a summary-based signal
+   */
+  evaluateSummarySignal(signal, summary) {
+    const value = summary[signal.metric];
+
+    // Summary signals are boolean: true = condition met
+    const passed = value === true;
+
+    return {
+      passed,
+      reason: `${signal.name}: ${passed ? '✅ PASS (detected)' : '❌ FAIL (not detected)'}`
     };
   }
 

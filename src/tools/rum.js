@@ -434,6 +434,43 @@ export function summarizeRUM(rumData, currentPageUrl = null) {
       const ttfbStatus = currentPage.ttfb <= CWV_METRICS.TTFB.good ? '✅ GOOD' : currentPage.ttfb <= CWV_METRICS.TTFB.needsImprovement ? '⚠️ NEEDS IMPROVEMENT' : '❌ POOR';
       report += `* **TTFB:** ${currentPage.ttfb}ms ${ttfbStatus}\n`;
     }
+
+    // Add interaction target breakdown for INP on current page
+    if (metrics.inp && metrics.inp.topSlow && metrics.inp.topSlow.length > 0) {
+      const currentPageInteractions = metrics.inp.topSlow.filter(i => i.url === currentPageUrl);
+      if (currentPageInteractions.length > 0) {
+        // Group by target element
+        const byTarget = new Map();
+        currentPageInteractions.forEach(interaction => {
+          const key = `${interaction.target}::${interaction.interactionType}`;
+          if (!byTarget.has(key)) {
+            byTarget.set(key, []);
+          }
+          byTarget.get(key).push(interaction.value);
+        });
+
+        // Calculate p75 for each target
+        const targetStats = Array.from(byTarget.entries()).map(([key, values]) => {
+          const [target, interactionType] = key.split('::');
+          const sorted = values.sort((a, b) => a - b);
+          const p75Index = Math.ceil(sorted.length * 0.75) - 1;
+          return {
+            target,
+            interactionType,
+            p75: sorted[p75Index],
+            count: values.length
+          };
+        }).sort((a, b) => b.p75 - a.p75);
+
+        if (targetStats.length > 0) {
+          report += `* **Interaction Targets (Current Page):**\n`;
+          targetStats.slice(0, 5).forEach(stat => {
+            report += `  * \`${stat.target}\` (${stat.interactionType}): p75 ${stat.p75}ms, ${stat.count} samples\n`;
+          });
+        }
+      }
+    }
+
     report += `\n`;
   } else if (currentPageUrl) {
     report += `**Current Page:** No RUM data found for ${new URL(currentPageUrl).pathname} in last ${daysAnalyzed} days\n\n`;

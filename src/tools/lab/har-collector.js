@@ -1,6 +1,7 @@
 import PuppeteerHar from 'puppeteer-har';
 import { LabDataCollector } from './base-collector.js';
 import { RESOURCE_THRESHOLDS, DATA_LIMITS, DISPLAY_LIMITS } from '../../config/thresholds.js';
+import { correlateChainWithRUM, formatRUMCorrelation } from '../../core/chain-rum-correlator.js';
 
 /**
  * HAR (HTTP Archive) Data Collector
@@ -28,10 +29,12 @@ export class HARCollector extends LabDataCollector {
     return har;
   }
 
-  summarize(harData, { thirdPartyAnalysis = null, pageUrl = null } = {}) {
+  summarize(harData, { thirdPartyAnalysis = null, pageUrl = null, coverageData = null, rumData = null } = {}) {
     // Store for use in analyze methods
     this.thirdPartyAnalysis = thirdPartyAnalysis;
     this.pageUrl = pageUrl;
+    this.coverageData = coverageData;
+    this.rumData = rumData;
 
     // Validate data
     const error = this.validateOrDefault(
@@ -893,6 +896,9 @@ export class HARCollector extends LabDataCollector {
 
     let report = '* **JS Request Chains (Sequential Loading Detected):**\n';
 
+    // Build coverage map for unused code detection
+    const coverageMap = this.buildCoverageMap(this.coverageData);
+
     // Report sequential chains
     if (uniqueChains.length > 0) {
       uniqueChains.slice(0, 3).forEach(({ path, totalDelay }) => {
@@ -915,7 +921,48 @@ export class HARCollector extends LabDataCollector {
           report += '\n';
         });
 
-        report += `    * ${this.generateChainRecommendation(path, classification)}\n`;
+        // Add RUM correlation if available
+        if (this.rumData && this.pageUrl) {
+          const rumInpData = this.rumData.data?.metrics?.inp;
+          if (rumInpData) {
+            const correlation = correlateChainWithRUM(
+              { path },
+              rumInpData,
+              this.pageUrl
+            );
+            if (correlation) {
+              const summary = formatRUMCorrelation(correlation);
+              report += `    * ${summary}\n`;
+            }
+          }
+        }
+
+        // Check for unused code in chain (only for scripts and stylesheets)
+        const unusedInChain = path
+          .filter(step => step.resourceType === 'script' || step.resourceType === 'stylesheet')
+          .map(step => {
+            const coverage = coverageMap.get(step.url);
+            return coverage && coverage.unusedPercent > 50 ? {
+              url: step.url,
+              unusedKB: Math.round(coverage.unused / 1024),
+              unusedPercent: Math.round(coverage.unusedPercent)
+            } : null;
+          })
+          .filter(Boolean);
+
+        // Add unused code warnings if present
+        if (unusedInChain.length > 0) {
+          report += `    * ⚠️  **Unused Code Detected:**\n`;
+          unusedInChain.forEach(({ url, unusedKB, unusedPercent }) => {
+            const urlShort = this.truncate(url);
+            report += `        - ${urlShort}: ${unusedKB}KB (${unusedPercent}%) unused\n`;
+          });
+          const totalUnusedKB = unusedInChain.reduce((sum, u) => sum + u.unusedKB, 0);
+          report += `    * **Recommendation**: Remove ${totalUnusedKB}KB of unused code from this chain via code-splitting or tree-shaking before considering preload\n`;
+        } else {
+          // Use standard recommendation logic
+          report += `    * ${this.generateChainRecommendation(path, classification)}\n`;
+        }
       });
     }
 
@@ -1019,6 +1066,38 @@ export class HARCollector extends LabDataCollector {
     }
 
     return '**Recommendation**: Consider removing or deferring non-critical resources in this chain';
+  }
+
+  /**
+   * Build a map of URL -> coverage statistics for quick lookup
+   * @param {Object} coverageData - Coverage data from coverage collector
+   * @returns {Map<string, Object>} Map of URL to { total, used, unused, unusedPercent }
+   */
+  buildCoverageMap(coverageData) {
+    const map = new Map();
+
+    if (!coverageData) return map;
+
+    try {
+      Object.entries(coverageData).forEach(([url, fileData]) => {
+        // Only include files with _bytes metadata
+        if (fileData && fileData._bytes) {
+          map.set(url, {
+            total: fileData._bytes.total || 0,
+            used: fileData._bytes.used || 0,
+            unused: fileData._bytes.unused || 0,
+            unusedPercent: fileData._bytes.unusedPercent || 0,
+            preLcp: fileData._bytes.preLcp || 0,
+            postLcp: fileData._bytes.postLcp || 0
+          });
+        }
+      });
+    } catch (error) {
+      // Graceful degradation - return empty map if coverage data is malformed
+      console.warn('⚠️  Failed to build coverage map:', error.message);
+    }
+
+    return map;
   }
 
   // Helper methods

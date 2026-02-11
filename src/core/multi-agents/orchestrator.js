@@ -11,6 +11,7 @@
 
 import { cacheResults, estimateTokenSize } from '../../utils.js';
 import { getCrux, getPsi, getRUM, getLabData, getCode } from '../collect.js';
+import { summarizeHAR } from '../../tools/lab/har-collector.js';
 import { detectAEMVersion } from '../../tools/aem.js';
 import { detectFramework } from '../../tools/code.js';
 import merge from '../../tools/merge.js';
@@ -240,6 +241,18 @@ export async function runAgentFlow(pageUrl, deviceType, options = {}) {
             : `${dataQualityIssues.length} data source(s) unavailable: ${dataQualityIssues.map(i => i.source).join(', ')}`
     };
 
+    // Regenerate HAR summary with RUM data for chain correlation
+    // The initial HAR summary was generated without RUM, so recreate it now that RUM is available
+    let harSummaryWithRUM = harSummary;
+    if (harHeavy && rum && thirdPartyAnalysis) {
+        harSummaryWithRUM = summarizeHAR(harHeavy, deviceType, {
+            thirdPartyAnalysis,
+            pageUrl,
+            coverageData,
+            rumData: { data: { metrics: rum?.metrics || {} } }
+        });
+    }
+
     // Assemble page data for prompts/agents
     const pageData = {
         pageUrl,
@@ -257,7 +270,7 @@ export async function runAgentFlow(pageUrl, deviceType, options = {}) {
         psiSummary,
         rumSummary,
         perfEntriesSummary,
-        harSummary,
+        harSummary: harSummaryWithRUM,
         coverageDataSummary,
         fullHtml,
         fontData,

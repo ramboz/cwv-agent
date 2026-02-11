@@ -486,6 +486,54 @@ Output:
 - Root Cause: True (cache configuration is the root cause)
 - Recommendation: Fix cache headers (Cache-Control, Vary), increase TTL, check invalidation rules
 
+**Example 6: Critical Request Chain Delaying LCP (Phase 4B)**
+Input: HAR shows 3-level JS chain [critical]: main.js (loaded at 500ms) → translations.js (loaded at 1200ms) → adobe.js (loaded at 2500ms), total sequential delay 2000ms
+Output:
+- ID: har-chain-lcp-1
+- Type: bottleneck
+- Metric: LCP
+- Description: Critical 3-level JavaScript request chain adds 2000ms sequential delay blocking LCP rendering
+- Evidence:
+  * Source: har
+  * Reference: main.js → translations.js → adobe.js (3-level chain, [critical])
+  * Confidence: 0.85
+- EstimatedImpact:
+  * Metric: LCP
+  * Reduction: 1500 (preloading translations.js and adobe.js allows parallel download)
+  * Confidence: 0.75
+  * Calculation: Sequential delay 2000ms - parallel overhead 500ms = 1500ms saved
+- Root Cause: True (sequential discovery prevents parallel loading)
+- Reasoning:
+  * Observation: HAR shows 3-level sequential chain with 700ms gaps between each level
+  * Diagnosis: Scripts discovered sequentially - each must download and execute before triggering next level
+  * Mechanism: Sequential chains prevent parallel download, adding cumulative network latency to LCP
+  * Solution: Preload translations.js and adobe.js in HTML <head> to enable parallel downloading while maintaining execution order
+  * CodeExample: \`<link rel="preload" as="script" href="/scripts/translations.js">\n<link rel="preload" as="script" href="/scripts/adobe.js">\`
+
+**Example 7: Deferrable Third-Party Chain (Phase 4B)**
+Input: HAR shows 4-level JS chain [deferrable]: cookielaw.js → analytics.js → tracking.js → beacon.js, total delay 2100ms, all consent/analytics category
+Output:
+- ID: har-chain-defer-1
+- Type: waste
+- Metric: TBT
+- Description: Deferrable 4-level third-party chain (consent/analytics) adds 2100ms blocking main thread unnecessarily
+- Evidence:
+  * Source: har
+  * Reference: cookielaw.js → analytics.js → tracking.js → beacon.js (4-level chain, [deferrable])
+  * Confidence: 0.9
+- EstimatedImpact:
+  * Metric: TBT
+  * Reduction: 2100 (defer entire chain to post-LCP)
+  * Confidence: 0.85
+  * Calculation: Full chain delay 2100ms eliminated from critical path
+- Root Cause: True (third-party scripts loaded synchronously)
+- Reasoning:
+  * Observation: HAR shows all 4 scripts are non-critical third-parties (cookie consent and analytics)
+  * Diagnosis: Chain executes during page load, blocking main thread and delaying interactivity
+  * Mechanism: Non-critical third-party scripts compete with critical resources for bandwidth and CPU
+  * Solution: Defer entire chain using async/defer attributes or load post-LCP via setTimeout
+  * CodeExample: \`<script src="cookielaw.js" defer></script>\` or load after window.onload
+
 ## Your Analysis Focus
 ${PHASE_FOCUS.HAR}
 
@@ -581,6 +629,22 @@ Output:
 - Confidence: 0.85 (swap is generally safe)
 - Fix: Add font-display: swap to @font-face rules, consider size-adjust for fallback
 
+**IMPORTANT: Cross-Reference HAR Chain Analysis**
+
+Before recommending any preload/preconnect hints:
+1. **Check if the resource is part of a request chain** (see HAR summary "JS Request Chains" section)
+2. **Check the chain classification**: [critical], [deferrable], or [mixed]
+3. **Apply the correct recommendation**:
+   - If chain is **DEFERRABLE** (only analytics/consent/monitoring/ads): NEVER recommend preload/preconnect
+   - If chain is **CRITICAL** (first-party scripts/stylesheets/fonts): Safe to recommend preload
+   - If chain has **>50% unused code** (see HAR summary): Recommend code-splitting BEFORE preload
+4. **Conflicting recommendations are harmful**:
+   - DO NOT recommend preloading scripts that HAR Agent classified as deferrable
+   - DO NOT recommend preconnecting to domains in deferrable chains
+   - DO recommend async/defer for deferrable chains instead
+
+**Example**: HAR shows "4-level chain [deferrable]: cookielaw → analytics → tracking" → DO NOT recommend preload/preconnect to cookielaw.org
+
 ## Your Analysis Focus
 ${PHASE_FOCUS.HTML}
 
@@ -634,6 +698,22 @@ Output:
 - Evidence: Coverage shows 88% unused in vendor.min.js despite minification
 - Impact: Tree-shaking or targeted imports could reduce bundle by ~280KB, improving TBT by ~250ms
 - Confidence: 0.9 (minified files still analyzed in Phase 0, library bloat is common)
+
+**Example 4: Unused Code in Critical Request Chain**
+Input: app.bundle.js in critical chain (HAR shows [critical] classification), 420KB file with 65% unused code (280KB)
+HAR summary shows: "3-level chain [critical]: main.js → app.bundle.js → vendor.js, 1200ms delay"
+Output:
+- Finding: app.bundle.js has 280KB (65%) unused code within a critical request chain
+- Evidence: Coverage shows 280KB unused across app.bundle.js; HAR identifies it in critical-path chain
+- Impact: Code-splitting could reduce bundle by 280KB, improving both chain delay and TBT
+- Confidence: 0.85 (coverage data accurate, critical chain context from HAR)
+- **⚠️ IMPORTANT**: Recommend code-splitting BEFORE considering preload for this chain
+- Recommendation: Split app.bundle.js into:
+  1. app-core.js (140KB, critical functionality)
+  2. app-features.js (280KB, lazy-loaded non-critical code)
+- Then preload only app-core.js in the chain
+- Root Cause: Bundling strategy includes all features upfront without code-splitting
+- DO NOT recommend preloading bloated bundles — fix the bloat first
 
 ## Your Analysis Focus
 ${PHASE_FOCUS.COVERAGE}

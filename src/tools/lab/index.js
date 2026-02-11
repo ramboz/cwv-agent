@@ -64,7 +64,7 @@ export async function collect(pageUrl, deviceType, { skipCache, blockRequests, c
     return Result.ok(
       {
         har: collectHar ? harFile : null,
-        harSummary: collectHar && harFile ? summarizeHAR(harFile, deviceType, { thirdPartyAnalysis, pageUrl }) : null,
+        harSummary: collectHar && harFile ? summarizeHAR(harFile, deviceType, { thirdPartyAnalysis, pageUrl, coverageData }) : null,
         perfEntries,
         perfEntriesSummary: summarizePerformanceEntries(perfEntries, deviceType, null, clsAttributionSummary),
         fullHtml,
@@ -146,8 +146,6 @@ export async function collect(pageUrl, deviceType, { skipCache, blockRequests, c
   // Collect HAR data
   if (needHar) {
     harFile = await stopHARRecording(har);
-    const count = Array.isArray(harFile?.log?.entries) ? harFile.log.entries.length : 0;
-    console.log(`📊 HAR collected: ${count} entries`);
   }
 
   // Enhanced attribution: Third-party scripts (Priority 1)
@@ -230,8 +228,8 @@ export async function collect(pageUrl, deviceType, { skipCache, blockRequests, c
   let perfEntriesSummary = summarizePerformanceEntries(perfEntries, deviceType, null, clsAttribution);
   cacheResults(pageUrl, deviceType, 'perf', perfEntriesSummary);
 
-  // Generate HAR summary (with Priority 1 third-party analysis and pageUrl)
-  const harSummary = collectHar && harFile ? summarizeHAR(harFile, deviceType, { thirdPartyAnalysis, pageUrl }) : null;
+  // Generate HAR summary (with Priority 1 third-party analysis, pageUrl, and coverage data)
+  const harSummary = collectHar && harFile ? summarizeHAR(harFile, deviceType, { thirdPartyAnalysis, pageUrl, coverageData }) : null;
   if (collectHar && harFile) {
     cacheResults(pageUrl, deviceType, 'har', harFile);
     cacheResults(pageUrl, deviceType, 'har', harSummary);

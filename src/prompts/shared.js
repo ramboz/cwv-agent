@@ -46,6 +46,40 @@ Do not provide recommendations for:
 }
 
 /**
+ * Chain classification guidance for agents analyzing request chains
+ * Helps agents make correct preload/defer recommendations based on chain type
+ * @return {String}
+ */
+export function getChainClassificationGuidance() {
+  return `## Chain Classification Guide
+
+The HAR analysis classifies JavaScript request chains into three types:
+
+### CRITICAL Chains
+- Contain first-party scripts, stylesheets, or fonts
+- These resources block rendering and must execute early
+- **ALWAYS recommend preloading** these chain scripts
+- Example: main.js → app-framework.js → vendor-library.js
+- Preload strategy: Add \`<link rel="preload" as="script">\` for each level
+
+### DEFERRABLE Chains
+- Contain ONLY non-critical third-party scripts (analytics, consent, monitoring, ads)
+- These should load AFTER page renders
+- **NEVER recommend preconnect or preload** for deferrable chains
+- **ALWAYS recommend async/defer** attributes instead
+- Example: cookielaw.org → analytics.js → tracking.js
+- Defer strategy: Add async/defer attributes or load post-LCP
+
+### MIXED Chains
+- Contain both critical and deferrable resources
+- Preload the critical parts, defer the deferrable parts
+- Example: main.js (critical) → adobedtm (deferrable) → vendor.js (critical)
+- Strategy: Split the chain - preload critical, async/defer deferrable
+
+**Important**: Always check chain classification BEFORE recommending preload/preconnect.`;
+}
+
+/**
  * Common analysis priorities shared by all agents.
  * Included once in the global system prompt (initializeSystemAgents) to avoid
  * repeating ~100 lines in every agent's prompt.
@@ -488,15 +522,21 @@ export const PHASE_FOCUS = {
 - Reference the \`getCategoryRecommendation()\` function output for each category
 - Example: "session-replay category (clarity.microsoft.com): NEVER preconnect, action: defer, reason: 200-500ms overhead"
 - **PRIORITY 3: Analyze JS Request Chains for Sequential Loading Patterns**
-  * Look for the "JS Request Chains" section in the HAR summary — it shows sequential script loading chains
+  * Look for the "JS Request Chains" section in the HAR summary — it shows sequential script loading chains with classification
   * Sequential chains create waterfall delays: each script must be downloaded AND executed before triggering the next level's imports
   * Common pattern in bundled sites: main.js imports translations.js which imports adobe.js which loads alloy.js
   * Each level in the chain adds the script's download time + execution time before the next level can start
-  * For chains with depth >= 3 and total delay > 500ms, recommend preloading the chain scripts
-  * Recommendation: Add \`<link rel="preload" as="script">\` in the HTML \`<head>\` (or via HTTP Link headers) for the scripts in the chain. This allows the browser to download ALL scripts in parallel while still executing them in dependency order
+  * **IMPORTANT: Check chain classification [critical/deferrable/mixed] before recommending preload**
+  * For chains with depth >= 3 and total delay > 500ms:
+    1. **Check chain classification** from HAR summary (critical/deferrable/mixed)
+    2. **CRITICAL chains**: Recommend preloading all scripts - Add \`<link rel="preload" as="script">\` in HTML \`<head>\`
+    3. **DEFERRABLE chains**: NEVER recommend preload - Instead recommend \`async\`/\`defer\` attributes or lazy loading post-LCP
+    4. **MIXED chains**: Preload only the critical parts (first-party scripts), defer non-critical third-parties
+  * This allows the browser to download ALL scripts in parallel while still executing them in dependency order
   * This is different from removing scripts — the scripts still need to run, they just don't need to be discovered sequentially
-  * Example finding: "3-level JS chain (main.js → translations.js → adobe.js) adds 3.3s sequential delay. Preloading translations.js and adobe.js would allow parallel download, saving ~2s of network waterfall time"
-  * Only recommend preloading for core framework/library scripts — not for individual page-specific blocks or components`,
+  * Example finding (CRITICAL): "3-level JS chain [critical] (main.js → translations.js → adobe.js) adds 3.3s sequential delay. Preloading translations.js and adobe.js would allow parallel download, saving ~2s"
+  * Example finding (DEFERRABLE): "4-level JS chain [deferrable] (cookielaw → analytics → tracking → beacon) adds 2.1s delay. Defer these third-party scripts using async attribute to load post-LCP"
+  * Only recommend preloading for critical chains — NEVER for deferrable chains containing only analytics/consent/monitoring`,
 
   HTML: `### Markup Analysis
 - Examine provided HTML for the page
