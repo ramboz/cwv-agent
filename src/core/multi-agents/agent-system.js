@@ -60,8 +60,12 @@ export class Agent {
         // Use structured output with Zod schema for guaranteed JSON structure
         // This prevents intermittent failures where agents return plain text instead of valid JSON
         // (Issue #1 from architectural review - CRITICAL fix)
+        // LangChain v1.0 requires explicit method parameter to enforce JSON mode
         if (useStructuredOutput) {
-            const llmWithStructuredOutput = baseLLM.withStructuredOutput(agentOutputSchemaFlat);
+            const llmWithStructuredOutput = baseLLM.withStructuredOutput(agentOutputSchemaFlat, {
+                method: 'jsonSchema',
+                name: 'agent_findings'
+            });
             this.chain = RunnableSequence.from([prompt, llmWithStructuredOutput]);
         } else {
             // Fallback for agents that need plain text output (e.g., final synthesis)
