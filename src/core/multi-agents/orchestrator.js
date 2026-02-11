@@ -19,99 +19,13 @@ import { applyRules } from '../../tools/rules.js';
 import { LLMFactory } from '../../models/llm-factory.js';
 import { getTokenLimits, DEFAULT_MODEL } from '../../models/config.js';
 import { DEVICE_THRESHOLDS } from '../../config/thresholds.js';
-import { RESOURCE_DENYLIST_REGEX } from '../../config/regex-patterns.js';
+import { SignalExtractor } from '../services/signal-extractor.js';
 
 // Import runMultiAgents from suggestions-engine
 import { runMultiAgents } from './suggestions-engine.js';
 
 // Re-export DEVICE_THRESHOLDS as DEFAULT_THRESHOLDS for backward compatibility
 export const DEFAULT_THRESHOLDS = DEVICE_THRESHOLDS;
-
-/**
- * Get PSI audit by ID safely
- */
-function getPsiAudit(psi, auditId) {
-    try {
-        return psi?.data?.lighthouseResult?.audits?.[auditId] || null;
-    } catch (e) {
-        return null;
-    }
-}
-
-/**
- * Extract key PSI signals for gating decisions
- */
-function extractPsiSignals(psi) {
-    const lcp = getPsiAudit(psi, 'largest-contentful-paint')?.numericValue ?? null;
-    const tbt = getPsiAudit(psi, 'total-blocking-time')?.numericValue ?? null;
-    const cls = getPsiAudit(psi, 'cumulative-layout-shift')?.numericValue ?? null;
-    const redirects = (getPsiAudit(psi, 'redirects')?.score ?? 1) < 1;
-    const unusedJsAudit = getPsiAudit(psi, 'unused-javascript');
-    const reduceUnusedJS = !!(unusedJsAudit && ((unusedJsAudit.score ?? 1) < 1));
-    const serverResponseSlow = (getPsiAudit(psi, 'server-response-time')?.score ?? 1) < 1;
-    const renderBlocking = (getPsiAudit(psi, 'render-blocking-resources')?.score ?? 1) < 1;
-    const usesRelPreconnect = (getPsiAudit(psi, 'uses-rel-preconnect')?.score ?? 1) < 1;
-    return { lcp, tbt, cls, redirects, reduceUnusedJS, serverResponseSlow, renderBlocking, usesRelPreconnect };
-}
-
-/**
- * Compute HAR stats used for gating
- */
-function computeHarStats(har) {
-    try {
-        const entries = har?.log?.entries || [];
-        let transferBytes = 0;
-        for (const e of entries) {
-            // Prefer _transferSize, fallback to bodySize/content.size
-            const t = (e.response?._transferSize ?? e.response?.bodySize ?? e.response?.content?.size ?? 0);
-            transferBytes += Math.max(0, t);
-        }
-        return { entriesCount: entries.length, transferBytes };
-    } catch (e) {
-        return { entriesCount: 0, transferBytes: 0 };
-    }
-}
-
-/**
- * Compute performance signals from PerformanceObserver entries
- */
-function computePerfSignals(perfEntries) {
-    try {
-        const entries = Array.isArray(perfEntries) ? perfEntries : [];
-        const lcpEntries = entries.filter(e => e.entryType === 'largest-contentful-paint');
-        const lcpTimeMs = lcpEntries.length > 0 ? Math.min(...lcpEntries.map(e => e.startTime || Number.MAX_VALUE)) : null;
-        const longTasks = entries.filter(e => e.entryType === 'longtask');
-        const longTasksPre = longTasks.filter(e => (lcpTimeMs == null) || (e.startTime <= lcpTimeMs));
-        const totalLongTaskMsPreLcp = longTasksPre.reduce((acc, e) => acc + (e.duration || 0), 0);
-        const hasLongTasksPreLcp = longTasksPre.some(e => (e.duration || 0) >= 200);
-        return { hasLongTasksPreLcp, totalLongTaskMsPreLcp, lcpTimeMs };
-    } catch (_) {
-        return { hasLongTasksPreLcp: false, totalLongTaskMsPreLcp: 0, lcpTimeMs: null };
-    }
-}
-
-/**
- * Filter resources for targeted code review
- * Keeps HTML at pageUrl and a subset of JS/CSS likely relevant
- */
-function selectCodeResources(pageUrl, resources) {
-    if (!resources || typeof resources !== 'object') return resources || {};
-    const html = resources[pageUrl];
-    const subset = {};
-    if (html) subset[pageUrl] = html;
-
-    for (const [url, content] of Object.entries(resources)) {
-        if (url === pageUrl) continue;
-        const isJsOrCss = url.endsWith('.js') || url.endsWith('.css');
-        if (!isJsOrCss) continue;
-        if (RESOURCE_DENYLIST_REGEX.test(url)) continue;
-        // Prefer files referenced in HTML or known critical patterns
-        const referencedInHtml = !!(html && url.includes('://') && html.includes(new URL(url).pathname));
-        if (!referencedInHtml) continue;
-        subset[url] = content;
-    }
-    return subset;
-}
 
 /**
  * Main Agent Flow Orchestrator
@@ -156,21 +70,15 @@ export async function runAgentFlow(pageUrl, deviceType, options = {}) {
         dataQualityIssues.push({ source: 'RUM', impact: 'Real User Monitoring data unavailable', severity: 'info' });
     }
 
-    // Derive gates using PSI only (single lab run later)
-    const signals = extractPsiSignals(psi);
-    const device = (deviceType || 'mobile').toLowerCase();
-    const TH = DEFAULT_THRESHOLDS[device] || DEFAULT_THRESHOLDS.mobile;
-    const coverageSignals = [
-        signals.reduceUnusedJS === true,
-        (signals.tbt ?? 0) > TH.TBT_MS,
-        (signals.lcp ?? 0) > TH.LCP_MS,
-    ];
-    const shouldRunCoverage = coverageSignals.some(Boolean);
+    // Derive gates using PSI signals via SignalExtractor service
+    const extractor = new SignalExtractor(deviceType);
+    const signals = extractor.extractPsiSignals(psi);
+    const shouldRunCoverage = extractor.deriveCoverageGate(signals);
 
     // Code collection gating (same logic as in generateConditionalAgentConfig)
     // Skip code collection entirely in light mode
     const isLightMode = options.mode === 'light';
-    const shouldRunCode = !isLightMode && ((signals.reduceUnusedJS === true && (signals.tbt ?? 0) > TH.TBT_MS) || shouldRunCoverage);
+    const shouldRunCode = extractor.deriveCodeGate(signals, shouldRunCoverage, isLightMode);
 
     // Phase 2: Single lab run, always collecting HAR, conditionally collecting Coverage
     const { har: harHeavy, harSummary, perfEntries, perfEntriesSummary, fullHtml, fontData, fontDataSummary, jsApi, coverageData, coverageDataSummary, thirdPartyAnalysis, clsAttribution } = await getLabData(pageUrl, deviceType, {
@@ -298,6 +206,3 @@ export async function runAgentFlow(pageUrl, deviceType, options = {}) {
 
     return markdown;
 }
-
-// Export helper functions for testing/reuse
-export { extractPsiSignals, computeHarStats, computePerfSignals, selectCodeResources, getPsiAudit };

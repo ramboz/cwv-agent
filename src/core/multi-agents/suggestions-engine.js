@@ -34,12 +34,10 @@ import { validateFindings, saveValidationResults } from '../validator.js';
 import { MultiAgentSystem } from './agent-system.js';
 
 // Import helper functions from orchestrator
-import {
-    extractPsiSignals,
-    computeHarStats,
-    computePerfSignals,
-    DEFAULT_THRESHOLDS
-} from './orchestrator.js';
+import { DEFAULT_THRESHOLDS } from './orchestrator.js';
+
+// Import SignalExtractor service
+import { SignalExtractor } from '../services/signal-extractor.js';
 
 // Import schema from dedicated schemas module
 import { suggestionSchema } from './schemas.js';
@@ -63,15 +61,16 @@ const isPromptValid = (length, limits) => length <= (limits.input - limits.outpu
  */
 function generateConditionalAgentConfig(pageData, cms) {
     const { psi, har, harSummary, perfEntries, perfEntriesSummary, pageUrl, resources, coverageData, coverageDataSummary, rulesSummary, frameworks } = pageData;
-    const signals = extractPsiSignals(psi);
-    const harStats = computeHarStats(har);
 
     // Device-aware thresholds
     const device = (pageData.deviceType || 'mobile').toLowerCase();
     const TH = DEFAULT_THRESHOLDS[device] || DEFAULT_THRESHOLDS.mobile;
 
-    // Multi-signal gating (include perf pre-LCP signals when available)
-    const perfSig = computePerfSignals(perfEntries);
+    // Extract signals using SignalExtractor service
+    const extractor = new SignalExtractor(device);
+    const signals = extractor.extractPsiSignals(psi);
+    const harStats = extractor.extractHarStats(har);
+    const perfSig = extractor.extractPerfSignals(perfEntries);
 
     // UNIFIED GATING: Use new AgentGating class for consistent logic
     const gating = new AgentGating(device);
@@ -101,13 +100,9 @@ function generateConditionalAgentConfig(pageData, cms) {
             ? coverageSignals.filter(Boolean).length >= 2
             : coverageSignals.some(Boolean));
 
-    // Extract chain signal from HAR summary
-    // HAR summary is already generated at this point (from pageData.harSummary)
-    const hasSequentialChains = harSummary &&
-        harSummary.includes('Chain depth:') &&
-        harSummary.includes('sequential delay:') &&
-        // Ensure it's a significant chain (not just "Chain depth: 1")
-        /Chain depth: [3-9]|Chain depth: \d{2,}/.test(harSummary);
+    // Extract chain signal from HAR summary using SignalExtractor service
+    // More robust than inline regex matching
+    const hasSequentialChains = extractor.extractChainSignal(harSummary);
 
     // HAR Agent Gating - Unified logic with lower thresholds
     const harDecision = gating.shouldRunAgent('har', {
