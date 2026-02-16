@@ -110,13 +110,17 @@ The HAR analysis classifies JavaScript request chains into three types:
 
 ### CRITICAL Chains
 - Contain first-party scripts, stylesheets, or fonts
+- Also includes **A/B testing and personalization scripts** (Optimizely, VWO, Adobe Target, Google Optimize, LaunchDarkly) when they control above-fold content — these intentionally block rendering to prevent content flicker
 - These resources block rendering and must execute early
 - **ALWAYS recommend preloading** these chain scripts
+- **NEVER recommend async/defer** for A/B testing scripts with above-fold experiments — this causes visible content flicker (FOOC) and CLS
 - Example: main.js → app-framework.js → vendor-library.js
+- Example: optimizely.js → experiment-config.js (above-fold A/B test)
 - Preload strategy: Add \`<link rel="preload" as="script">\` for each level
 
 ### DEFERRABLE Chains
 - Contain ONLY non-critical third-party scripts (analytics, consent, monitoring, ads)
+- Does NOT include A/B testing/personalization scripts that control above-fold content (those are CRITICAL)
 - These should load AFTER page renders
 - **NEVER recommend preconnect or preload** for deferrable chains
 - **ALWAYS recommend async/defer** attributes instead
@@ -316,6 +320,23 @@ If any metric already meets Google's "good" thresholds, skip recommendations for
 - There's above-fold personalization that would cause flicker
 - Detection: Look for at.js, mbox calls, or Target library
 - If no Target detected → recommend async loading, NOT preconnect
+
+**NEVER recommend async/defer for A/B Testing & Personalization scripts that control above-fold content:**
+
+| Tool | Domains | Why NOT async/defer |
+|------|---------|---------------------|
+| Optimizely | cdn.optimizely.com, cdn-pci.optimizely.com | Client-side DOM manipulation for experiments; async causes content flicker (FOOC) and CLS |
+| VWO | dev.visualwebsiteoptimizer.com | Client-side A/B testing; async causes visible variant swap |
+| Adobe Target | *.tt.omtrdc.net, at.js, mbox | Personalization/targeting; async causes flicker of default content |
+| Google Optimize | optimize.google.com, googleoptimize | Client-side experiments; async causes original content flash |
+| LaunchDarkly | app.launchdarkly.com | Feature flags controlling above-fold UI; async causes flag flicker |
+
+- These scripts intentionally block rendering to swap content BEFORE the user sees it
+- Making them async/defer causes the original (control) content to flash before the variant loads → content flicker, poor UX, AND inflated CLS
+- **Correct approach**: Keep synchronous loading in \`<head>\`; optimize the script itself (reduce payload, use snippet version, edge-side decisions)
+- **If the performance impact is severe**: Recommend migrating to server-side or edge-side experimentation (e.g., CDN-level A/B testing) to avoid the client-side flicker tradeoff entirely
+- **Detection signals**: Look for optimizely.com, vwo.com, googleoptimize.com, at.js, mbox, or launchdarkly in synchronous \`<script>\` tags in \`<head>\`
+- **If NOT doing above-fold experiments**: Then the script CAN be deferred — but verify by checking experiment scope before recommending async
 
 **Valid preconnect targets (affects LCP):**
 - CDN hosting hero/LCP image
@@ -564,7 +585,7 @@ export const PHASE_FOCUS = {
   * Consent (onetrust, cookiebot, termly, iubenda) → NEVER preconnect, always defer to post-LCP
   * Tag managers (googletagmanager, tealium, adobedtm) → async unless Target personalization
   * CDN (cloudfront, fastly, akamai) → preconnect ONLY if hosts LCP resource
-  * Testing/Personalization (optimizely, vwo, at.js, target, googleoptimize) → preconnect ONLY if above-fold A/B test
+  * Testing/Personalization (optimizely, vwo, at.js, target, googleoptimize, launchdarkly) → NEVER recommend async/defer if controlling above-fold content (causes content flicker and CLS); keep synchronous; recommend server-side experimentation if perf impact is severe
   * Support (zendesk, intercom, drift) → NEVER preconnect, defer
   * Monitoring (newrelic, datadog, sentry, rollbar) → NEVER preconnect, async
   * Session Replay (clarity.microsoft, contentsquare) → NEVER preconnect, defer to post-interaction (Issue #4 fix)

@@ -133,6 +133,29 @@ You know the following about AEM AMS.
 - AVOID: Preconnect for non-critical resources (analytics, fonts loaded async, third-party scripts)
   - Bad: <link rel="preconnect" href="https://fonts.googleapis.com"> (fonts should use font-display:swap, not preconnect)
   - Bad: <link rel="preconnect" href="https://analytics.example.com"> (analytics is not in LCP critical path)
+- **NEVER PRECONNECT - These categories should ALWAYS be deferred/async instead:**
+  - Cookie Consent: cookielaw.org, cdn.cookielaw.org, onetrust.com, cookiebot.com
+    → Consent banners never affect LCP, always defer to post-LCP
+  - Analytics: google-analytics.com, analytics.*, omtrdc.net
+    → Analytics doesn't affect rendering, load async
+  - Tag Managers: googletagmanager.com, assets.adobedtm.com (Adobe Launch)
+    → Load async unless doing above-fold personalization (see exception below)
+  - Monitoring: hotjar.com, fullstory.com, logrocket.com, newrelic.com
+    → Session replay/monitoring is never rendering-critical
+  - Social: facebook.net, twitter.com, linkedin.com
+    → Social pixels are never LCP-critical
+  - A/B Testing/Personalization: optimizely.com, cdn-pci.optimizely.com, vwo.com, googleoptimize.com, launchdarkly.com
+    → NEVER async/defer if controlling above-fold content (causes content flicker and CLS)
+    → These scripts intentionally block rendering to swap content before the user sees it
+    → If perf impact is severe, recommend server-side or edge-side experimentation instead
+    → Only defer if verified that NO above-fold experiments are active
+
+- **Exception - Adobe Target Personalization:**
+  - If Adobe Launch (adobedtm) is loading Adobe Target AND there's above-fold personalization:
+    → Preconnect MAY be justified to reduce personalization flicker
+  - Detection signal: Look for at.js, mbox calls, or Target-specific code
+  - If no Target detected: Adobe Launch should load async, NOT preconnect
+
 - Preload: Only for critical, discoverable-late resources in clientlibs (not content images)
   - Example: Critical CSS/JS in clientlibs that would otherwise be discovered late
 - DNS-prefetch: Avoid - no practical use case for modern sites

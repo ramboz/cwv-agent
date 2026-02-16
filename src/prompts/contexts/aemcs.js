@@ -144,8 +144,11 @@ You know the following about AEM CS.
     → Session replay/monitoring is never rendering-critical
   - Social: facebook.net, twitter.com, linkedin.com
     → Social pixels are never LCP-critical
-  - A/B Testing: optimizely.com, vwo.com
-    → Unless doing above-fold flicker-prevention (rare)
+  - A/B Testing/Personalization: optimizely.com, cdn-pci.optimizely.com, vwo.com, googleoptimize.com, launchdarkly.com
+    → NEVER async/defer if controlling above-fold content (causes content flicker and CLS)
+    → These scripts intentionally block rendering to swap content before the user sees it
+    → If perf impact is severe, recommend server-side or edge-side experimentation instead
+    → Only defer if verified that NO above-fold experiments are active
 
 - **Exception - Adobe Target Personalization:**
   - If Adobe Launch (adobedtm) is loading Adobe Target AND there's above-fold personalization:
