@@ -1,6 +1,7 @@
 import { parse } from 'node-html-parser';
 
 export default function evaluate({ summary, fullHtml }) {
+  if (!fullHtml) return null;
   const doc = parse(fullHtml);
   const svgElements = doc.querySelectorAll('body svg');
   if (svgElements.length > 0) {

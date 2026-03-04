@@ -81,11 +81,21 @@ export async function runAgentFlow(pageUrl, deviceType, options = {}) {
     const shouldRunCode = extractor.deriveCodeGate(signals, shouldRunCoverage, isLightMode);
 
     // Phase 2: Single lab run, always collecting HAR, conditionally collecting Coverage
-    const { har: harHeavy, harSummary, perfEntries, perfEntriesSummary, fullHtml, fontData, fontDataSummary, jsApi, coverageData, coverageDataSummary, thirdPartyAnalysis, clsAttribution } = await getLabData(pageUrl, deviceType, {
+    const labData = await getLabData(pageUrl, deviceType, {
         ...options,
         collectHar: true,  // Always collect HAR
         collectCoverage: shouldRunCoverage,
     });
+    const { har: harHeavy, harSummary, perfEntries, perfEntriesSummary, fullHtml, fontData, fontDataSummary, jsApi, coverageData, coverageDataSummary, thirdPartyAnalysis, clsAttribution, botProtection } = labData;
+
+    if (botProtection) {
+        const providerMsg = botProtection.provider ? ` (${botProtection.provider})` : '';
+        dataQualityIssues.push({
+            source: 'Lab',
+            impact: `Bot protection detected${providerMsg} — lab data unavailable. Analysis limited to CrUX, PSI, and RUM.`,
+            severity: 'error',
+        });
+    }
 
     // Phase 3: Conditionally collect code after coverage/har gates
     let resources = undefined;

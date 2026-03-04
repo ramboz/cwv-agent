@@ -1,4 +1,5 @@
 export default function evaluate({ summary, har }) {
+  if (!har?.log?.entries?.length) return null;
   const { hostname } = new URL(summary.url);
   const allModernProtocol = har.log.entries
     .filter((e) => new URL(e.request.url).hostname === hostname)

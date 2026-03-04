@@ -17,6 +17,7 @@ import { collectFontData } from './font-analyzer.js';
 import { extractCwvRelevantHtml } from './html-extractor.js';
 import { analyzeThirdPartyScripts } from './third-party-attributor.js';
 import { attributeCLStoCSS } from './cls-attributor.js';
+import { detectBotProtection } from './bot-detection.js';
 import { Result } from '../../core/result.js';
 import { ErrorCodes } from '../../core/error-codes.js';
 import { CollectorFactory, CollectorConfig } from '../../core/factories/collector-factory.js';
@@ -58,6 +59,28 @@ export async function collect(pageUrl, deviceType, { skipCache, blockRequests, c
 
   // If nothing is needed, return from cache only what's relevant
   if (!needPerf && !needHtml && !needFonts && !needJsApi && !needHar && !needCoverage) {
+    // Run bot detection on cached data too
+    const cachedBotResult = detectBotProtection({
+      har: collectHar ? harFile : null,
+      fullHtml,
+      fontData,
+      pageUrl,
+    });
+    if (cachedBotResult.detected) {
+      const providerMsg = cachedBotResult.provider ? ` (${cachedBotResult.provider})` : '';
+      console.error(
+        `\n🚫 Bot protection detected in cached data${providerMsg} — lab data is from a challenge page, not the real site.\n` +
+        `   Re-run with --skip-cache to collect fresh data (the bot protection issue may persist).\n`
+      );
+      return Result.err(
+        ErrorCodes.BOT_PROTECTION,
+        `Cached lab data is from a bot-challenge page${providerMsg}. ` +
+        `Signals: ${cachedBotResult.signals.join('; ')}`,
+        { botDetection: cachedBotResult, pageUrl, deviceType },
+        false
+      );
+    }
+
     // Extract summary from cached CLS attribution if it exists
     const clsAttributionSummary = clsAttribution?.summary || clsAttribution || null;
 
@@ -233,6 +256,31 @@ export async function collect(pageUrl, deviceType, { skipCache, blockRequests, c
 
   // Close browser and save results
   await browser.close();
+
+  // Bot / WAF challenge detection — abort early if the page was blocked
+  const botResult = detectBotProtection({
+    har: harFile,
+    fullHtml,
+    fontData,
+    perfEntries,
+    pageUrl,
+  });
+  if (botResult.detected) {
+    const providerMsg = botResult.provider ? ` (${botResult.provider})` : '';
+    const signalList = botResult.signals.map(s => `  • ${s}`).join('\n');
+    console.error(
+      `\n🚫 Bot protection detected${providerMsg} — lab data is from a challenge page, not the real site.\n` +
+      `   Confidence: ${botResult.confidence} (score ${botResult.score})\n` +
+      `   Signals:\n${signalList}\n`
+    );
+    return Result.err(
+      ErrorCodes.BOT_PROTECTION,
+      `Site served a bot-challenge page${providerMsg}. Lab data is invalid. ` +
+      `Signals: ${botResult.signals.join('; ')}`,
+      { botDetection: botResult, pageUrl, deviceType },
+      false
+    );
+  }
 
   // Create factory config for summarization
   const config = new CollectorConfig(deviceType);

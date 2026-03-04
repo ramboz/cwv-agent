@@ -141,6 +141,8 @@ function generateConditionalAgentConfig(pageData, cms) {
     const frameworkContext = fwContextLCP + fwContextINP + fwContextCLS;
 
     const steps = [];
+    const hasBotProtection = pageData.dataQuality?.issues?.some(i => i.source === 'Lab' && i.impact?.includes('Bot protection'));
+    const hasLabData = !hasBotProtection && (perfEntriesSummary || pageData.fullHtml || harSummary);
 
     // Always-on lightweight agents (use summaries where possible)
     steps.push({ name: 'CrUX Agent', sys: cruxAgentPrompt(cms), hum: cruxSummaryStep(pageData.cruxSummary) });
@@ -153,27 +155,34 @@ function generateConditionalAgentConfig(pageData, cms) {
     // PSI Agent - include framework context for CWV optimization guidance
     steps.push({ name: 'PSI Agent', sys: psiAgentPrompt(cms), hum: psiSummaryStep(pageData.psiSummary) + frameworkContext });
 
-    // Perf Observer Agent - include framework context for performance optimization
-    steps.push({ name: 'Perf Observer Agent', sys: perfObserverAgentPrompt(cms), hum: perfSummaryStep(perfEntriesSummary) + frameworkContext });
+    // Skip lab-dependent agents when bot protection blocked data collection
+    if (hasLabData) {
+        // Perf Observer Agent - include framework context for performance optimization
+        steps.push({ name: 'Perf Observer Agent', sys: perfObserverAgentPrompt(cms), hum: perfSummaryStep(perfEntriesSummary) + frameworkContext });
 
-    // Prefer fullHtml when available for correctness; fallback to resources[pageUrl]
-    const htmlPayload = pageData.fullHtml || resources;
-    steps.push({ name: 'HTML Agent', sys: htmlAgentPrompt(cms), hum: htmlStep(pageUrl, htmlPayload) + frameworkContext });
+        // Prefer fullHtml when available for correctness; fallback to resources[pageUrl]
+        const htmlPayload = pageData.fullHtml || resources;
+        steps.push({ name: 'HTML Agent', sys: htmlAgentPrompt(cms), hum: htmlStep(pageUrl, htmlPayload) + frameworkContext });
+
+        if (shouldRunHar) {
+            steps.push({ name: 'HAR Agent', sys: harAgentPrompt(cms), hum: harSummaryStep(harSummary) });
+        }
+
+        if (shouldRunCoverage) {
+            // Coverage Agent - include framework context for unused code analysis
+            steps.push({ name: 'Code Coverage Agent', sys: coverageAgentPrompt(cms), hum: coverageSummaryStep(coverageDataSummary || coverageData) + frameworkContext });
+        }
+
+        if (shouldRunCode) {
+            // Code Review Agent - include framework context for code-level optimizations
+            steps.push({ name: 'Code Review Agent', sys: codeReviewAgentPrompt(cms), hum: codeStep(pageUrl, resources, 10_000) + frameworkContext });
+        }
+    } else if (hasBotProtection) {
+        console.log('⚠️  Skipping lab-dependent agents (Perf Observer, HTML, HAR, Coverage, Code Review) — bot protection detected');
+    }
+
+    // Rules Agent always runs (it handles null data gracefully)
     steps.push({ name: 'Rules Agent', sys: rulesAgentPrompt(cms), hum: rulesStep(rulesSummary) });
-
-    if (shouldRunHar) {
-        steps.push({ name: 'HAR Agent', sys: harAgentPrompt(cms), hum: harSummaryStep(harSummary) });
-    }
-
-    if (shouldRunCoverage) {
-        // Coverage Agent - include framework context for unused code analysis
-        steps.push({ name: 'Code Coverage Agent', sys: coverageAgentPrompt(cms), hum: coverageSummaryStep(coverageDataSummary || coverageData) + frameworkContext });
-    }
-
-    if (shouldRunCode) {
-        // Code Review Agent - include framework context for code-level optimizations
-        steps.push({ name: 'Code Review Agent', sys: codeReviewAgentPrompt(cms), hum: codeStep(pageUrl, resources, 10_000) + frameworkContext });
-    }
 
     // Debug/log the gating outcome so users can see why agent count == N
     const selectedNames = steps.map(s => s.name);
@@ -943,7 +952,8 @@ ${pathDescriptions.join('\n\n')}
         deviceType: pageData.deviceType,
         mode,
         rootCauseImpacts: rootCauseImpacts, // Pass the computed objects, not the raw ID array
-        validationSummary: validationResults?.summary
+        validationSummary: validationResults?.summary,
+        dataQuality: pageData.dataQuality,
     });
 
     console.groupEnd();

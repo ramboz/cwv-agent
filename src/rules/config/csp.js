@@ -1,6 +1,6 @@
 export default function evaluate({ jsApi }) {
   const results = [];
-  if (jsApi.cspViolations && Array.isArray(jsApi.cspViolations)) {
+  if (jsApi?.cspViolations && Array.isArray(jsApi.cspViolations)) {
     jsApi.cspViolations.forEach((v) => {
       results.push({
         category: 'network',

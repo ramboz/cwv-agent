@@ -29,7 +29,10 @@ export const ErrorCodes = {
   SCRIPT_ERROR: 'SCRIPT_ERROR',           // Browser script execution failed
 
   // Analysis errors (not retryable)
-  ANALYSIS_FAILED: 'ANALYSIS_FAILED'  // Data analysis/processing failed
+  ANALYSIS_FAILED: 'ANALYSIS_FAILED',  // Data analysis/processing failed
+
+  // Bot protection (not retryable without configuration change)
+  BOT_PROTECTION: 'BOT_PROTECTION'  // Site served a bot-challenge page instead of real content
 };
 
 /**
@@ -72,7 +75,8 @@ export function getErrorCategory(code) {
     [ErrorCodes.MISSING_CONFIG]: 'Configuration',
     [ErrorCodes.PAGE_LOAD_FAILED]: 'Browser',
     [ErrorCodes.SCRIPT_ERROR]: 'Browser',
-    [ErrorCodes.ANALYSIS_FAILED]: 'Analysis'
+    [ErrorCodes.ANALYSIS_FAILED]: 'Analysis',
+    [ErrorCodes.BOT_PROTECTION]: 'Browser'
   };
 
   return categories[code] || 'Unknown';

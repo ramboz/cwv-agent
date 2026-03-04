@@ -111,12 +111,22 @@ export async function getLabData(pageUrl, deviceType, options) {
 
   // Handle Result pattern - LAB collector now returns Result
   if (labResult.isErr()) {
-    console.error(`❌ LAB data collection failed: ${labResult.error.message}`);
+    if (labResult.error.code === 'BOT_PROTECTION') {
+      const bot = labResult.error.details?.botDetection;
+      const providerMsg = bot?.provider ? ` by ${bot.provider}` : '';
+      console.error(`\n🚫 Bot protection detected${providerMsg} — skipping lab data.`);
+      console.error(`   The site served a challenge page instead of real content.`);
+      console.error(`   Lab-based analysis (HAR, performance, coverage, HTML) will be unavailable.`);
+      console.error(`   CrUX, PSI, and RUM data (if available) are unaffected.\n`);
+    } else {
+      console.error(`❌ LAB data collection failed: ${labResult.error.message}`);
+    }
     return {
       har: null, harSummary: null,
       perfEntries: null, perfEntriesSummary: null,
       fullHtml: null, fontData: null, fontDataSummary: null, jsApi: null,
-      coverageData: null, coverageDataSummary: null
+      coverageData: null, coverageDataSummary: null,
+      botProtection: labResult.error.code === 'BOT_PROTECTION' ? labResult.error.details?.botDetection : null,
     };
   }
 

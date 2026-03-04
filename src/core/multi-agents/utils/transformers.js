@@ -94,7 +94,7 @@ export function transformFindingsToSuggestions(findings) {
  * @returns {string} Formatted markdown report
  */
 export function formatSuggestionsToMarkdown(structuredData, metadata = {}) {
-    const { url, deviceType, mode, rootCauseImpacts, validationSummary } = metadata;
+    const { url, deviceType, mode, rootCauseImpacts, validationSummary, dataQuality } = metadata;
     const suggestions = structuredData.suggestions || [];
 
     let markdown = `# Core Web Vitals Analysis Report
@@ -107,6 +107,18 @@ ${mode === 'light' ? `**Analysis Mode**: Light (focused on: hero images, fonts, 
 ---
 
 `;
+
+    // Add bot protection / data quality warning when lab data is unavailable
+    const botIssue = dataQuality?.issues?.find(i => i.source === 'Lab' && i.impact?.includes('Bot protection'));
+    if (botIssue) {
+        markdown += `> **Warning: Limited Analysis** — ${botIssue.impact}
+> Recommendations below are based on CrUX field data, PSI remote audit, and RUM only.
+> Resource-level attribution (request chains, per-script analysis, code coverage) is unavailable.
+
+---
+
+`;
+    }
 
     // Add root cause summary if available
     if (rootCauseImpacts && rootCauseImpacts.length > 0) {
