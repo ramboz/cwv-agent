@@ -7,91 +7,60 @@ import { getDeliverableFormat, getTechnicalContext } from './shared.js';
  * @param {string} cms - CMS type (ams, cs, eds)
  * @returns {string} Final action prompt
  */
-export const actionPrompt = (pageUrl, deviceType, cms = 'eds') =>`
-Perform your final exhaustive and detailed analysis for url ${pageUrl} on a ${deviceType} device.
+export const actionPrompt = (pageUrl, deviceType, cms = 'eds') => `
+Produce the final analysis and actionable suggestion list for ${pageUrl} on a ${deviceType} device.
+Your output is a ranked set of optimization suggestions — each one grounded in upstream agent findings, classified with a semanticType, and tied to concrete code changes.
 
 ${getTechnicalContext(cms)}
 
-## Phase 5: Graph-Enhanced Synthesis Instructions
+## Synthesis Rules
 
-If you receive "Root Cause Prioritization" data from the causal graph:
+### Prioritize Root Causes Over Symptoms
+If you receive "Root Cause Prioritization" data from the causal graph, apply these rules; otherwise infer root causes from the findings yourself.
 
-1. **Focus on Root Causes**: Prioritize suggestions that address root causes over symptoms
-   - Root causes are fundamental issues that cascade to multiple problems
-   - Fixing one root cause often resolves multiple symptoms
-   - Example: Unused code (root cause) → High TBT (symptom) → Poor INP (symptom)
+1. **Focus on root causes, not symptoms.** Root causes cascade to multiple problems; fixing one often resolves many.
+   Example: Unused code (root cause) → High TBT (symptom) → Poor INP (symptom).
+2. **Combine related findings into one suggestion** when they share a root cause. Do not emit a separate suggestion per symptom.
+   Example: Merge TBT + INP + LCP findings caused by the same unused code into one "Remove unused code" suggestion.
+3. **Order by total downstream impact.** Higher-impact root causes go first; describe cascading benefits in the suggestion.
+   Example: "Removing 1147KB unused code will improve TBT by 400ms, which cascades to INP improvement of ~200ms."
+4. **Respect graph depth.** Depth 1 = direct causes; depth 2+ = fundamental root causes — prefer depth 2+ for strategic suggestions.
 
-2. **Combine Related Findings**: When multiple findings share the same root cause, create ONE holistic suggestion
-   - Don't create separate suggestions for each symptom
-   - Address the root cause comprehensively
-   - Example: Instead of 3 separate suggestions for TBT, INP, and LCP, create one suggestion to remove unused code
+### Every Suggestion Must Have a semanticType
+The \`semanticType\` field drives downstream filtering, targeted analysis modes, and SpaceCat categorization.
 
-3. **Order by Total Impact**: Use the "Total downstream impact" to prioritize
-   - Higher impact root causes should appear first
-   - Show cascading benefits in the description
-   - Example: "Removing 1147KB unused code will improve TBT by 400ms, which cascades to INP improvement of ~200ms"
+- **Inherit from findings.** Use the semanticType of the primary finding the suggestion addresses.
+- **For merged suggestions.** Use the semanticType of the root cause finding.
+  Example: Merging unused-code + TBT + INP → \`unused-code\`.
+  Example: Merging lcp-image + CLS on the same image → \`lcp-image\`.
+- **When uncertain.** Prefer the most specific matching type; fall back to the finding with highest impact.
 
-4. **Respect Graph Depth**: Deeper root causes (depth 2-3) are more fundamental
-   - Depth 1: Direct causes (immediate problems)
-   - Depth 2+: Root causes (fundamental issues)
-   - Prioritize depth 2+ for strategic improvements
+Valid types (use the most specific that applies):
+- \`lcp-image\` — LCP-specific image issues (missing preload, fetchpriority, lazy-loading on the LCP element)
+- \`font-format\` — font format/loading issues (missing font-display, FOIT/FOUT)
+- \`font-preload\` — missing font preload or preconnect to font CDN
+- \`image-sizing\` — missing width/height/aspect-ratio causing CLS
+- \`unused-code\` — unused CSS/JS in bundles
+- \`js-execution\` — long tasks, heavy JavaScript execution
+- \`layout-shift\` — CLS issues (dynamic inserts, unsized elements)
+- \`blocking-resource\` — render-blocking CSS/JS
+- \`ttfb\` — server response time / backend
+- \`third-party\` — third-party scripts impacting performance
+- \`resource-preload\` — missing preload hints for critical resources
+- Add others as appropriate.
 
-## CRITICAL: Semantic Type Classification
+### Every Suggestion Must Include Concrete codeChanges
+- GOOD: \`{ "file": "/apps/myproject/components/content/hero/hero.html", "after": "..." }\`
+- BAD: \`{ "file": "Update your component template" }\`
 
-EVERY suggestion MUST include a semanticType field for downstream filtering and targeted analysis:
+Match code examples to the CMS architecture:
+- AEM AMS/CS → clientlib categories, HTL templates, dispatcher config
+- EDS → block structure, styles.css, lazy-styles.css
 
-1. **Inherit from findings**: When creating a suggestion from agent findings, use the semanticType from the primary finding
-   - If the suggestion addresses an LCP image issue, use "lcp-image"
-   - If the suggestion addresses font loading, use "font-format" or "font-preload"
-   - If the suggestion addresses missing image dimensions, use "image-sizing"
-
-2. **For merged suggestions**: When combining multiple findings into one suggestion, use the semantic type of the root cause finding
-   - Example: If merging unused-code + TBT + INP findings, use "unused-code" as semanticType
-   - Example: If merging lcp-image + CLS findings about the same image, use "lcp-image" as the primary type
-
-3. **Valid semantic types** (use the most specific type that matches):
-   - **lcp-image**: LCP-specific image issues (missing preload, fetchpriority, lazy loading on LCP element)
-   - **font-format**: Font format/loading issues (missing font-display, FOIT/FOUT)
-   - **font-preload**: Missing font preload hints or preconnect to font CDN
-   - **image-sizing**: Missing width/height/aspect-ratio attributes causing CLS
-   - **unused-code**: Code waste (unused CSS/JS in bundles)
-   - **js-execution**: Long tasks, heavy JavaScript execution
-   - **layout-shift**: CLS issues (dynamic content insertion, unsized elements)
-   - **blocking-resource**: Render-blocking CSS/JS resources
-   - **ttfb**: Server response time, backend performance
-   - **third-party**: Third-party scripts impacting performance
-   - **resource-preload**: Missing preload hints for critical resources
-   - And others as appropriate...
-
-4. **When uncertain**: Choose the most specific type that matches the primary issue being addressed
-   - Prefer specific types (lcp-image, font-preload) over generic types (resource-preload)
-   - If truly ambiguous, use the type of the finding with highest impact
-
-**Why this matters**: The semanticType field enables:
-- Targeted analysis modes (light mode for quick wins, full mode for comprehensive audit)
-- Downstream filtering by SpaceCat platform
-- Better categorization and prioritization of suggestions
-
-**Examples**:
-- Suggestion about hero image loading → semanticType: "lcp-image"
-- Suggestion about custom font optimization → semanticType: "font-format" or "font-preload"
-- Suggestion about images missing dimensions → semanticType: "image-sizing"
-- Suggestion about removing unused CSS → semanticType: "unused-code"
-
-## Code Change Requirements
-
-**Every suggestion MUST include codeChanges with AEM-specific file paths:**
-- ✅ GOOD: { "file": "/apps/myproject/components/content/hero/hero.html", "after": "..." }
-- ❌ BAD: { "file": "Update your component template" }
-
-**Match the CMS architecture:**
-- AEM AMS/CS: Show clientlib categories, HTL templates, dispatcher config
-- EDS: Show block structure, styles.css, lazy-styles.css
-
-**Before/After convention:**
-- Use "before" + "after" when modifying existing code (showing diff/replacement)
-- Use only "after" when adding new files or configurations
-- For multi-file changes, each file can independently use before/after or just after
+Before/after convention:
+- Modifying existing code → provide both \`before\` and \`after\`
+- Adding new files/config → \`after\` only
+- Multi-file changes → each file uses its own before/after (or just after)
 
 ${getDeliverableFormat()}
 `;
