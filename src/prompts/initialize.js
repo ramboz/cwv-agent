@@ -60,6 +60,26 @@ Phase 1 will start with the next message.
 `;
 
 /**
+ * Shared output contract for every multi-agent sub-agent. Gives the
+ * downstream reducer consistent shapes to parse, and caps length so agents
+ * don't pad their answers.
+ */
+const AGENT_OUTPUT_CONTRACT = `## Output Contract
+
+Produce only findings that pass the filtering criteria above — no preamble, no summary, no restatement of the task.
+
+Format each finding as:
+
+- **Title** — one-line description of the issue
+- **Evidence** — the specific signal in your input data that surfaced it
+- **Metrics** — which of LCP, CLS, INP are affected
+- **Impact** — expected improvement range (e.g. "300-500ms LCP")
+- **Effort** — Easy | Medium | Hard
+- **Recommendation** — what to change, specific enough for an engineer to act on
+
+Keep the total response under 500 words. If nothing in your input passes the filtering criteria, output the single line \`No qualifying findings.\` and stop.`;
+
+/**
  * Multi-agent global baseline: every agent sees this, so keep it to the
  * shared characteristics only. Phase-specific optimization lists and anti-
  * patterns are layered in by each agent's own system prompt.
@@ -73,5 +93,7 @@ export function initializeSystemAgents(cms = 'eds') {
 ${getTechnicalContext(cms, BASELINE_CONTEXT_SECTIONS)}
 
 ${getCriticalFilteringCriteria()}
+
+${AGENT_OUTPUT_CONTRACT}
 `;
 }
