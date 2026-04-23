@@ -1,10 +1,15 @@
 /**
  * Technical context for AEM Managed Services (AMS)
+ *
+ * Exposed as named sections so agents can receive only what's relevant to
+ * their phase (see PHASE_CONTEXT in shared.js). AMSContext is the full
+ * string, preserved for single-context consumers (e.g. actionPrompt).
  */
-export const AMSContext = `
-You know the following about AEM AMS.
- 
-### Characteristics
+
+const PREAMBLE = `You know the following about AEM AMS.`;
+
+export const AMSSections = {
+  characteristics: `### Characteristics
 
 - Dispatcher and publish instances managed by Adobe operations team
 - Custom CDN configuration possible (Akamai/Fastly/others)
@@ -20,11 +25,9 @@ You know the following about AEM AMS.
 - Deployment through Adobe's Release Management process
 - Custom replication agents often implemented
 - Dispatcher flush agents handle cache invalidation
-- Traffic may use HTTP/HTTPS with potential mixed content
+- Traffic may use HTTP/HTTPS with potential mixed content`,
 
-### Common Optimizations
-
-#### LCP
+  lcpOptimizations: `#### LCP Optimizations
 
 - Optimize Dispatcher TTL settings for static resources
 - Configure CDN properly for edge caching of assets
@@ -37,9 +40,9 @@ You know the following about AEM AMS.
 - Optimize component rendering sequence for critical content
 - Implement proper HTML caching strategies at the Dispatcher level
 - Configure proper flush agents to maintain cache freshness
-- Apply proper image sizing and format selection for hero images
+- Apply proper image sizing and format selection for hero images`,
 
-#### CLS
+  clsOptimizations: `#### CLS Optimizations
 
 - Ensure all images have proper dimensions specified
 - Implement proper font-loading strategies
@@ -50,9 +53,9 @@ You know the following about AEM AMS.
 - Implement progressive enhancement for dynamic content
 - Ensure proper responsive behaviors for all viewport sizes
 - Properly handle lazy-loaded content to maintain layout stability
-- Implement content placeholders during loading phases
+- Implement content placeholders during loading phases`,
 
-#### INP
+  inpOptimizations: `#### INP Optimizations
 
 - Optimize JavaScript execution in critical path
 - Implement efficient event handling patterns
@@ -63,9 +66,9 @@ You know the following about AEM AMS.
 - Apply proper debouncing and throttling for event handlers
 - Optimize DOM interaction patterns in JavaScript
 - Implement efficient data structures for complex operations
-- Apply proper task scheduling to prevent long tasks
+- Apply proper task scheduling to prevent long tasks`,
 
-### Anti-patterns
+  antiPatterns: `### Anti-patterns
 
 **CRITICAL - Absolutely prohibited (even if performance impact is severe):**
 - NEVER inline critical CSS for above-the-fold content in the <head> (requires build system not available in AEM). Instead, split clientlibs into critical (sync) and non-critical (async), load non-critical with JavaScript.
@@ -80,9 +83,9 @@ You know the following about AEM AMS.
 - AVOID relying on inefficient jQuery selectors for critical operations
 - AVOID implementing render-blocking resource loading
 - AVOID neglecting proper cache invalidation strategies
-- AVOID implementing excessive server-side processing for initial render
+- AVOID implementing excessive server-side processing for initial render`,
 
-### Practical Implementation Constraints
+  implementationConstraints: `### Practical Implementation Constraints
 
 **Image Optimization Recommendations:**
 - AVOID: Suggesting page-specific <link rel="preload"> for hero images (not maintainable across site)
@@ -167,5 +170,23 @@ You know the following about AEM AMS.
 - Always provide AEM-specific implementation paths (HTL templates, clientlib categories, Dispatcher config)
 - Show actual file locations: /apps/myproject/components/content/hero/hero.html
 - Include Dispatcher configuration snippets when suggesting caching changes
-- Reference Core Components version-specific APIs when applicable
-`; 
+- Reference Core Components version-specific APIs when applicable`,
+};
+
+export const AMSContext = `
+${PREAMBLE}
+
+${AMSSections.characteristics}
+
+### Common Optimizations
+
+${AMSSections.lcpOptimizations}
+
+${AMSSections.clsOptimizations}
+
+${AMSSections.inpOptimizations}
+
+${AMSSections.antiPatterns}
+
+${AMSSections.implementationConstraints}
+`;

@@ -185,6 +185,7 @@ Output:
     dataSource: 'crux',
     focusKey: 'CRUX',
     examples,
+    cms,
   });
 }
 
@@ -221,6 +222,7 @@ Output:
     dataSource: 'rum',
     focusKey: 'RUM',
     examples,
+    cms,
   });
 }
 
@@ -254,6 +256,7 @@ Output:
     dataSource: 'psi',
     focusKey: 'PSI',
     examples,
+    cms,
   });
 }
 
@@ -341,6 +344,7 @@ Output:
     focusKey: 'PERF_OBSERVER',
     examples,
     additionalContext,
+    cms,
   });
 }
 
@@ -456,6 +460,7 @@ Output:
     focusKey: 'HAR',
     examples,
     additionalContext,
+    cms,
   });
 }
 
@@ -560,6 +565,7 @@ Before recommending any preload/preconnect hints:
     focusKey: 'HTML',
     examples,
     additionalContext,
+    cms,
   });
 }
 
@@ -572,6 +578,7 @@ export function rulesAgentPrompt(cms = 'eds') {
     dataSource: 'rules',
     focusKey: 'RULES',
     examples,
+    cms,
   });
 }
 
@@ -622,6 +629,7 @@ Output:
     dataSource: 'coverage',
     focusKey: 'COVERAGE',
     examples,
+    cms,
   });
 }
 
@@ -638,6 +646,7 @@ ${PHASE_FOCUS.CODE_REVIEW}`;
     focusKey: 'CODE_REVIEW',
     examples,
     additionalContext,
+    cms,
   });
 }
 

@@ -1,6 +1,6 @@
-import { EDSContext } from './contexts/eds.js';
-import { AEMCSContext } from './contexts/aemcs.js';
-import { AMSContext } from './contexts/ams.js';
+import { EDSContext, EDSSections } from './contexts/eds.js';
+import { AEMCSContext, AEMCSSections } from './contexts/aemcs.js';
+import { AMSContext, AMSSections } from './contexts/ams.js';
 
 /**
  * Chain-of-Thought reasoning instructions shared by all agents
@@ -55,12 +55,73 @@ Be concrete with file names, sizes (KB), timings (ms), and metric values. Refere
 `;
 }
 
+const CMS_SECTIONS = {
+  eds: EDSSections,
+  cs: AEMCSSections,
+  ams: AMSSections,
+};
+
 /**
- * Returns CMS-specific technical context text
- * @param {String} cms
+ * Baseline sections every agent sees — enough to know the platform,
+ * nothing about how to optimize it.
+ */
+export const BASELINE_CONTEXT_SECTIONS = ['characteristics'];
+
+/**
+ * Phase-scoped section keys per agent data source. Agents analyzing field
+ * data (crux, rum) only need to understand the platform; the HAR, HTML and
+ * code-review agents need the optimization patterns and anti-patterns
+ * relevant to their phase. `code` gets the full context.
+ *
+ * Keys here match the `dataSource` parameter used by createAgentPrompt.
+ */
+const ALL_OPTIMIZATION_SECTIONS = [
+  'lcpOptimizations',
+  'clsOptimizations',
+  'inpOptimizations',
+  'antiPatterns',
+  'implementationConstraints',
+  'ttfbCaching',
+];
+
+export const PHASE_CONTEXT = {
+  crux: ['characteristics'],
+  rum: ['characteristics'],
+  psi: ['characteristics', 'lcpOptimizations', 'clsOptimizations', 'inpOptimizations', 'antiPatterns'],
+  perf_observer: ['characteristics', 'lcpOptimizations', 'clsOptimizations', 'inpOptimizations'],
+  har: ['characteristics', 'lcpOptimizations', 'antiPatterns', 'implementationConstraints', 'ttfbCaching'],
+  html: ['characteristics', 'lcpOptimizations', 'clsOptimizations', 'antiPatterns', 'implementationConstraints'],
+  rules: ['characteristics', 'lcpOptimizations', 'clsOptimizations', 'inpOptimizations', 'antiPatterns'],
+  coverage: ['characteristics', 'antiPatterns', 'implementationConstraints'],
+  code: ['characteristics', ...ALL_OPTIMIZATION_SECTIONS],
+};
+
+/**
+ * Returns CMS-specific technical context text.
+ *
+ * @param {String} cms - CMS identifier (eds, cs, ams, aem-headless, or other)
+ * @param {String[]} [sectionKeys] - Optional list of section keys to include
+ *   (e.g. ['characteristics', 'lcpOptimizations']). When omitted or null,
+ *   the full context is returned — preserves existing single-shot/synthesis
+ *   behaviour. Section keys that don't exist on a given CMS (e.g. ttfbCaching
+ *   is only on AEM CS) are silently skipped.
  * @return {String}
  */
-export function getTechnicalContext(cms) {
+export function getTechnicalContext(cms, sectionKeys = null) {
+  if (sectionKeys) {
+    const sections = CMS_SECTIONS[cms];
+    if (sections) {
+      return sectionKeys
+        .map((key) => sections[key])
+        .filter(Boolean)
+        .join('\n\n');
+    }
+    if (sectionKeys.includes('characteristics')) {
+      return (cms === 'aem-headless' && 'The website uses AEM Headless as a backend system.')
+        || 'The CMS serving the site does not seem to be any version of AEM.';
+    }
+    return '';
+  }
   return (cms === 'eds' && EDSContext)
     || (cms === 'cs' && AEMCSContext)
     || (cms === 'ams' && AMSContext)
