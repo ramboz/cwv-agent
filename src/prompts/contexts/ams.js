@@ -1,12 +1,13 @@
 /**
  * Technical context for AEM Managed Services (AMS)
+ *
+ * Exported as a sectioned object so prompts can request only the parts
+ * relevant to a given analysis phase (see PHASE_CONTEXT in ../shared.js).
  */
-export const AMSContext = `
-You know the following about AEM AMS.
- 
-### Characteristics
+export const AMSContext = {
+  platform: 'AEM AMS',
 
-- Dispatcher and publish instances managed by Adobe operations team
+  characteristics: `- Dispatcher and publish instances managed by Adobe operations team
 - Custom CDN configuration possible (Akamai/Fastly/others)
 - Dispatcher configuration can be fully customized
 - Typically uses classic UI or hybrid UI/Touch UI implementation
@@ -20,13 +21,9 @@ You know the following about AEM AMS.
 - Deployment through Adobe's Release Management process
 - Custom replication agents often implemented
 - Dispatcher flush agents handle cache invalidation
-- Traffic may use HTTP/HTTPS with potential mixed content
+- Traffic may use HTTP/HTTPS with potential mixed content`,
 
-### Common Optimizations
-
-#### LCP
-
-- Optimize Dispatcher TTL settings for static resources
+  lcp: `- Optimize Dispatcher TTL settings for static resources
 - Configure CDN properly for edge caching of assets
 - Implement proper clientlib categorization (css.async, etc.)
 - Apply proper image optimization for critical above-the-fold images
@@ -37,11 +34,9 @@ You know the following about AEM AMS.
 - Optimize component rendering sequence for critical content
 - Implement proper HTML caching strategies at the Dispatcher level
 - Configure proper flush agents to maintain cache freshness
-- Apply proper image sizing and format selection for hero images
+- Apply proper image sizing and format selection for hero images`,
 
-#### CLS
-
-- Ensure all images have proper dimensions specified
+  cls: `- Ensure all images have proper dimensions specified
 - Implement proper font-loading strategies
 - Reserve space for dynamic content that loads after initial paint
 - Implement stable layouts that don't shift during page load
@@ -50,11 +45,9 @@ You know the following about AEM AMS.
 - Implement progressive enhancement for dynamic content
 - Ensure proper responsive behaviors for all viewport sizes
 - Properly handle lazy-loaded content to maintain layout stability
-- Implement content placeholders during loading phases
+- Implement content placeholders during loading phases`,
 
-#### INP
-
-- Optimize JavaScript execution in critical path
+  inp: `- Optimize JavaScript execution in critical path
 - Implement efficient event handling patterns
 - Reduce JavaScript bundle sizes through proper clientlib configuration
 - Implement main thread work distribution strategies
@@ -63,11 +56,9 @@ You know the following about AEM AMS.
 - Apply proper debouncing and throttling for event handlers
 - Optimize DOM interaction patterns in JavaScript
 - Implement efficient data structures for complex operations
-- Apply proper task scheduling to prevent long tasks
+- Apply proper task scheduling to prevent long tasks`,
 
-### Anti-patterns
-
-- Do not inline critical CSS for above-the-fold content in the <head>. It would require a build system
+  antiPatterns: `- Do not inline critical CSS for above-the-fold content in the <head>. It would require a build system
 - Do not use synchronous XMLHttpRequest in critical path
 - Avoid excessive clientlib dependencies loading in header
 - Do not implement custom caching mechanisms that bypass Dispatcher
@@ -77,5 +68,5 @@ You know the following about AEM AMS.
 - Do not rely on inefficient jQuery selectors for critical operations
 - Avoid implementing render-blocking resource loading
 - Do not neglect proper cache invalidation strategies
-- Avoid implementing excessive server-side processing for initial render
-`; 
+- Avoid implementing excessive server-side processing for initial render`,
+};

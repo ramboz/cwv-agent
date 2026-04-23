@@ -1,12 +1,14 @@
 /**
  * Technical context for AEM Experience Delivery Service (EDS)
+ *
+ * Exported as a sectioned object so prompts can request only the parts
+ * relevant to a given analysis phase (see PHASE_CONTEXT in ../shared.js).
+ * The full composition is rebuilt on-demand by getTechnicalContext().
  */
-export const EDSContext = `
-You know the following about AEM EDS.
- 
-### Characteristics
- 
-- the page typically has references either "aem.js" or "lib-franklin.js" in the frontend code (but is not mandatory), a reference to "scripts.js"
+export const EDSContext = {
+  platform: 'AEM EDS',
+
+  characteristics: `- the page typically has references either "aem.js" or "lib-franklin.js" in the frontend code (but is not mandatory), a reference to "scripts.js"
 - the markup has "data-block-status" data attributes
 - the main CDN used is Fastly. Fastly VCL and configs cannot be modified
 - the CDN cache headers for the first-party domain are properly optimized already. Cache-Control headers should not be modified for first-party resources.
@@ -25,13 +27,9 @@ You know the following about AEM EDS.
 - custom fonts are loaded asynchronously in the lazy phase to free up the critical path
 - HTTP headers can be set for individual pages (i.e. "/home"), or all pages following a generic pattern (i.e. "/products/**")
 - The HTML <head> is mostly global for the whole site, and only individual metadata can be changed without a global impact
-- Traffic is always on HTTPS
- 
-### Common Optimizations
- 
-#### LCP
- 
-- cleaning up the critical path for the LCP by delaying unused dependencies, martech and third-party libraries
+- Traffic is always on HTTPS`,
+
+  lcp: `- cleaning up the critical path for the LCP by delaying unused dependencies, martech and third-party libraries
 - leveraging inline imports to do tree shaking of the JavaScript files at runtime
 - making sure images above the fold, especially in the hero section or block and for the LCP element, are loaded eagerly and with a high fetch-priority. The initial markup itself cannot be modified, so this is typically done via Javascript
 - keeping the 1st section short so it doesn't have to wait for every block in it to render before showing the LCP. A good rule of thumb is to not have more than 3 blocks in the first section
@@ -40,31 +38,25 @@ You know the following about AEM EDS.
 - header and footer should be loaded in the "loadLazy" phase
 - self-hosting third-party resources (like martech, custom fonts, etc.). This helps reduce the number of external hosts that need to be resolved and the number of TLS connections that need to be established
 - preloading critical JS and CSS files needed to render the LCP directly in the HTML head or via HTTP Link headers (better) to benefit from Early Hints
-- defer third-party embeds (like maps, videos, social widgets, etc.) with a "facade" (i.e. placeholder) and only load them using an Intersection Observer or an actual user interaction
- 
-#### CLS
- 
-- ensure all images have proper height and width, or an aspect ratio defined
+- defer third-party embeds (like maps, videos, social widgets, etc.) with a "facade" (i.e. placeholder) and only load them using an Intersection Observer or an actual user interaction`,
+
+  cls: `- ensure all images have proper height and width, or an aspect ratio defined
 - making sure that the CSS uses "scrollbar-gutter: stable;" to avoid CLS when the page is longer than the initial viewport
 - loading any page template files (CSS and JS) in the eager phase before the LCP
 - setting a minimum height on the blocks that are loaded asynchronously to avoid CLS after the block is shown
-- when custom fonts are used, they should have the "font-display: swap;" CSS property, and there should also be a fallback font for it in styles.css using a safe web font that has the "size-adjust" CSS property to reduce CLS
- 
-#### INP
- 
-- deferring all third-party logic to the delayed phase (except for the experimentation/personalization libraries)
+- when custom fonts are used, they should have the "font-display: swap;" CSS property, and there should also be a fallback font for it in styles.css using a safe web font that has the "size-adjust" CSS property to reduce CLS`,
+
+  inp: `- deferring all third-party logic to the delayed phase (except for the experimentation/personalization libraries)
 - removing unused tags from the tag manager containers
 - breaking up long tasks in event handlers at the project level by leveraging "window.requestAnimationFrame", "window.requestIdleCallback", "window.setTimeout" or "scheduler.yield" APIs
 - patching datalayer push operations to forcibly yield to the main thread, so first party event handlers are prioritized and third-party metrics tracking is executed afterwards
-- patching global event listeners like "load", "DOMContentLoaded", "click", etc. to forcibly yield to the main thread, so first party event handlers are prioritized and third-party metrics tracking is executed afterwards
- 
-### Anti-patterns
- 
-- Do not inline critical CSS for above-the-fold content in the <head>. It would require a build system
+- patching global event listeners like "load", "DOMContentLoaded", "click", etc. to forcibly yield to the main thread, so first party event handlers are prioritized and third-party metrics tracking is executed afterwards`,
+
+  antiPatterns: `- Do not inline critical CSS for above-the-fold content in the <head>. It would require a build system
 - Do not minify CSS and JS files. The files are already small, HTTP compression is already properly configured, and it would again require a build system
 - Do not preload the LCP image via meta tags or HTTP headers. Setting loading to eager and fetchpriority to high using Javascript is the recommended approach. The initial markup itself cannot be modified
 - Do not add defer or async to third-party scripts in the head. "aem.js"/"lib-franklin.js" are modules and anyways loaded like "defer". Instead load those dependencies via the "loadDelayed" method
 - Do not preload JS and CSS for individual blocks. This is considered overkill and would require page-specific rules that won't scale
 - Do not preload custom fonts. This would clutter the LCP critical path. Instead, defer the fonts to the lazy phase with appropriate font fallbacks defined
-- Do not preload/preconnect any third-party resource that is not in the critical path for the LCP. Instead, let them load async in "loadLazy" or "loadDelayed"
-`; 
+- Do not preload/preconnect any third-party resource that is not in the critical path for the LCP. Instead, let them load async in "loadLazy" or "loadDelayed"`,
+};

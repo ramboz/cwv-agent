@@ -2,17 +2,74 @@ import { EDSContext } from './contexts/eds.js';
 import { AEMCSContext } from './contexts/aemcs.js';
 import { AMSContext } from './contexts/ams.js';
 
+const CONTEXTS = {
+  eds: EDSContext,
+  cs: AEMCSContext,
+  ams: AMSContext,
+};
+
+const ALL_SECTIONS = ['characteristics', 'lcp', 'cls', 'inp', 'antiPatterns'];
+
 /**
- * Returns CMS-specific technical context text
- * @param {String} cms
+ * Sections each analysis phase actually needs. A CrUX agent looking at field
+ * data does not need LCP/CLS/INP optimization lists or code-level anti-patterns;
+ * a code review agent does. Keeping the shared baseline small (characteristics
+ * only) and layering phase-specific sections on top avoids shipping irrelevant
+ * context to agents that won't use it.
+ */
+export const PHASE_CONTEXT = {
+  crux: [],
+  psi: ['lcp', 'cls', 'inp'],
+  perfObserver: ['lcp', 'cls', 'inp', 'antiPatterns'],
+  har: ['lcp', 'antiPatterns'],
+  html: ['lcp', 'cls', 'antiPatterns'],
+  rules: ['lcp', 'cls', 'inp', 'antiPatterns'],
+  coverage: ['lcp', 'inp', 'antiPatterns'],
+  codeReview: ['lcp', 'cls', 'inp', 'antiPatterns'],
+};
+
+/** Baseline that goes into the shared system prompt for every agent. */
+export const BASELINE_CONTEXT_SECTIONS = ['characteristics'];
+
+function composeContext(ctx, sections) {
+  const parts = [];
+  if (sections.includes('characteristics') && ctx.characteristics) {
+    parts.push(`You know the following about ${ctx.platform}.`);
+    parts.push(`### Characteristics\n\n${ctx.characteristics}`);
+  }
+
+  const opts = [];
+  if (sections.includes('lcp') && ctx.lcp) opts.push(`#### LCP\n\n${ctx.lcp}`);
+  if (sections.includes('cls') && ctx.cls) opts.push(`#### CLS\n\n${ctx.cls}`);
+  if (sections.includes('inp') && ctx.inp) opts.push(`#### INP\n\n${ctx.inp}`);
+  if (opts.length > 0) {
+    parts.push(`### Common Optimizations\n\n${opts.join('\n\n')}`);
+  }
+
+  if (sections.includes('antiPatterns') && ctx.antiPatterns) {
+    parts.push(`### Anti-patterns\n\n${ctx.antiPatterns}`);
+  }
+
+  return parts.join('\n\n');
+}
+
+/**
+ * Returns CMS-specific technical context text.
+ *
+ * @param {String} cms - CMS key ('eds', 'cs', 'ams', 'aem-headless', other)
+ * @param {String[]} [sections=ALL_SECTIONS] - which sections to include. Pass
+ *   a subset (e.g. PHASE_CONTEXT.har) to scope context to what a single phase
+ *   actually uses. Defaults to the full composition for single-shot flows.
  * @return {String}
  */
-export function getTechnicalContext(cms) {
-  return (cms === 'eds' && EDSContext)
-    || (cms === 'cs' && AEMCSContext)
-    || (cms === 'ams' && AMSContext)
-    || (cms === 'aem-headless' && 'The website uses AEM Headless as a backend system.')
-    || 'The CMS serving the site does not seem to be any version of AEM.';
+export function getTechnicalContext(cms, sections = ALL_SECTIONS) {
+  const ctx = CONTEXTS[cms];
+  if (ctx) return composeContext(ctx, sections);
+  // Fallback one-liners are characteristics-only: surface them in the baseline
+  // and stay silent when an agent asks for phase-specific sections.
+  if (!sections.includes('characteristics')) return '';
+  if (cms === 'aem-headless') return 'The website uses AEM Headless as a backend system.';
+  return 'The CMS serving the site does not seem to be any version of AEM.';
 }
 
 /**

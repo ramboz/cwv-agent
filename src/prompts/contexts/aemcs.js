@@ -1,12 +1,13 @@
 /**
  * Technical context for AEM Cloud Service (CS)
+ *
+ * Exported as a sectioned object so prompts can request only the parts
+ * relevant to a given analysis phase (see PHASE_CONTEXT in ../shared.js).
  */
-export const AEMCSContext = `
-You know the following about AEM CS.
- 
-### Characteristics
+export const AEMCSContext = {
+  platform: 'AEM CS',
 
-- Dispatcher and CDN layer managed by Adobe
+  characteristics: `- Dispatcher and CDN layer managed by Adobe
 - Standard Adobe CDN is Fastly, with configuration capabilities
 - Dispatcher can be customized via configuration files
 - Frontend assets delivered through a combination of CDN and Dispatcher
@@ -21,13 +22,9 @@ You know the following about AEM CS.
 - Dynamic server-side personalization possible via ContextHub
 - Page structure uses container/component hierarchy
 - ClientLibs can be categorized as "js", "css", "dependencies", etc.
-- Traffic is always on HTTPS
+- Traffic is always on HTTPS`,
 
-### Common Optimizations
-
-#### LCP
-
-- Configure clientlibs properly with categories to control loading order
+  lcp: `- Configure clientlibs properly with categories to control loading order
 - Set "async" and "defer" attributes to non-critical JavaScript
 - Enable client-side libraries minification in production mode
 - Implement proper responsive image handling for hero images
@@ -38,11 +35,9 @@ You know the following about AEM CS.
 - Optimize server-side rendering time for critical components
 - Implement proper image format selection (WebP) via adaptive serving
 - Implement preconnect for external domains used in the critical path
-- Use HTTP/2 Server Push for critical resources via Dispatcher configuration
+- Use HTTP/2 Server Push for critical resources via Dispatcher configuration`,
 
-#### CLS
-
-- Properly configure image dimensions in Core Components
+  cls: `- Properly configure image dimensions in Core Components
 - Implement CSS best practices for layout stability
 - Use Core Components with proper responsive behaviors
 - Avoid late-loading content that shifts page layout
@@ -51,11 +46,9 @@ You know the following about AEM CS.
 - Properly configure font loading strategies
 - Utilize CSS containment where appropriate
 - Set explicit width/height for all media elements
-- Implement proper lazy loading strategies for below-the-fold content
+- Implement proper lazy loading strategies for below-the-fold content`,
 
-#### INP
-
-- Optimize clientlib JavaScript for performance
+  inp: `- Optimize clientlib JavaScript for performance
 - Utilize efficient event delegation patterns
 - Implement code-splitting for JavaScript bundles
 - Optimize component initialization scripts
@@ -64,11 +57,9 @@ You know the following about AEM CS.
 - Optimize third-party script loading and execution
 - Implement proper task scheduling for JavaScript execution
 - Optimize event handlers to avoid long tasks
-- Break up large JavaScript operations into smaller chunks
+- Break up large JavaScript operations into smaller chunks`,
 
-### Anti-patterns
-
-- Do not inline critical CSS for above-the-fold content in the <head>. It would require a build system
+  antiPatterns: `- Do not inline critical CSS for above-the-fold content in the <head>. It would require a build system
 - Do not rely on excessive client-side rendering for critical content
 - Avoid using monolithic clientlibs that load everything at once
 - Do not use synchronous XMLHttpRequest for component data loading
@@ -78,5 +69,5 @@ You know the following about AEM CS.
 - Do not depend on heavy jQuery operations for core functionality
 - Avoid excessive CSS specificity that leads to performance issues
 - Do not implement custom image handling that bypasses adaptive images
-- Avoid implementing custom clientlib categories that bypass optimization
-`; 
+- Avoid implementing custom clientlib categories that bypass optimization`,
+};

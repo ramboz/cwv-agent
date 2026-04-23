@@ -1,16 +1,36 @@
-import { getTechnicalContext, getCriticalFilteringCriteria, getDeliverableFormat, PHASE_FOCUS } from './shared.js';
+import {
+  getTechnicalContext,
+  getCriticalFilteringCriteria,
+  PHASE_FOCUS,
+  BASELINE_CONTEXT_SECTIONS,
+} from './shared.js';
 
 /**
- * Initialize the system with appropriate CMS context
- * @param {string} cms - The CMS type ('eds', 'cs', or 'ams')
- * @returns {string} System initialization prompt
+ * Spec components used for every prompt in this module:
+ *   - Task: what "done" looks like
+ *   - Context: CMS characteristics and phase-relevant optimizations
+ *   - Constraints: critical filtering criteria (when a finding is worth reporting)
+ *   - Examples / Output: deliverable format (lives in action.js for the final step)
+ *
+ * The single-shot prompt bundles all phases into one conversation, so it keeps
+ * the full technical context. The multi-agent global baseline strips it down to
+ * "characteristics" only — each agent layers phase-specific sections on top.
  */
-export const initializeSystem = (cms = 'eds') => `
-You are a web performance expert analyzing Core Web Vitals for an AEM website. Your goal is to identify optimization opportunities to achieve Google's "good" thresholds:
- 
+
+const TASK = `Analyze Core Web Vitals for an AEM website and identify optimization opportunities to hit Google's "good" thresholds:
+
 - Largest Contentful Paint (LCP): under 2.5 seconds
 - Cumulative Layout Shift (CLS): under 0.1
-- Interaction to Next Paint (INP): under 200ms
+- Interaction to Next Paint (INP): under 200ms`;
+
+/**
+ * Single-shot system prompt: one agent walks through all 8 phases in a single
+ * conversation. Ships the full technical context because every phase runs.
+ * @param {String} cms
+ * @return {String}
+ */
+export const initializeSystem = (cms = 'eds') => `
+You are a web performance expert. ${TASK}
 
 ## Technical Context
 ${getTechnicalContext(cms)}
@@ -40,18 +60,17 @@ Phase 1 will start with the next message.
 `;
 
 /**
- * Initial context optimized for multi-agent flow (global system prompt)
- * Includes only CMS technical context, critical filtering criteria,
- * and deliverable/structured JSON instructions to avoid duplication
- * across agent-specific prompts.
+ * Multi-agent global baseline: every agent sees this, so keep it to the
+ * shared characteristics only. Phase-specific optimization lists and anti-
+ * patterns are layered in by each agent's own system prompt.
  * @param {String} cms
  * @return {String}
  */
 export function initializeSystemAgents(cms = 'eds') {
-  return `You are a web performance expert analyzing Core Web Vitals for an AEM website.
+  return `You are a web performance expert. ${TASK}
 
-## Technical Context
-${getTechnicalContext(cms)}
+## Platform Context
+${getTechnicalContext(cms, BASELINE_CONTEXT_SECTIONS)}
 
 ${getCriticalFilteringCriteria()}
 `;
