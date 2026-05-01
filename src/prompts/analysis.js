@@ -129,11 +129,6 @@ export const rumSummaryStep = (rumSummary) => `
 Here is the Real User Monitoring (RUM) data from the last 7 days:
 
 ${rumSummary}
-
-**CRITICAL: Focus ONLY on "Current Page Metrics" section**
-- Report findings ONLY for the current page being analyzed
-- DO NOT report issues from "Other Pages on Site" unless marked as "CURRENT PAGE"
-- Site-wide metrics are provided for context/comparison only
 `;
 
 function getBasePrompt(role) {
@@ -185,6 +180,7 @@ Output:
     dataSource: 'crux',
     focusKey: 'CRUX',
     examples,
+    cms,
   });
 }
 
@@ -215,12 +211,20 @@ Output:
 - Impact: Hero image without dimensions is consistent root cause
 - Confidence: 0.95 (cross-validated by two field data sources)`;
 
+  const additionalContext = `## Scope Constraint
+Focus ONLY on the "Current Page Metrics" section of the RUM payload.
+- Report findings ONLY for the current page being analyzed.
+- DO NOT report issues from "Other Pages on Site" unless that entry is explicitly marked as "CURRENT PAGE".
+- Site-wide metrics are provided for context/comparison only, not as findings.`;
+
   return createAgentPrompt({
     agentName: 'RUM Agent',
     role: 'analyzing Real User Monitoring (RUM) field data',
     dataSource: 'rum',
     focusKey: 'RUM',
     examples,
+    cms,
+    additionalContext,
   });
 }
 
@@ -254,6 +258,7 @@ Output:
     dataSource: 'psi',
     focusKey: 'PSI',
     examples,
+    cms,
   });
 }
 
@@ -341,6 +346,7 @@ Output:
     focusKey: 'PERF_OBSERVER',
     examples,
     additionalContext,
+    cms,
   });
 }
 
@@ -456,6 +462,7 @@ Output:
     focusKey: 'HAR',
     examples,
     additionalContext,
+    cms,
   });
 }
 
@@ -560,6 +567,7 @@ Before recommending any preload/preconnect hints:
     focusKey: 'HTML',
     examples,
     additionalContext,
+    cms,
   });
 }
 
@@ -572,6 +580,7 @@ export function rulesAgentPrompt(cms = 'eds') {
     dataSource: 'rules',
     focusKey: 'RULES',
     examples,
+    cms,
   });
 }
 
@@ -622,6 +631,7 @@ Output:
     dataSource: 'coverage',
     focusKey: 'COVERAGE',
     examples,
+    cms,
   });
 }
 
@@ -638,6 +648,7 @@ ${PHASE_FOCUS.CODE_REVIEW}`;
     focusKey: 'CODE_REVIEW',
     examples,
     additionalContext,
+    cms,
   });
 }
 

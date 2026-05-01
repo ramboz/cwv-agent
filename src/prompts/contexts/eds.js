@@ -1,11 +1,16 @@
 /**
  * Technical context for AEM Experience Delivery Service (EDS)
+ *
+ * Exposed as named sections so agents can receive only what's relevant to
+ * their phase (see PHASE_CONTEXT in shared.js). EDSContext is the full
+ * string, preserved for single-context consumers (e.g. actionPrompt).
  */
-export const EDSContext = `
-You know the following about AEM EDS.
- 
-### Characteristics
- 
+
+const PREAMBLE = `You know the following about AEM EDS.`;
+
+export const EDSSections = {
+  characteristics: `### Characteristics
+
 - the page typically has references either "aem.js" or "lib-franklin.js" in the frontend code (but is not mandatory), a reference to "scripts.js"
 - the markup has "data-block-status" data attributes
 - the main CDN used is Fastly. Fastly VCL and configs cannot be modified
@@ -25,12 +30,10 @@ You know the following about AEM EDS.
 - custom fonts are loaded asynchronously in the lazy phase to free up the critical path
 - HTTP headers can be set for individual pages (i.e. "/home"), or all pages following a generic pattern (i.e. "/products/**")
 - The HTML <head> is mostly global for the whole site, and only individual metadata can be changed without a global impact
-- Traffic is always on HTTPS
- 
-### Common Optimizations
- 
-#### LCP
- 
+- Traffic is always on HTTPS`,
+
+  lcpOptimizations: `#### LCP Optimizations
+
 - cleaning up the critical path for the LCP by delaying unused dependencies, martech and third-party libraries
 - leveraging inline imports to do tree shaking of the JavaScript files at runtime
 - making sure images above the fold, especially in the hero section or block and for the LCP element, are loaded eagerly and with a high fetch-priority. The initial markup itself cannot be modified, so this is typically done via Javascript
@@ -40,35 +43,35 @@ You know the following about AEM EDS.
 - header and footer should be loaded in the "loadLazy" phase
 - self-hosting third-party resources (like martech, custom fonts, etc.). This helps reduce the number of external hosts that need to be resolved and the number of TLS connections that need to be established
 - preloading critical JS and CSS files needed to render the LCP directly in the HTML head or via HTTP Link headers (better) to benefit from Early Hints
-- defer third-party embeds (like maps, videos, social widgets, etc.) with a "facade" (i.e. placeholder) and only load them using an Intersection Observer or an actual user interaction
- 
-#### CLS
- 
+- defer third-party embeds (like maps, videos, social widgets, etc.) with a "facade" (i.e. placeholder) and only load them using an Intersection Observer or an actual user interaction`,
+
+  clsOptimizations: `#### CLS Optimizations
+
 - ensure all images have proper height and width, or an aspect ratio defined
 - making sure that the CSS uses "scrollbar-gutter: stable;" to avoid CLS when the page is longer than the initial viewport
 - loading any page template files (CSS and JS) in the eager phase before the LCP
 - setting a minimum height on the blocks that are loaded asynchronously to avoid CLS after the block is shown
-- when custom fonts are used, they should have the "font-display: swap;" CSS property, and there should also be a fallback font for it in styles.css using a safe web font that has the "size-adjust" CSS property to reduce CLS
- 
-#### INP
- 
+- when custom fonts are used, they should have the "font-display: swap;" CSS property, and there should also be a fallback font for it in styles.css using a safe web font that has the "size-adjust" CSS property to reduce CLS`,
+
+  inpOptimizations: `#### INP Optimizations
+
 - deferring all third-party logic to the delayed phase (except for the experimentation/personalization libraries)
 - removing unused tags from the tag manager containers
 - breaking up long tasks in event handlers at the project level by leveraging "window.requestAnimationFrame", "window.requestIdleCallback", "window.setTimeout" or "scheduler.yield" APIs
 - patching datalayer push operations to forcibly yield to the main thread, so first party event handlers are prioritized and third-party metrics tracking is executed afterwards
-- patching global event listeners like "load", "DOMContentLoaded", "click", etc. to forcibly yield to the main thread, so first party event handlers are prioritized and third-party metrics tracking is executed afterwards
- 
-### Anti-patterns
- 
+- patching global event listeners like "load", "DOMContentLoaded", "click", etc. to forcibly yield to the main thread, so first party event handlers are prioritized and third-party metrics tracking is executed afterwards`,
+
+  antiPatterns: `### Anti-patterns
+
 - NEVER inline critical CSS for above-the-fold content in the <head> (requires build system). Use separate styles.css and lazy-styles.css files instead. Inline CSS is a common web performance best practice but is NOT compatible with EDS architecture.
 - Do not minify CSS and JS files. The files are already small, HTTP compression is already properly configured, and it would again require a build system
 - Do not preload the LCP image via meta tags or HTTP headers. Setting loading to eager and fetchpriority to high using Javascript is the recommended approach. The initial markup itself cannot be modified
 - Do not add defer or async to third-party scripts in the head. "aem.js"/"lib-franklin.js" are modules and anyways loaded like "defer". Instead load those dependencies via the "loadDelayed" method
 - Do not preload JS and CSS for individual blocks. This is considered overkill and would require page-specific rules that won't scale
 - Do not preload custom fonts. This would clutter the LCP critical path. Instead, defer the fonts to the lazy phase with appropriate font fallbacks defined
-- Do not preload/preconnect any third-party resource that is not in the critical path for the LCP. Instead, let them load async in "loadLazy" or "loadDelayed"
+- Do not preload/preconnect any third-party resource that is not in the critical path for the LCP. Instead, let them load async in "loadLazy" or "loadDelayed"`,
 
-### Practical Implementation Constraints
+  implementationConstraints: `### Practical Implementation Constraints
 
 **Image Optimization Recommendations:**
 - AVOID: Suggesting page-specific <link rel="preload"> for hero images (not maintainable across site)
@@ -99,5 +102,23 @@ You know the following about AEM EDS.
 - Always provide AEM-specific implementation paths (HTL templates, clientlib categories, Dispatcher config)
 - Show actual file locations: /apps/myproject/components/content/hero/hero.html
 - Include Dispatcher configuration snippets when suggesting caching changes
-- Reference Core Components version-specific APIs when applicable
-`; 
+- Reference Core Components version-specific APIs when applicable`,
+};
+
+export const EDSContext = `
+${PREAMBLE}
+
+${EDSSections.characteristics}
+
+### Common Optimizations
+
+${EDSSections.lcpOptimizations}
+
+${EDSSections.clsOptimizations}
+
+${EDSSections.inpOptimizations}
+
+${EDSSections.antiPatterns}
+
+${EDSSections.implementationConstraints}
+`;

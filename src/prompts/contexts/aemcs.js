@@ -1,10 +1,15 @@
 /**
  * Technical context for AEM Cloud Service (CS)
+ *
+ * Exposed as named sections so agents can receive only what's relevant to
+ * their phase (see PHASE_CONTEXT in shared.js). AEMCSContext is the full
+ * string, preserved for single-context consumers (e.g. actionPrompt).
  */
-export const AEMCSContext = `
-You know the following about AEM CS.
- 
-### Characteristics
+
+const PREAMBLE = `You know the following about AEM CS.`;
+
+export const AEMCSSections = {
+  characteristics: `### Characteristics
 
 - Dispatcher and CDN layer managed by Adobe
 - Standard Adobe CDN is Fastly, with configuration capabilities
@@ -21,11 +26,9 @@ You know the following about AEM CS.
 - Dynamic server-side personalization possible via ContextHub
 - Page structure uses container/component hierarchy
 - ClientLibs can be categorized as "js", "css", "dependencies", etc.
-- Traffic is always on HTTPS
+- Traffic is always on HTTPS`,
 
-### Common Optimizations
-
-#### LCP
+  lcpOptimizations: `#### LCP Optimizations
 
 - Configure clientlibs properly with categories to control loading order
 - Set "async" and "defer" attributes to non-critical JavaScript
@@ -38,9 +41,9 @@ You know the following about AEM CS.
 - Optimize server-side rendering time for critical components
 - Implement proper image format selection (WebP) via adaptive serving
 - Implement preconnect for external domains used in the critical path
-- Use HTTP/2 Server Push for critical resources via Dispatcher configuration
+- Use HTTP/2 Server Push for critical resources via Dispatcher configuration`,
 
-#### CLS
+  clsOptimizations: `#### CLS Optimizations
 
 - Properly configure image dimensions in Core Components
 - Implement CSS best practices for layout stability
@@ -51,9 +54,9 @@ You know the following about AEM CS.
 - Properly configure font loading strategies
 - Utilize CSS containment where appropriate
 - Set explicit width/height for all media elements
-- Implement proper lazy loading strategies for below-the-fold content
+- Implement proper lazy loading strategies for below-the-fold content`,
 
-#### INP
+  inpOptimizations: `#### INP Optimizations
 
 - Optimize clientlib JavaScript for performance
 - Utilize efficient event delegation patterns
@@ -64,9 +67,9 @@ You know the following about AEM CS.
 - Optimize third-party script loading and execution
 - Implement proper task scheduling for JavaScript execution
 - Optimize event handlers to avoid long tasks
-- Break up large JavaScript operations into smaller chunks
+- Break up large JavaScript operations into smaller chunks`,
 
-### Anti-patterns
+  antiPatterns: `### Anti-patterns
 
 **CRITICAL - Absolutely prohibited (even if performance impact is severe):**
 - NEVER inline critical CSS for above-the-fold content in the <head> (requires build system not available in AEM). Instead, split clientlibs into critical (sync) and non-critical (async), load non-critical with JavaScript.
@@ -81,9 +84,9 @@ You know the following about AEM CS.
 - AVOID using deprecated AEM Foundation components that aren't optimized
 - AVOID depending on heavy jQuery operations for core functionality
 - AVOID excessive CSS specificity that leads to performance issues
-- AVOID implementing custom clientlib categories that bypass optimization
+- AVOID implementing custom clientlib categories that bypass optimization`,
 
-### Practical Implementation Constraints
+  implementationConstraints: `### Practical Implementation Constraints
 
 **Image Optimization Recommendations:**
 - AVOID: Suggesting page-specific <link rel="preload"> for hero images (not maintainable across site)
@@ -167,9 +170,9 @@ You know the following about AEM CS.
 - Always provide AEM-specific implementation paths (HTL templates, clientlib categories, Dispatcher config)
 - Show actual file locations: /apps/myproject/components/content/hero/hero.html
 - Include Dispatcher configuration snippets when suggesting caching changes
-- Reference Core Components version-specific APIs when applicable
+- Reference Core Components version-specific APIs when applicable`,
 
-### TTFB Optimization and Caching
+  ttfbCaching: `### TTFB Optimization and Caching
 
 **Dispatcher Cache Detection:**
 - X-Dispatcher-Cache header indicates cache status: "HIT" (cached) or "MISS" (origin fetch)
@@ -241,6 +244,25 @@ Set Cache-Control headers:
 - Static assets (JS/CSS/images): max-age=31536000 (1 year) with versioned URLs
 - HTML pages: max-age=300-3600 depending on content freshness needs
 - API responses: Cache-Control: no-store for personalized content
-- Use stale-while-revalidate for improved perceived performance
+- Use stale-while-revalidate for improved perceived performance`,
+};
+
+export const AEMCSContext = `
+${PREAMBLE}
+
+${AEMCSSections.characteristics}
+
+### Common Optimizations
+
+${AEMCSSections.lcpOptimizations}
+
+${AEMCSSections.clsOptimizations}
+
+${AEMCSSections.inpOptimizations}
+
+${AEMCSSections.antiPatterns}
+
+${AEMCSSections.implementationConstraints}
+
+${AEMCSSections.ttfbCaching}
 `;
- 

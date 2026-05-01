@@ -1,4 +1,9 @@
-import { getTechnicalContext, getCriticalFilteringCriteria, getCommonAnalysisPriorities } from './shared.js';
+import {
+  getTechnicalContext,
+  getCriticalFilteringCriteria,
+  getCommonAnalysisPriorities,
+  BASELINE_CONTEXT_SECTIONS,
+} from './shared.js';
 
 /**
  * Initial context optimized for multi-agent flow (global system prompt)
@@ -35,7 +40,7 @@ ${errorIssues.length > 0 ? '- Some critical data sources failed - analysis may b
   return `You are a web performance expert analyzing Core Web Vitals for an AEM website.
 
 ## Technical Context
-${getTechnicalContext(cms)}
+${getTechnicalContext(cms, BASELINE_CONTEXT_SECTIONS)}
 
 ${getCommonAnalysisPriorities()}
 
