@@ -22,7 +22,7 @@
  *   7. Favicon before first stylesheet in discovery order
  *   8. Preconnect / dns-prefetch to deferrable-tier third parties (analytics, RUM, etc.)
  *   9. Inline SVG payload in early body markup
- *  10. AEM EDS structural contract failure (reveal/page-shape gate)
+ *  10. section reveal-gating structural contract failure (reveal/page-shape gate)
  *
  * CLI:
  *   node html-parse.js --url <URL> [--output <path>]
@@ -251,7 +251,7 @@ function stripTags(markup) {
 
 /**
  * Extract top-level <div> elements from a region. This is deliberately narrow:
- * EDS pages represent sections as top-level divs under <main>, and pulling only
+ * Section-based frontends represent sections as top-level divs under <main>, and pulling only
  * that level avoids treating nested block content as sections.
  */
 function findTopLevelDivs(region) {
@@ -781,10 +781,10 @@ function checkInlineSvgPayload(body, ctx) {
 }
 
 // --------------------------------------------------------------------------
-// H10 — AEM EDS structural contract failure.
+// H10 — section reveal-gating structural contract failure.
 // --------------------------------------------------------------------------
 
-const EDS_PLACEHOLDER_CLASSES = new Set([
+const PLACEHOLDER_SECTION_CLASSES = new Set([
   'css-block',
   'metadata',
   'section-metadata',
@@ -808,7 +808,7 @@ function detectEdsStack(html, sectionCount = 0) {
   if (/\bdata-section-status\s*=/i.test(html)) signals.push('data-section-status');
   if (/main\s*>\s*div|\bclass=["'][^"']*\bsection\b/i.test(html)) signals.push('section-markup');
   return {
-    eds: signals.includes('scripts.js') && (signals.length > 1 || sectionCount > 0),
+    sectionBased: signals.includes('scripts.js') && (signals.length > 1 || sectionCount > 0),
     signals,
   };
 }
@@ -820,7 +820,7 @@ function classifyEdsSection(section, index) {
   const textLength = text.length;
   const hasMedia = /<(picture|img|video)\b/i.test(section.inner);
   const hasHeading = /<h[1-3]\b/i.test(section.inner);
-  const placeholder = classes.some((cls) => EDS_PLACEHOLDER_CLASSES.has(cls));
+  const placeholder = classes.some((cls) => PLACEHOLDER_SECTION_CLASSES.has(cls));
   const tabShell = classSet.has('tabs') || /\btabs?\b/i.test(classes.join(' '));
   const kind = placeholder ? 'placeholder' : tabShell ? 'tab-shell' : 'content';
   const meaningful = !placeholder && !tabShell && (hasHeading || hasMedia || textLength >= 80);
@@ -890,7 +890,7 @@ function headerOverlaySignals(rawHtml) {
   };
 }
 
-function analyzeEdsStructure(rawHtml, ctx) {
+function analyzeSectionStructure(rawHtml, ctx) {
   const cleaned = stripComments(rawHtml);
   const main = extractMain(cleaned);
   const sections = main ? findTopLevelDivs(main.inner).map(classifyEdsSection) : [];
@@ -908,17 +908,17 @@ function analyzeEdsStructure(rawHtml, ctx) {
   const tabShellBeforeMeaningful = beforeMeaningful.filter((section) => section.tabShell).length;
   const reasons = [];
 
-  if (!stack.eds) {
+  if (!stack.sectionBased) {
     return {
       stack,
-      gate: { name: 'eds-structural-contract', result: 'not-run', reasons: [] },
+      gate: { name: 'structural-contract', result: 'not-run', reasons: [] },
       sections,
       finding: null,
     };
   }
 
   if (!firstMeaningful) {
-    reasons.push('No meaningful top-level EDS section was found in <main>.');
+    reasons.push('No meaningful top-level section was found in <main>.');
   } else if (firstMeaningful.index > 3) {
     reasons.push(`First meaningful section is section ${firstMeaningful.index}, after placeholder or shell sections.`);
   }
@@ -932,13 +932,13 @@ function analyzeEdsStructure(rawHtml, ctx) {
     reasons.push('A tab-shell section appears before the first meaningful/LCP-like section.');
   }
   if (signals.viewblockDisplayBlock) {
-    reasons.push('Source-visible CSS forces section-block___viewblock sections to display:block, which can bypass EDS reveal gating.');
+    reasons.push('Source-visible CSS forces section-block___viewblock sections to display:block, which can bypass section reveal gating.');
   }
   if (signals.bodyAppearDisplayBlock && !signals.bodyNotAppearMainHidden) {
     reasons.push('Inline/source CSS shows body.appear display rules without a matching body:not(.appear) main display:none gate.');
   }
   if (signals.removeGatingComment) {
-    reasons.push('Source comments mention removing EDS body or section hiding to prevent FOUC.');
+    reasons.push('Source comments mention removing body or section hiding to prevent FOUC.');
   }
   if (headerSignals.overlayLikely && (
     placeholderBeforeMeaningful > 0
@@ -951,7 +951,7 @@ function analyzeEdsStructure(rawHtml, ctx) {
 
   const result = reasons.length > 0 ? 'fail' : 'pass';
   const gate = {
-    name: 'eds-structural-contract',
+    name: 'structural-contract',
     result,
     reasons,
     sectionCount: sections.length,
@@ -998,13 +998,13 @@ function analyzeEdsStructure(rawHtml, ctx) {
     timestamp: ctx.timestamp,
     metric: ['CLS', 'LCP'],
     type: 'bottleneck',
-    cause: 'AEM EDS reveal/page-shape contract appears broken: meaningful content is delayed behind placeholder sections or reveal gating is bypassed.',
-    recommendation: 'Restore the EDS structural contract before promoting selector-level fixes: reveal main/sections only after eager content is ready, make the first meaningful/LCP section eager, keep header/content in normal flow, and remove spacer/transparent sections used as layout padding.',
+    cause: 'The section reveal/page-shape contract appears broken: meaningful content is delayed behind placeholder sections or reveal gating is bypassed.',
+    recommendation: 'Restore the structural contract before promoting selector-level fixes: reveal main/sections only after eager content is ready, make the first meaningful/LCP section eager, keep header/content in normal flow, and remove spacer/transparent sections used as layout padding.',
     evidence: [
       {
         kind: 'rule-violation',
         data: {
-          ruleId: 'html/eds-structural-contract',
+          ruleId: 'html/structural-contract',
           match: main ? main.inner.slice(0, 600) : '<main> not found',
           context,
         },
@@ -1069,7 +1069,7 @@ async function analyzeHtml(urlOrHtml, opts = {}) {
   const cleaned = stripComments(html);
   const head = extractHead(cleaned);
   const body = extractBody(cleaned);
-  const edsStructure = analyzeEdsStructure(html, ctx);
+  const sectionStructure = analyzeSectionStructure(html, ctx);
 
   const findings = [];
   if (head) {
@@ -1085,8 +1085,8 @@ async function analyzeHtml(urlOrHtml, opts = {}) {
     findings.push(...checkLcpCandidateFetchPriority(body, ctx));
     findings.push(...checkInlineSvgPayload(body, ctx));
   }
-  if (edsStructure.finding) {
-    findings.push(edsStructure.finding);
+  if (sectionStructure.finding) {
+    findings.push(sectionStructure.finding);
   }
 
   // Validate every finding; drop invalid ones with a warning on stderr (CLI safety).
@@ -1113,8 +1113,8 @@ async function analyzeHtml(urlOrHtml, opts = {}) {
       fetchedFrom,
       contentLength,
       responseHeaders,
-      stack: edsStructure.stack,
-      structuralGate: edsStructure.gate,
+      stack: sectionStructure.stack,
+      structuralGate: sectionStructure.gate,
     },
   };
 }
@@ -1245,7 +1245,7 @@ const _internal = {
   isDeferrableHost,
   decodeHtmlEntities,
   cssEscapeAttrValue,
-  analyzeEdsStructure,
+  analyzeSectionStructure,
   headerOverlaySignals,
   buildErrorEnvelope,
 };

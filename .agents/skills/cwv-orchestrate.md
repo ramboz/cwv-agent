@@ -11,7 +11,7 @@ self-assessment. Experiments that don't clear the oracle are preserved in
 ## When to invoke
 - You have a target URL and want to iteratively improve its CWV metrics
   without manually chaining `diagnose → fix → validate`.
-- You have an EDS (or other) source repo checked out locally alongside
+- You have a frontend source repo checked out locally alongside
   cwv-agent, and you want validated patches handed off as local branch refs
   plus git-applicable patch files.
 - Running in a fresh session with no prior state — the orchestrator will
@@ -22,8 +22,8 @@ self-assessment. Experiments that don't clear the oracle are preserved in
 
 Do not invoke if:
 - You only want a one-shot analysis (use `cwv-analyze`).
-- You need publish persistence rather than a local handoff (use `cwv-publish`
-  after validation).
+- You need a formatted review handoff only (use `cwv-report` after
+  validation).
 - You have a single fix in mind already (use `cwv-fix` + `cwv-validate`).
 
 ## Prerequisites
@@ -48,8 +48,6 @@ Do not invoke if:
 - **`.env` Google keys** (`GOOGLE_CRUX_API_KEY`,
   `GOOGLE_PAGESPEED_INSIGHTS_API_KEY`) are required only when the
   `field-google` triage profile is enabled.
-- **`RUM_DOMAIN_KEY`** is required only when the `field-aem-rum` profile is
-  enabled.
 
 ### Soft preconditions
 - Time budget: a full run with 5 candidates × (5 baseline + 5 treatment runs
@@ -77,8 +75,8 @@ fast if:
 **Doctor preflight gate (ADR-0014 / spec 014-01) — run this FIRST, before
 creating any directory.** Resolve the execution/provider profile this run is
 about to exercise — default `local`, escalated to whichever optional provider
-profile the operator named (e.g. `validate-aso` when the run will call ASO
-validation, `publish-spacecat` when it will publish). This is the same
+profile the operator named (e.g. `field-google` when the run will start from
+field triage). This is the same
 "Provider profile" line already documented in
 `cwv-diagnose.md`/`cwv-validate.md`/`cwv-fix.md`'s Prerequisites sections —
 not new vocabulary. Then run the standalone preflight as the very first action
@@ -95,18 +93,15 @@ required prerequisite is **verifiably missing**, `2` = unknown profile / usage
 error. On exit 1, surface the command's own stdout (doctor's failing rows)
 verbatim and **stop immediately** — do not derive `slug`, do not create
 `progress/{slug}/`, do not invoke `launcher.js`, and do not run any
-measurement, diagnosis, patch, or publish work. Do not re-derive the error
+measurement, diagnosis, patch, or report work. Do not re-derive the error
 message.
 
-**Block vs. advise (ADR-0014).** The gate refuses only on prerequisites doctor
-can **positively determine are absent** — status `fail` (missing binary, down
-Docker daemon, unwritable dir, unresolvable module) or `not-wired` (an unwired
-provider adapter). Prerequisites a zero-write doctor **cannot self-verify** —
-status `unknown`, e.g. SpaceCat/mysticat auth (`publish-spacecat`) or S3 site
-resolution (`source-s3`) — are surfaced as **non-blocking advisories**
-(`⚠ preflight: could not verify …`) and the run **proceeds (exit 0)**. So a
-fully-authenticated `publish-spacecat` run is not refused just because doctor
-cannot self-check the auth; the operator sees the advisory and continues. A
+**Block vs. advise.** The gate refuses only on prerequisites doctor can
+**positively determine are absent** — status `fail` (missing binary,
+unwritable dir, unresolvable module) or `not-wired` (an unwired provider
+adapter). Prerequisites a zero-write doctor **cannot self-verify** — status
+`unknown` — are surfaced as **non-blocking advisories**
+(`⚠ preflight: could not verify …`) and the run **proceeds (exit 0)**. A
 genuinely missing tool still blocks.
 
 An operator who intentionally wants the old late-failure behavior (e.g. to
@@ -136,7 +131,7 @@ arg-validation), but the **authoritative** Step-0 gate is the standalone
 `--force`).** If a triage
 envelope already exists at `progress/{slug}/triage-findings.json` (from a
 prior `cwv-analyze` or explicit triage run), read it. Otherwise, run
-`cwv-triage` for the single URL only when `field-google` or `field-aem-rum` is
+`cwv-triage` for the single URL only when `field-google` is
 enabled and persist the envelope there. With the default local profile and no
 field data, skip this gate and proceed to the lab baseline. Then:
 - If the envelope's top-level `status === "passing"`, **do not start the
@@ -251,12 +246,12 @@ runs the five analyzers in parallel, and emits a Finding envelope to
 `status: "proposed"` finding with non-empty `patches` is a candidate.
 
 `cwv-diagnose` Step 8b already tagged each finding with an `owner`
-(platform-vs-customer attribution). Preserve it — the loop carries it through
-and the summary reports the **"is it AEM or the customer?"** verdict (Step 7).
-Findings with a `requires-operator` / `requires-launch-rule` `deliveryConstraint`
-are not patchable by the EDS branch-based loop; note them but don't expect a
-validated lab delta (they route to the operator / a Launch rule, or to the
-CS/AMS validation path, not the EDS `perf/*` branch loop).
+(ownership attribution). Preserve it — the loop carries it through and the
+summary reports the **"platform, site code, or third party?"** verdict
+(Step 7). Findings with a `requires-operator` / `requires-tag-manager-rule`
+`deliveryConstraint` are not patchable by the branch-based loop; note them but
+don't expect a validated lab delta (they route to the operator or a
+tag-manager rule, not the `perf/*` branch loop).
 
 **2b.** Transform the findings envelope into the ranked candidate list the
 loop consumes:
@@ -328,7 +323,7 @@ Write `progress/{slug}/session.json`:
     "source": { "status": "not-used", "profiles": [], "providers": [], "artifacts": [] },
     "diagnosis": { "status": "used", "profiles": ["local"], "providers": ["cwv-agent"], "artifacts": ["progress/{slug}/diagnose-findings.json"] },
     "validation": { "status": "used", "profiles": ["local"], "providers": ["oracle"], "artifacts": [] },
-    "publishing": { "status": "not-used", "profiles": ["publish-spacecat"], "providers": ["cwv-publish"], "artifacts": [], "spaceCatApiCalls": [] }
+    "reporting": { "status": "not-used", "profiles": [], "providers": ["cwv-report"], "artifacts": [] }
   },
   "experiments": [],
   "promoted": [],
@@ -530,8 +525,7 @@ If source translation fails (file not found, patch doesn't apply cleanly, or no
 source repo is available), keep the lab-validated candidate in the local
 artifact set and record the missing `sourceEdits` in the summary. The manifest's
 `branchOutput.skipped[]` preserves validated findings that cannot become source
-patch files yet. Do not call SpaceCat and do not silently drop the validated lab
-evidence.
+patch files yet. Do not silently drop the validated lab evidence.
 
 ### Step 7 — Termination & summary
 Loop exits when:
@@ -550,23 +544,23 @@ Emit `progress/{slug}/SUMMARY.md`:
 Started:  {startedAt}
 Finished: {finishedAt}
 Mode:     {degradedMode || "full (field + lab)"}
-Stack:    {flavor} ({deliveryType})
+Stack:    {stack}
 
-## Ownership verdict — is it AEM or the customer?
+## Ownership verdict — platform, site code, or third party?
 
 Tally the diagnose findings by `owner` and state the headline plainly:
 
 | Owner            | Findings | Notes |
 |------------------|----------|-------|
-| customer-code    | {n}      | clientlibs / HTL / block JS — fix in the customer repo |
-| customer-content | {n}      | authored assets / dialog — content change |
-| third-party      | {n}      | vendor scripts ({requires-launch-rule} count flagged) |
-| dispatcher-cdn   | {n}      | caching/edge — {requires-operator} |
-| platform-default | {n}      | AEM platform — operator-managed |
+| customer-code    | {n}      | site templates / CSS / JS — fix in the site repo |
+| customer-content | {n}      | authored assets / CMS config — content change |
+| third-party      | {n}      | vendor scripts ({requires-tag-manager-rule} count flagged) |
+| cdn-edge         | {n}      | caching/edge — {requires-operator} |
+| platform-default | {n}      | hosting platform — operator-managed |
 
-Headline (e.g. "**Customer-implementation, not AEM** — the failing CWV (CLS) is
-the customer's own banner component; platform serves fast"). This is the literal
-question the engagement asks; lead the summary with it.
+Headline (e.g. "**Site-implementation, not the platform** — the failing CWV
+(CLS) is the site's own banner component; the platform serves fast"). This is
+the literal question the engagement asks; lead the summary with it.
 
 ## Total gain (original baseline → final cumulative)
 
@@ -611,8 +605,7 @@ halted early — fix the applier first, then resume.
 ```
 
 Then assemble the local artifact manifest. This is the terminal handoff for the
-default `local` profile and does not call SpaceCat. For URL-only sessions with
-no source checkout:
+default `local` profile. For URL-only sessions with no source checkout:
 
 ```
 node .agents/scripts/local-artifacts.js \
@@ -693,7 +686,6 @@ refs are not auto-committed fix branches.
   envelope before persisting.
 - `git` in the source repo — optional local branch-ref creation and
   `git apply --check` review of generated patch files; commits are human-owned.
-- Optional: `node .agents/scripts/rum-fetch.js` for field corroboration.
 
 ## Execution in Claude Code
 

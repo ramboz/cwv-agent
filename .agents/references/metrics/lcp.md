@@ -39,7 +39,6 @@ The Largest Contentful Paint (LCP) metric measures the time from when the page s
 - Leverage modern media formats (webp, avif, webm) and optimize for the viewport (responsive image)
   - if the LCP element is a video, make sure to use a poster image
   - if the LCP element is an image, make sure it is `loading` as `eager` and its [`fetchpriority`](https://web.dev/articles/fetch-priority) is set to `high`
-    - the `prioritizeImages` method in the [aem-cwv-helper](https://github.com/ramboz/aem-cwv-helper#prioritizeimagesselector) can help with this
 - Leverage the `navigator.connection` API to adjust media variants for slower networks
 - Use [speculative pre-rendering](https://developer.chrome.com/docs/web-platform/prerender-pages)
 - Redesign cookie consent dialog so it is smaller than the actual LCP on the page

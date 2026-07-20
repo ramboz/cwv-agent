@@ -85,7 +85,7 @@ node .agents/scripts/launcher.js --url <URL> \
 ```
 The launcher injects `measure-cwv.js` and `collect-resources.js` via `page.evaluateOnNewDocument(...)` before navigation — critical so CWV observers register before any page script runs.
 
-**Cold cache by default (first-visit).** The launcher disables the HTTP cache for the default `first-visit` cohort, so the run measures the true cold-load cost **and** CDP `Fetch` patches actually intercept. Without this, immutable long-cache assets (e.g. AEM `.lc-<hash>` clientlibs) are served from Chrome's cache — which both **under-measures cold LCP** (warm clientlibs masked ~3 s on a real case) and **silently no-ops any `block`/`rewriteBody`/header patch** (cache hits never reach `Fetch.requestPaused`). The `returning` cohort keeps the cache warm on purpose (its throwaway warm-up load defines a repeat visitor).
+**Cold cache by default (first-visit).** The launcher disables the HTTP cache for the default `first-visit` cohort, so the run measures the true cold-load cost **and** CDP `Fetch` patches actually intercept. Without this, immutable long-cache assets (e.g. content-hashed bundles) are served from Chrome's cache — which both **under-measures cold LCP** (warm bundles masked ~3 s on a real case) and **silently no-ops any `block`/`rewriteBody`/header patch** (cache hits never reach `Fetch.requestPaused`). The `returning` cohort keeps the cache warm on purpose (its throwaway warm-up load defines a repeat visitor).
 
 **Field-faithful CLS (default).** `--scroll` is on by default (passed explicitly above for clarity): the launcher dismisses consent, scrolls to the bottom in viewport steps, and settles to layout/network quiescence so the post-load CLS that dominates the field — consent banners, scroll-lazy ads, late inserts — is captured. The reported `cwv.cls.value` is therefore the **field-faithful CLS of record**, and `cwv.cls.shiftSources[]` ranks the shifting elements (the input to CLS attribution / correlator C6); `cwv.cls.shiftSummary.windowedFromShifts` is an independent cross-check of `value`. A load-only run reads a false-negative CLS (e.g. the news-site case: 0.005 load-only vs 0.21 scrolled, banner-dominated). Add `--no-scroll` only for a fast load-only pass when CLS is out of scope (scroll adds ~20–30 s/run).
 
@@ -99,13 +99,13 @@ text, and bounded `outerHTML` for matching nodes in the same measured page
 context. Use this for cases like `#FindCare,#select-your-insurance` where the
 question is whether SSR/static state matches hydrated default state.
 
-**EDS structure snapshot.** When the target fingerprints as AEM EDS, or when the
+**Structure snapshot.** When the page reveals content behind section gating, or when the
 page shape itself is suspect (empty/spacer sections, overlay header, LCP content
 several sections down), add `--eds-structure-snapshot` to the launcher command.
 The run output gains `runs[].edsStructureSnapshot`: `body.appear`, first
 top-level `main` sections, first meaningful section, header/main overlap, and
 visible unloaded blocks in the same measured page context. This is rendered
-evidence for the EDS structural gate; it complements, and can replace, static
+evidence for the structural gate; it complements, and can replace, static
 HTML evidence on WAF-protected targets.
 
 ### Step 2b — Reproduce first, then run a negative control (anti-thrash)
@@ -130,7 +130,7 @@ From the JSON stdout, extract:
 - `runs[0].domSnapshot` when `--dom-snapshot-selector` was passed — selected
   nodes' rects and computed layout styles at the measured state.
 - `runs[0].edsStructureSnapshot` when `--eds-structure-snapshot` was passed —
-  rendered EDS page-shape evidence: reveal state, first sections, header overlap,
+  rendered page-shape evidence: reveal state, first sections, header overlap,
   first meaningful section depth, and visible unloaded blocks.
 - `viewport` (top-level) / `runs[0].viewport` — the rendered viewport. On `desktop-cable-1xcpu` this is **1350×940** (Lighthouse's desktop preset; 003-06 / ADR-0007), not Puppeteer's 800×600 default. **Report it alongside any CLS number**: the CLS *score* is viewport-relative (distance fraction = shiftDistance / max(width, height)), so a desktop CLS is only interpretable paired with its viewport.
 
@@ -156,7 +156,7 @@ Fan out across analyzers. Each emits schema-conformant Findings that compose int
   node .agents/scripts/analyzers/html-parse.js --url <URL> --output html-findings.json
   ```
   Emits: blocking script in head, missing img dimensions, missing `fetchpriority`, missing viewport, inline-script bloat, preconnect-to-deferrable, etc.
-  On EDS pages it also emits an `html/eds-structural-contract` finding when the
+  On section-gated pages it also emits an `html/structural-contract` finding when the
   reveal/page-shape gate fails: meaningful content buried behind placeholder or
   tab-shell sections, spacer/transparent abuse, source-visible reveal-rule
   contradictions, or header overlay hints. This finding carries
@@ -166,7 +166,7 @@ Fan out across analyzers. Each emits schema-conformant Findings that compose int
   parse was unavailable. If `launcher.js` reaches the real page, do **not**
   switch to a separate ad-hoc Puppeteer probe (it may get a different challenge
   state). Re-run the launcher that already has the correct profile/stealth
-  settings with targeted DOM snapshots and, on EDS pages, the structure snapshot:
+  settings with targeted DOM snapshots and, on section-gated pages, the structure snapshot:
   ```
   node .agents/scripts/launcher.js --url <URL> --profile $PROFILE --scroll $STEALTH \
     --dom-snapshot-selector '#FindCare,#select-your-insurance,.tabs-wrapper' \
@@ -177,7 +177,7 @@ Fan out across analyzers. Each emits schema-conformant Findings that compose int
   summary, and redacted trimmed `outerHTML` of suspect nodes. The comma-list
   form is a convenience for simple selectors; for complex selectors that contain
   commas (for example `:is()` lists), pass separate simple selectors instead.
-  Use `runs[].edsStructureSnapshot` for pre-scroll/final EDS section state,
+  Use `runs[].structureSnapshot` for pre-scroll/final section state,
   body reveal state, header overlap, and visible unloaded blocks.
 
 - **Image analysis** (spins its own Puppeteer session; same `$PROFILE`):
@@ -202,21 +202,23 @@ Only read runbooks for metrics whose `rating !== 'good'`:
 Each runbook has an `## Attribution Phases (web-vitals v4)` section mapping attribution fields to root causes and a `## Patch Snippets` section with ready-to-use `patches.json` examples.
 
 ### Step 6 — Detect the stack
-Inspect the initial HTML (`await page.content()` or via the resources snapshot). Fingerprints (see `topics/stack-detection.md` for the full weighted table):
-- `data-block-name` attributes, `helix-` class prefix, `/blocks/` in script URLs → read `stacks/aem-eds.md` (AEM Edge Delivery Services). Pay special attention to `loadEager` / `loadLazy` / `loadDelayed` phases and Adobe Alloy/Target synchronous requirements.
-- `cq:template` meta, `/etc.clientlibs/` in link hrefs → read `stacks/aem-cs.md` (AEM Cloud Service). Focus on Dispatcher cache HIT/MISS and clientlib bundling.
-- `/etc/designs/`, `.min.<32hex>.js` clientlib hashes → read `stacks/aem-ams.md` (AEM Managed Services).
-- `_next/` or `__NEXT_DATA__` → Next.js stack (future runbook).
+Inspect the initial HTML (`await page.content()` or via the resources snapshot).
+Fingerprints (see `topics/stack-detection.md`): CMS/framework markers such as
+`wp-content/` (WordPress), `_next/` or `__NEXT_DATA__` (Next.js), shared
+`scripts.js` + top-level `<main>` sections (section-based frontends). When a
+stack pack is installed under `.agents/references/stacks/`, read its doc for
+the matched stack.
 
-Record the detected **flavor** (`eds` | `cs` | `ams` | `headless`) — it drives both playbook selection (Step 6b) and ownership attribution (Step 8b). If you fetched the source via `cwv-source-fetch`, the manifest's `deliveryType` (e.g. `aem_cs`) is authoritative; `attribution.js` normalizes it.
+Record the detected **stack** (or `generic`) — it drives playbook selection
+(Step 6b) and ownership attribution (Step 8b).
 
-**EDS structural gate (ADR-0011).** If the flavor is `eds`, resolve the gate
-before making selector-level root-cause claims:
+**Structural gate.** If the page is section-gated (content revealed after
+hydration), resolve the gate before making selector-level root-cause claims:
 
-1. Prefer the `html/eds-structural-contract` finding from `html-parse`.
+1. Prefer the `html/structural-contract` finding from `html-parse`.
 2. If static fetch failed or the finding is inconclusive, re-run the launcher with
-   `--eds-structure-snapshot` and inspect `runs[].edsStructureSnapshot`.
-3. If the gate fails, frame the primary cause as an EDS reveal/page-shape
+   `--structure-snapshot` and inspect `runs[].structureSnapshot`.
+3. If the gate fails, frame the primary cause as a reveal/page-shape
    contract failure. Selector-level CLS patches remain useful probes, but their
    confidence is capped and they must not be promoted as root-cause fixes unless
    they restore the structural contract and pass cross-metric guards.
@@ -224,16 +226,16 @@ before making selector-level root-cause claims:
    finding instead of forcing a runtime shim.
 
 ### Step 6b — Consult the playbook for each failing metric
-The mystique CWV playbooks (`.agents/references/playbooks/`) encode per-issue-type remediation knowledge that must drive detection, not just be referenced after. For each failing metric, list the applicable playbooks for the detected flavor:
+The CWV playbooks (`.agents/references/playbooks/`) encode per-issue-type remediation knowledge that must drive detection, not just be referenced after. For each failing metric, list the applicable playbooks:
 ```
-node .agents/scripts/attribution.js --explain <CLS|LCP|INP|TTFB|...> --flavor <flavor>
+node .agents/scripts/attribution.js --explain <CLS|LCP|INP|TTFB|...>
 ```
-This returns the candidate issue types in priority order, each flagged `applicable` (its `applicable_flavors` includes the flavor). **Read the top applicable playbook** and let its signals steer the diagnosis:
+This returns the candidate issue types in priority order, each flagged `applicable` (a playbook restricted via `applicable_stacks` may be N/A on the detected stack). **Read the top applicable playbook** and let its signals steer the diagnosis:
 - **CLS → `layout-shift.md`** — it is a *router*: classify the shifting element (unsized image → `image-sizing.md`; dynamically inserted banner/ad/embed → `min-height`/`aspect-ratio` reservation; web-font swap → `font-fallback.md`). The "late-injected / consent / ad-slot" categories tell you *what to measure* (did you scroll? was consent triggered?) and *how to classify* the shift.
-- **LCP → `lcp-image.md`** (+ `resource-preload`/`resource-hints`/`blocking-resource` as needed) — note its `on_flavors: [eds]` forbidden `<link rel=preload>` (EDS auto-emits the header).
-- **INP → `interaction.md` / `js-execution.md`**; **TTFB → `ttfb.md` / `compression.md`** (both N/A on EDS — platform-managed).
+- **LCP → `lcp-image.md`** (+ `resource-preload`/`resource-hints`/`blocking-resource` as needed) — note its forbidden `<link rel=preload>` patterns (prefer `fetchpriority` on the `<img>`).
+- **INP → `interaction.md` / `js-execution.md`**; **TTFB → `ttfb.md` / `compression.md`** (CDN/server-config concerns — often operator-owned).
 
-A playbook that **excludes** the detected flavor is itself a signal: the issue is platform-managed / N/A on that stack (feeds Step 8b).
+A playbook that **excludes** the detected stack is itself a signal: the issue is platform-managed / N/A there (feeds Step 8b).
 
 ### Step 6c — Read the resolved playbook closure (routing tree)
 `--explain` lists the *candidate* playbooks for a metric; before finalizing root
@@ -295,19 +297,19 @@ and anti-bot mode as the measurement.
 For each chain of 3+ sequential fetches from the same origin (or initiator), classify per `topics/request-chains.md`:
 - **CRITICAL** — must be preloaded or synchronous (first-party head scripts, A/B testing SDKs affecting above-fold, critical CSS, hero image).
 - **DEFERRABLE** — must NOT be preloaded (analytics, consent, monitoring, chat widgets, social pixels). Anti-pattern to preconnect or preload these.
-- **MIXED** — tag managers (GTM, Adobe Launch) — audit each tag.
+- **MIXED** — tag managers (e.g. GTM) — audit each tag.
 
-### Step 8b — Attribute ownership (is it AEM or the customer?)
+### Step 8b — Attribute ownership (platform, site code, or third party?)
 Tag every finding with an `owner` so the report answers the literal customer question. Run the attribution pass over the merged findings, passing the detected flavor:
 ```
 node .agents/scripts/attribution.js diagnose-findings.json --flavor <flavor> \
   --output diagnose-findings.json
 ```
-Each finding gains `owner` ∈ {`platform-default`, `dispatcher-cdn`, `customer-code`, `customer-content`, `third-party`} plus an `ownership` block (confidence, the playbook consulted, `deliveryConstraint`, rationale, signals). The classifier derives this from the playbook `applicable_flavors` (Step 6b) + the stack doc + the finding's evidence (third-party resource domains, cache headers, the shifting selector). See `topics/finding-schema.md` → "Platform-vs-customer attribution".
+Each finding gains `owner` ∈ {`platform-default`, `cdn-edge`, `customer-code`, `customer-content`, `third-party`} plus an `ownership` block (confidence, the playbook consulted, `deliveryConstraint`, rationale, signals). The classifier derives this from the playbook applicability (Step 6b) + the stack doc (if any) + the finding's evidence (third-party resource domains, cache headers, the shifting selector). See `topics/finding-schema.md` → "Ownership attribution".
 
 Key distinctions to sanity-check in the output:
 - A **first-party selector** with no third-party resource in evidence is `customer-code` (or `customer-content` for authored images), **not** `third-party` — e.g. a site's own custom consent banner is the customer's implementation, even though it's a "cookie bar."
-- `requires-operator` (Fastly/Dispatcher/CDN) and `requires-launch-rule` (Adobe Launch/DTM-injected) deliveryConstraints mean the fix is **not** a normal in-repo code change — call that out.
+- `requires-operator` (CDN/platform-managed) and `requires-tag-manager-rule` (tag-manager-injected) deliveryConstraints mean the fix is **not** a normal in-repo code change — call that out.
 
 ### Step 8c — Mechanism-confirmed gate (before any `rootCause: true`)
 A finding may be emitted with **`rootCause: true`** (finding-schema: "fundamental driver", not "observable symptom") **only** when its mechanism is *confirmed by direct evidence* — not inferred from correlation:
@@ -331,7 +333,7 @@ Observation: [concrete numbers from cwv attribution and resources]
 Diagnosis:   [the perf issue this causes]
 Mechanism:   [why this causes it, technically — reference the attribution phase]
 Solution:    [specific actionable fix with implementation path]
-Owner:       customer-code | customer-content | third-party | dispatcher-cdn | platform-default  (from Step 8b)
+Owner:       customer-code | customer-content | third-party | cdn-edge | platform-default  (from Step 8b)
 Confidence:  0.85
 Severity:    bottleneck | waste | opportunity
 ```
@@ -356,7 +358,7 @@ Example (LCP image discovery issue):
 Concrete traps that caused diagnosis thrash; Step 2b (reproduce + negative control) and Step 8c (mechanism gate) exist to avoid them.
 
 **Pitfalls**
-- **A fix validated on one page does NOT auto-transfer to another page on the same site — re-measure each page's own lever.** Site-level levers (a shared clientlib CSS split, authoring-jQuery removal) may carry, but page-specific causes don't, and a prior page's *headline* lever can be a no-op here. (the law-firm case: deferring martech was the `/super-claim-check/` LCP win — **0 ms** on the homepage, whose LCP is gated by render-blocking head CSS instead; and the homepage's dominant issue, an Elfsight-driven CLS, was absent on the other page.) Phrase a fix "same as page X" only *after* measurement confirms it; anything new surfaced gets the full deep-dive.
+- **A fix validated on one page does NOT auto-transfer to another page on the same site — re-measure each page's own lever.** Site-level levers (a shared CSS-bundle split, legacy-jQuery removal) may carry, but page-specific causes don't, and a prior page's *headline* lever can be a no-op here. (the law-firm case: deferring martech was the `/super-claim-check/` LCP win — **0 ms** on the homepage, whose LCP is gated by render-blocking head CSS instead; and the homepage's dominant issue, an Elfsight-driven CLS, was absent on the other page.) Phrase a fix "same as page X" only *after* measurement confirms it; anything new surfaced gets the full deep-dive.
 - **A DCL-applied `markup` reservation can land *after* first paint and *add* a shift.** Reserving space by mutating the DOM on `DOMContentLoaded` (or later) can itself shift already-painted content, making CLS *worse*. For a CLS reservation fix, prefer a **parse-time `rewriteBody`** (the reservation is in the HTML before first paint) over a post-load `markup` mutation. (Patch vocabulary: `cwv-fix` / `cwv-validate`.)
 - **Hydrated/default-state mismatches are a CLS root-cause class.** A common
   tab/accordion pattern renders one panel in the static layout, then hydration
@@ -383,7 +385,7 @@ Emit BOTH a human-readable report and a structured Findings envelope.
 - A `patches.json` code block for the top hypothesis, ready to paste into `patches.json`.
 - The `screenshots/before.png` path for visual context.
 - Stack fingerprint finding (which stack was detected, if any).
-- **Ownership summary** — the "is it AEM or the customer?" verdict: a one-line tally of findings by `owner` (e.g. "3 customer-code, 1 third-party, 0 platform"), and an explicit call-out of any finding with a `requires-operator` / `requires-launch-rule` deliveryConstraint.
+- **Ownership summary** — the "platform, site code, or third party?" verdict: a one-line tally of findings by `owner` (e.g. "3 customer-code, 1 third-party, 0 platform"), and an explicit call-out of any finding with a `requires-operator` / `requires-tag-manager-rule` deliveryConstraint.
 - A suggested next step (`cwv-fix` invocation with the generated `patches.json`).
 
 ### Structured findings (REQUIRED)
@@ -397,7 +399,7 @@ Emit `diagnose-findings.json` conforming to [finding-schema.md](../references/to
 - `evidence[]` MUST include at least one of: `cwv-attribution`, `resource-timing`, `har-entry`, `coverage-row`, `rule-violation`
 - `relatedFindingIds` SHOULD reference the upstream `triage-*` id if chained from triage
 - `impactReduction` estimated per the metric-specific runbook guidance
-- `owner` + `ownership` populated by the Step 8b attribution pass (the platform-vs-customer tag)
+- `owner` + `ownership` populated by the Step 8b attribution pass (the ownership tag)
 
 Suppress findings with `confidence < 0.5` or `impactReduction` below MIN_ACTIONABLE_IMPACT (see finding-schema.md) — emit them with `status: "rejected"` rather than dropping silently, so the causal record is preserved.
 
@@ -408,33 +410,20 @@ node .agents/scripts/finding-schema.js diagnose-findings.json
 
 Downstream: `cwv-fix` reads this file and picks the top `proposed` finding to apply.
 
-### SpaceCat draft + AEM review report (REQUIRED after `diagnose-findings.json`)
-After `diagnose-findings.json` validates, derive the non-mutating publish draft
-and the human review report:
-
-```bash
-node .agents/scripts/diagnose-draft.js diagnose-findings.json \
-  --output diagnose-spacecat-draft.json \
-  --report diagnose-report.md
-```
-
-`diagnose-spacecat-draft.json` is a **draft only**. It carries the selected URL,
-metric, `aggregationKey`, draft `CODE_CHANGE` issue breakdown, evidence,
-ownership, confidence limits, and `dedupIdentity`, but it must keep
-`publishState: "draft"`, `mutatesBackend: false`, and `dedupPlan: null`.
-Do not claim that any existing SpaceCat suggestion is already `OUTDATED`; the
-publish read probe and confirm-before-write gate own that state transition.
-
-`diagnose-report.md` is the AEM expert review surface. It summarizes selected
-URL, failing metrics, root cause, evidence, ownership, risks, and the recommended
-next remediation path without requiring the reviewer to inspect raw JSON.
+### Diagnosis report (REQUIRED after `diagnose-findings.json`)
+After `diagnose-findings.json` validates, write the human review report
+`diagnose-report.md` (the `cwv-report` skill formalizes the full handoff at
+the end of the loop; this step-level report keeps the diagnosis reviewable on
+its own). It summarizes the selected URL, failing metrics, root cause,
+evidence, ownership, risks, and the recommended next remediation path without
+requiring the reviewer to inspect raw JSON.
 
 ## References to read
 - Always: `topics/finding-schema.md`, `topics/evidence-and-confidence.md`, `topics/request-chains.md`.
 - Analyzer references (read the one matching your dominant analyzer): `topics/waterfall-shift.md`, `topics/coverage.md`, `topics/html-structure.md`, `topics/image-optimization.md`.
 - Metric-specific: `metrics/lcp.md`, `metrics/cls.md`, `metrics/inp.md`, `metrics/fcp.md`, `metrics/ttfb.md`, `metrics/tbt.md` (read only for metrics whose rating is not `good`).
 - Topics: `topics/martech.md` (INP fails), `topics/field-vs-lab.md` (when reconciling with CrUX), `topics/performance-audit.md` (general audit checklist), `topics/stack-detection.md` (Step 6 fingerprints).
-- Stacks: `stacks/aem-eds.md`, `stacks/aem-cs.md`, `stacks/aem-ams.md` (based on fingerprints).
+- Stacks: docs under `.agents/references/stacks/` (when a stack pack is installed; based on fingerprints).
 - Playbooks: `.agents/references/playbooks/<issue-type>.md` — the remediation playbook for the failing metric (Step 6b), loaded via `attribution.js --explain`. Read the top applicable one before classifying.
 
 ## Tools required

@@ -13,9 +13,7 @@ Do not invoke for early hypothesis testing — use `cwv-fix` (3 runs, indicative
 
 ## Prerequisites
 - Provider profile: `local` validation with the in-repo launcher and
-  `oracle.js`. Optional extension: `validate-aso`, which submits an already
-  prepared workbench patch/source diff to a running local `aso-shallow-validator`
-  service and records ASO artifacts under `progress/{slug}/aso-validation/`.
+  `oracle.js`.
 - `patches.json` from `cwv-fix` (or a modified source URL for pre/post comparison).
 - Enough time budget: N=15 with ~30s per run on `mobile-slow4g-4xcpu` ≈ 7.5 min per condition = 15 min total for baseline + treatment.
 - `npm ci` completed; harness scripts syntax-checked.
@@ -27,15 +25,14 @@ Do not invoke for early hypothesis testing — use `cwv-fix` (3 runs, indicative
 Before any lab measurement, run the same standalone doctor preflight gate the
 5-step runbook enforces at every step. Resolve this skill's provider profile
 (the one on the "Provider profile:" line above — `local` for the in-repo
-oracle; `validate-aso` when submitting to a local ASO service), then run:
+oracle), then run:
 ```
 node .agents/scripts/preflight.js --profile local
-# or, for the ASO extension: npm run preflight -- --profile validate-aso
 ```
 Exit codes: `0` = ready (or advisory-only), `1` = a required prerequisite is
-**verifiably missing** (doctor `fail`/`not-wired`, e.g. a down Docker daemon
-for `validate-aso`), `2` = usage error. On exit 1, surface the command's own
-doctor rows verbatim and **stop** before any browser/measurement/ASO
+**verifiably missing** (doctor `fail`/`not-wired`), `2` = usage error. On
+exit 1, surface the command's own doctor rows verbatim and **stop** before any
+browser/measurement
 submission work — do not re-derive the message. Prerequisites doctor **cannot
 self-verify** (status `unknown`) are printed as non-blocking advisories
 (`⚠ preflight: could not verify …`) and the run **proceeds** — the gate never
@@ -91,71 +88,6 @@ node .agents/scripts/launcher.js --url <URL> \
 ```
 
 **Field-faithful measurement (default) — baseline and treatment MUST match.** `--scroll` is on by default and is passed on BOTH runs above so the CLS oracle comparison is apples-to-apples. This is **required** to validate a CLS fix: a consent/scroll-lazy CLS fix is invisible to a load-only run (the shift happens post-load), which is why such fixes used to come back NOT_MEASURED/INCONCLUSIVE. The field-faithful CLS of record is `cwv.cls.value` (corroborated by `cwv.cls.shiftSummary.windowedFromShifts`). Only when **CLS is not among the target metrics** may you pass `--no-scroll` to BOTH runs to cut wall-clock (scroll adds ~20–30 s/run × 2×N runs); never mix scroll modes across baseline and treatment.
-
-**AEM CS source-built treatments — use `aem-clientlib-builder` by default.**
-When a fix has been translated into imported AEM CS source, do not validate the
-source-built treatment by manually running the customer repo's package manager
-unless the builder is unavailable. Apply the source edits, then run:
-```
-node .agents/scripts/aem-clientlib-build.js \
-  --source progress/{slug}/source/<repo-root> \
-  --output progress/{slug}/aem-clientlib-build-result.json
-```
-The wrapper delegates to `adobe-rnd/aem-clientlib-builder`: POM parsing,
-frontend-maven-plugin command mapping, Node/npm/NVM handling, frontend build
-steps, and Granite clientlib compilation. Use the rebuilt clientlibs from that
-run as the treatment bytes for `launcher.js --patches` replay. If
-`aso-shallow-validator` is available, run it as the stronger extension after
-the builder baseline; the builder is still the default local source-built
-gate.
-
-**Optional ASO provider (`validate-aso`) — explicit extension, never default.**
-After local launcher/oracle validation and source mapping have produced a
-validated finding, submit the ASO validation request with:
-
-```bash
-npm run validate:aso -- \
-  --progress progress/{slug} \
-  --source-repo progress/{slug}/source/<repo-root> \
-  --source-ref-location s3://bucket/source.zip \
-  --source-ref-checksum sha256:<64-hex>
-```
-
-The adapter writes:
-
-- `progress/{slug}/aso-validation/request.json`
-- `progress/{slug}/aso-validation/submit-response.json`
-- `progress/{slug}/aso-validation/poll-trail.json`
-- `progress/{slug}/aso-validation/final-verdict.json`
-- `progress/{slug}/aso-validation/summary.json`
-
-`POST /v1/validate?forceRevalidate=true` is used by default and
-`GET /v1/validate/{jobId}` is polled until a terminal verdict or timeout. Use
-`--base-url`, `--submit-path`, `--poll-path-template`, or
-`--no-force-revalidate` only when the local ASO service differs from the default
-contract. ASO `REJECT`, non-2xx problem responses, and timeouts are recorded as
-provider verdict artifacts; malformed responses or an unreachable API fail the
-adapter run because there is no trustworthy provider verdict to preserve.
-
-For old POM-pinned Node versions that lack a local architecture binary (for
-example Node 14.17 on Apple Silicon), `nvm` may fall back to compiling Node from
-source. Node 14 configure requires Python 3.9 or older. Use `pyenv` and pass the
-interpreter explicitly:
-```
-pyenv install 3.9.19
-node .agents/scripts/aem-clientlib-build.js \
-  --source progress/{slug}/source/<repo-root> \
-  --python "$(pyenv root)/versions/3.9.19/bin/python"
-```
-Equivalent env form: `AEM_CLIENTLIB_BUILD_PYTHON="$(pyenv root)/versions/3.9.19/bin/python"`.
-If modern macOS/Xcode still cannot compile the old Node source, use the Docker
-fallback so nvm can install the Linux binary instead:
-```
-npm run build:aem-clientlibs:docker-image
-npm run build:aem-clientlibs:docker -- \
-  --source progress/{slug}/source/<repo-root> \
-  --output progress/{slug}/aem-clientlib-build-result.json
-```
 
 **INP note:** If INP is a target, add `--interact "<selector>" --interact-delay 500` to BOTH baseline and treatment, using the identical selector so the interaction path is comparable. Without `--interact`, `cwv.inp = { value: null, reason: 'not-observed' }` in every run — do not interpret that as "INP validated."
 
@@ -292,23 +224,23 @@ node .agents/scripts/finding-schema.js validate-findings.json
 
 Terminal statuses — a `validated` | `rejected` | `regression` finding is not mutated further in this session.
 
-### Publish handoff
-`cwv-validate` promotes only remediation payloads that are still eligible after
-the oracle verdict:
+### Report handoff
+`cwv-validate` promotes only findings that are still eligible after the oracle
+verdict:
 
-- `CODE_CHANGE` remediation can become publishable only when the target metric's
-  oracle verdict is `VALIDATED`. The emitted `validate-findings.json` /
+- A code-change fix is handoff-ready only when the target metric's oracle
+  verdict is `VALIDATED`. The emitted `validate-findings.json` /
   `fix-findings.json` finding must carry `status:"validated"` plus deployable
-  source material (`sourceEdits` or a reconciled `patchContent` supplied later by
-  `cwv-publish`).
+  source material (`sourceEdits`, from which `cwv-report` derives the unified
+  diff).
 - `INCONCLUSIVE`, `UNRELIABLE`, `REGRESSION`, `BELOW_THRESHOLD`, `NO_OP`, and
-  `NOT_MEASURED` outcomes remain non-publishable as code changes. Emit
-  `rejected`, `regression`, or `no_op` as appropriate and return to diagnosis/fix
-  rather than handing them to publish.
-- `GUIDANCE` remediation is not oracle-promoted as a code change. It can proceed
-  to `cwv-publish` only under ADR-0008's mechanism-confirmed `rootCause:true`
-  and confidence rules, and must remain patchless/advisory in the publish
-  preview.
+  `NOT_MEASURED` outcomes remain non-shippable as code changes. Emit
+  `rejected`, `regression`, or `no_op` as appropriate and return to
+  diagnosis/fix rather than handing them to the report.
+- Guidance-only findings (including `manual-review` classifications) are not
+  oracle-promoted as code changes. They enter the report only with a
+  mechanism-confirmed `rootCause:true` and honest confidence, and must remain
+  patchless/advisory.
 
 ## References to read
 - `.agents/references/topics/finding-schema.md` — terminal lifecycle states; `measurement-delta` evidence shape.

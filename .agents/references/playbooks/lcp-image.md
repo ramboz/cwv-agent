@@ -80,7 +80,7 @@ The LCP element on most pages is a hero image. By default, browsers fetch images
 
 **When the hero is served through an on-the-fly image pipeline, request a right-sized, compressed rendition via URL params.** The correct param names depend on the pipeline:
 
-- **DM delivery API** — `/adobe/dynamicmedia/deliver/dm-aid--…`: use **`width`** / **`height`** / **`quality`** / **`preferwebp=true`**. This endpoint **silently ignores the classic `wid`/`hei` params** (the request still 200s but returns the full-size original), so a `wid=`-based "fix" saves zero bytes and only changes the URL — see anti-patterns.
+- **Managed image-delivery APIs**: verify the exact param names the endpoint honors (`width`/`height`/`quality`/format flags vary by vendor). Some endpoints **silently ignore unknown resize params** (the request still 200s but returns the full-size original), so a wrong-param "fix" saves zero bytes and only changes the URL — see anti-patterns.
 - **Legacy image servers** may use different param names (e.g. `wid`/`hei`/`qlt`) — match the endpoint's own convention.
 - **Image-CDN endpoints with `<picture>` auto-generation** — when the pipeline already emits a responsive `<picture>` with sized renditions and intrinsic `width`/`height`, the LCP-weight fix is usually **in the image-emitting helper** — request a rendered-size `width` (don't serve the desktop rendition to mobile), keep the modern-format rendition, and set `fetchpriority="high"` on the eager hero `<img>` — not by hand-editing a static URL.
 

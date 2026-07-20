@@ -90,7 +90,7 @@ function mkStructuralFinding(over = {}) {
     evidence: [{
       kind: 'rule-violation',
       data: {
-        ruleId: 'html/eds-structural-contract',
+        ruleId: 'html/structural-contract',
         context: {
           gateResult: 'fail',
           reasons: ['first meaningful section is section 6'],
@@ -103,7 +103,7 @@ function mkStructuralFinding(over = {}) {
     impactReduction: { metric: 'CLS', score: 0.1 },
     rootCause: true,
     structuralGate: {
-      name: 'eds-structural-contract',
+      name: 'structural-contract',
       result: 'fail',
       reasons: ['first meaningful section is section 6'],
     },
@@ -336,7 +336,7 @@ test('deriveStructuralGate: preserves clean EDS pass from analyzer metadata', ()
   const env = mkEnvelope([]);
   env.meta = {
     structuralGate: {
-      name: 'eds-structural-contract',
+      name: 'structural-contract',
       result: 'pass',
       reasons: [],
     },
@@ -401,7 +401,7 @@ test('rank: clean structural pass from metadata is attached and does not block C
   ]);
   env.meta = {
     structuralGate: {
-      name: 'eds-structural-contract',
+      name: 'structural-contract',
       result: 'pass',
       reasons: [],
     },

@@ -11,8 +11,8 @@ Interactively develop and measure a performance fix for a specific URL. Build `p
 
 ## Prerequisites
 - Provider profile: `local` runtime patching with the in-repo launcher. Source
-  translation can use a local checkout or an explicitly fetched `source-s3`
-  tree, but source access is not required to measure a patch.
+  translation uses a local checkout when present; source access is not required
+  to measure a patch.
 - `cwv-diagnose` already ran and a `patches.json` draft exists (or the user has a hypothesis in mind).
 - `npm ci` completed; `launcher.js` syntax-checked.
 - Writable `screenshots/` directory.
@@ -77,7 +77,7 @@ Resolve the hypothesis's `issue_type` (from the Finding, or via
 `classifyFindingIssueType`) and consult its playbook risk tier:
 
 ```
-node -e 'import("./.agents/scripts/forbidden-technique-validator.js").then(m => console.log(JSON.stringify(m.riskTierPolicy(process.argv[1], process.argv[2]))))' <issue_type> <flavor>
+node -e 'import("./.agents/scripts/forbidden-technique-validator.js").then(m => console.log(JSON.stringify(m.riskTierPolicy(process.argv[1]))))' <issue_type>
 ```
 
 If `allowsCodeChange` is `false` (i.e. `risk_tier: high` — `interaction`,
@@ -88,9 +88,9 @@ the validation loop below; `low` is auto-fixable.
 
 If the upstream `diagnose-findings.json` / `analyze-findings.json` or
 `ranked_patches.json` contains `structuralGate.result: "fail"` for
-`eds-structural-contract`, call that out before testing: selector-level CLS
+`structural-contract`, call that out before testing: selector-level CLS
 layout shims are **probe-only**. They can be useful discriminating tests, but
-the production fix must restore the EDS reveal/page-shape contract or be emitted
+the production fix must restore the reveal/page-shape contract or be emitted
 as guidance if no safe local patch exists.
 
 ### Step 3 — Build `patches.json`
@@ -149,7 +149,7 @@ node .agents/scripts/oracle.js --baseline progress/{slug}/baseline.json \
 ```
 Accept only when **`CLS@<source>` actually drops** (a stable source validates cleanly; a volatile one self-reports `UNRELIABLE` — re-target).
 
-**The structural scaffold is a starting point, not the fix.** Step 8.5 may scaffold an `override-clientlib` that pins position / reserves `min-height`. Verify it: if `CLS@<source>` is **unchanged**, the scaffold is **causally inert** and you must iterate the *real* mechanism — do not accept it. The most common inert case is an **animated reveal** (`evidence.data.mechanism === "animated-reveal"`, V5): the element already has its final geometry (e.g. `position:fixed`), so pinning it does nothing — the shift is the *entrance animation* (jQuery `.show(duration)` / `display:none→flex` tweening width/height). Iterate the de-animation fix and re-measure per-source:
+**The structural scaffold is a starting point, not the fix.** A structural CSS scaffold that pins position / reserves `min-height` must be verified: if `CLS@<source>` is **unchanged**, the scaffold is **causally inert** and you must iterate the *real* mechanism — do not accept it. The most common inert case is an **animated reveal** (`evidence.data.mechanism === "animated-reveal"`, V5): the element already has its final geometry (e.g. `position:fixed`), so pinning it does nothing — the shift is the *entrance animation* (jQuery `.show(duration)` / `display:none→flex` tweening width/height). Iterate the de-animation fix and re-measure per-source:
 - **Prove it in the lab without a rebuild** — `rewriteBody` the served bundle (incl. a cross-origin vendor JS file) to remove the animation, e.g. the news-site case `theme.js` `$(".cookies__container").show(e)` → `.show()`. See `cwv-validate.md` → "Validating a served-JS fix with `rewriteBody`".
 - **Map to the permanent fix** — the reveal recipe in [`playbooks/layout-shift.md`](../references/playbooks/layout-shift.md) → "Reveal or expand content without shifting layout" (render at final size; animate only `opacity`/`transform`; class toggle, not `.show(duration)`).
 
@@ -186,7 +186,7 @@ iterate the patch before validation. If the guard is noisy, mark the attempt
 `status: "rejected"` with `data.verdict = "guard-unreliable"` and re-measure
 instead of carrying ambiguous evidence forward.
 
-For a failing EDS structural gate, this guard is mandatory for any vertical-space
+For a failing structural gate, this guard is mandatory for any vertical-space
 reservation, min-height, hidden-state, display, or class patch. A numerically
 successful CLS result is not enough: if the load-only LCP candidate changes or
 regresses, reject the selector shim and return to the structural contract fix.
@@ -241,73 +241,39 @@ Emit:
 - The accepted `patches.json` verbatim.
 - Paths to `screenshots/baseline.png` and `screenshots/attempt-N.png`.
 - Median baseline vs treatment values for record.
-- **Permanent implementation instructions** — map each accepted patch to its source-level equivalent. For any fix that may become a SpaceCat `CODE_CHANGE`, do not stop at runtime `patches.json` when `sourceEdits` is missing. First try a local checkout; if none is present, run the `source-s3` provider (`cwv-source-fetch`) to check SpaceCat's imported source, then map/reconcile against that tree. Record the result in `sourceAvailability` (`fetched`, `not_found`, `auth_blocked`, or `mapping_failed`). Only publish guidance-only after this probe proves there is no safe deployable patch path. When the user's repo or fetched source tree is in the workspace, run `source-mapper.js` (`mapToSource({ patches, repoRoot })`) where applicable to compute the concrete edits; it returns `edits[]` of `{ file, before, after, line?, … }`. Render the prose instructions below for the human report **and** capture the `{ file, before, after, line? }` subset of each edit for the structured `sourceEdits` field (see "Structured findings" below) — that subset is what `cwv-publish` (003-02) turns into the unified diff. The mapping is documented in [finding-schema.md → fix-findings.json → suggestion-payload mapping](../references/topics/finding-schema.md#fix-findingsjson--suggestion-payload-mapping).
+- **Permanent implementation instructions** — map each accepted patch to its source-level equivalent. Do not stop at runtime `patches.json` when `sourceEdits` is missing: with the user's repo in the workspace, run `source-mapper.js` (`mapToSource({ patches, repoRoot })`) to compute the concrete edits; it returns `edits[]` of `{ file, before, after, line?, … }`. Record the outcome in `sourceAvailability` (`fetched` for a local checkout, `not_found` when no source is available, or `mapping_failed`). Only mark a fix guidance-only after this probe proves there is no safe deployable patch path. Render the prose instructions below for the human report **and** capture the `{ file, before, after, line? }` subset of each edit for the structured `sourceEdits` field (see "Structured findings" below) — that subset is what `cwv-report` turns into the unified diff.
   - `preloads` → `<link rel="preload" href="..." as="..." fetchpriority="high">` in the HTML `<head>`, OR a CDN `Link` response header rule (Fastly VCL, CloudFront function, Vercel `headers` config).
-  - `markup` attr changes → edit the HTML template or component source. For AEM EDS, edit the block decorator (`blocks/<name>/<name>.js`) or the `scripts/scripts.js` decorators. For AEM CS, edit the HTL template or Sightly expression — use `selector-resolver.js` (Step 8.5) to pinpoint the component + HTL file rather than guessing the path. For an AEM CS **CSS/layout** fix specifically, the resolver also tells you whether to edit source or ship an override clientlib.
+  - `markup` attr changes → edit the HTML template or the component/decorator source that emits the element.
   - `responseHeaders` → CDN-layer rule. Write the rule in the format appropriate to the CDN (Fastly VCL snippet, CloudFront function, Vercel `headers`, Cloudflare Worker, nginx `add_header`).
   - `requestHeaders` → often not portable to production; flag as lab-only if the target is a 3rd-party domain you don't control.
-  - `block` URLs → the permanent equivalent is to move the blocked script to `loadDelayed()` (AEM EDS), add `defer`/`async` attrs, remove the script entirely, or gate it on consent / interaction.
+  - `block` URLs → the permanent equivalent is to move the blocked script into a delayed loading phase, add `defer`/`async` attrs, remove the script entirely, or gate it on consent / interaction.
 - `rewriteBody` → source code change (or CDN body rewrite rule if available). Cannot be a runtime-only fix in prod.
 
-After `fix-findings.json` is written and validated, emit the phase handoff
-artifacts:
+After `fix-findings.json` is written and validated, classify the accepted
+fixes so validation routes correctly:
 
 ```
-node .agents/scripts/remediation-payload.js fix-findings.json \
-  --output remediation-payload.json \
-  --report remediation-report.md \
-  --patches patches.json
+node .agents/scripts/fix-classifier.js --patches patches.json \
+  --findings fix-findings.json --repo <source-root> --output classification.json
 ```
 
-`patches.json` is the runtime treatment applied by the launcher. It stays linked
-as lab evidence and is not the deployable SpaceCat diff. `remediation-payload.json`
-is the publish-facing handoff: each issue is explicitly `CODE_CHANGE` or
-`GUIDANCE`. `CODE_CHANGE` issues must carry `sourceEdits` and derived
-`patchContent`; if diff material is missing, the helper classifies the issue as
-`GUIDANCE`, and `publish-payload.js` still rejects any validated `CODE_CHANGE`
-attempt that lacks diff material. `remediation-report.md` is the AEM expert
-review view: source locations, expected CWV effect, risk, and what to verify.
-
-### Step 8.5 — Resolve selector → source (AEM CS CSS/layout fixes)
-When the accepted fix targets a **CSS / layout** problem on **AEM CS** (e.g. a CLS shift-source selector from `cls.shiftSources` / chain-rum-correlator C6), the hard part is not the patch — it is finding *where* that element is styled and *how a fix actually reaches production*. Editing the wrong layer (a built/vendor clientlib, or HTL when the CSS isn't even in git) ships a no-op.
-
-Run the resolver against the pulled source tree (from `cwv-source-fetch`):
-
-```
-node .agents/scripts/selector-resolver.js --selector '<runtime-selector>' --source progress/<slug>/source --md
-```
-
-It returns: the owning **component** (+ resource type, HTL path), a **styling trace** (inline / Sling model / authored dialog / clientlib CSS), the **base-CSS origin** (committed vs vendor-built / not-in-git), and a **recommended delivery**:
-
-- `direct-source-edit` — the styling CSS is committed; edit it and let the clientlib build ship it.
-- `override-clientlib` — the base CSS is vendor-built / not in git; deliver an override clientlib loaded after the vendor styles (the resolver emits the `.content.xml` / `css.txt` / `css/*.css` scaffold; `--emit <dir>` writes it). This is the the news-site case `t004-cookie` / `.cookies__container` case. **Caveat (V3): the emitted scaffold is structural (position/min-height) and may be causally inert** — on the news-site case the banner already ships `position:fixed` inline, so pinning it did nothing for CLS; the real shift is its `.show(e)` *entrance animation*. Always verify the scaffold against the **per-source** delta (Step 5b) and, if `CLS@<source>` doesn't move, iterate the mechanism fix (de-animate the reveal) rather than shipping the inert scaffold.
-- `content-dialog` — the property is authored; a content change repositions it with zero code (but won't change entrance/reflow behaviour).
-
-Use this to fill in the "Permanent implementation instructions" precisely instead of guessing the layer. `source-mapper.js`'s AEM CS `markup` path calls the same resolver to name the component+HTL automatically.
-
-> **AEM XWalk (Crosswalk):** XWalk publishes via Edge Delivery, so its fix surface
-> is the **EDS frontend repo**, not the AEM CS author — this Step 8.5 AEM-CS
-> resolver / override-clientlib path does **not** apply. Pull the EDS frontend with
-> `source-fetch --channel aemy` (XWalk sites store both a `cm` author package and
-> an `aemy` frontend; `detectStack` then routes the `aemy` repo to `aem-eds`), and
-> use the EDS block-decorator / `scripts/scripts.js` / `head.html` edits above. The
-> CS author side is content-only: if a root cause is authored-content shape (e.g. an
-> unsized hero `<img>`), prefer a defensive block-decorator fix and hand off any
-> author-side change as a recommendation.
+Each fix routes as Class 1 (`patch` — the CDP engine applies it directly),
+Class 2 (`source-edit` — the deliverable is a diff, lab-validated via mapped
+patches), or Class 3 (`manual-review` — structural; land in source and
+re-measure). `patches.json` stays linked as lab evidence; the reviewable
+handoff (report + diffs) is assembled by `cwv-report`.
 
 ### Step 9 — Offer direct source edits (optional)
-If the user's repo is present in the workspace, offer to apply the permanent source edits directly (Edit tool on HTML/CSS/JS files). Do NOT edit source unless the user explicitly confirms. For AEM CS, prefer the delivery the resolver recommends (Step 8.5) — for an `override-clientlib` recommendation, scaffold the new clientlib rather than editing vendor-built CSS that isn't in the repo.
+If the user's repo is present in the workspace, offer to apply the permanent source edits directly (Edit tool on HTML/CSS/JS files). Do NOT edit source unless the user explicitly confirms.
 
-### Step 10 — Source probe status for publish handoff
-Before handing a validated runtime fix to `cwv-publish`, ensure the finding says what happened to source mapping:
+### Step 10 — Source probe status for the report handoff
+Before handing a validated runtime fix to `cwv-report`, ensure the finding says what happened to source mapping:
 
-- `sourceEdits` present → `sourceAvailability.status: "fetched"` (or local checkout equivalent) and publish can build `patchContent`.
-- Source was not present in the workspace → try `cwv-source-fetch` / `source-s3` before declaring the fix guidance-only.
-- S3 has no import → `sourceAvailability.status: "not_found"`.
-- Mysticat/AWS credentials blocked the check → `sourceAvailability.status: "auth_blocked"` with a short `reason`.
-- Source was fetched but the runtime patch cannot be mapped safely → `sourceAvailability.status: "mapping_failed"` with a short `reason`.
+- `sourceEdits` present → `sourceAvailability.status: "fetched"` (local checkout) and the report can carry a unified diff.
+- No source checkout in the workspace → `sourceAvailability.status: "not_found"`; the fix ships as prose instructions.
+- Source present but the runtime patch cannot be mapped safely → `sourceAvailability.status: "mapping_failed"` with a short `reason`.
 
-Treat `sourceAvailability.status: "unattempted"` (or an absent field) as an incomplete SpaceCat handoff for any validated finding without `sourceEdits`.
+Treat `sourceAvailability.status: "unattempted"` (or an absent field) as an incomplete handoff for any validated finding without `sourceEdits`.
 
 ## Why pre-navigation only
 Post-load DOM mutations cannot test preload hints (preload must be present when browser parses the HTML `<head>`), cannot rewrite response headers (already received), and cannot alter the LCP resource's priority (already picked up by the preload scanner). Every patch in this workflow is applied via `evaluateOnNewDocument` (markup) or the CDP Fetch domain (headers/block/body) before navigation, so lab results genuinely predict source-level fix behavior.
@@ -339,13 +305,11 @@ Emit `fix-findings.json` conforming to [finding-schema.md](../references/topics/
   load-bearing subset of its edit objects; drop the runtime-only
   `rationale`/`autoApplicable`/`patchType`/`insertion`). Emit the records
   themselves, **not** a prose rendering of them — this is the raw material
-  `cwv-publish` (003-02) formats into the SpaceCat unified-diff `patchContent`
-  at upload (see [finding-schema.md → fix-findings.json → suggestion-payload
-  mapping](../references/topics/finding-schema.md#fix-findingsjson--suggestion-payload-mapping)).
+  `cwv-report` formats into the unified diff in the handoff.
   `sourceEdits` is **optional** (omit it for a `rejected`/`regression`/`no_op`
-  finding, or when source can't be mapped) but **required for a deployable patch
-  publish**. When a validated finding omits it, also emit `sourceAvailability`
-  so `cwv-publish` can distinguish "not attempted" from "source unavailable" or
+  finding, or when source can't be mapped) but **required for a deployable
+  diff**. When a validated finding omits it, also emit `sourceAvailability`
+  so `cwv-report` can distinguish "not attempted" from "source unavailable" or
   "mapping failed." The Step 8 prose "Permanent implementation instructions"
   stays in the human report; `sourceEdits` is its machine-readable twin.
 - Update `impactReduction` with the MEASURED delta (not the diagnose estimate).
@@ -366,7 +330,7 @@ Downstream: `cwv-validate` reads `applied` findings and re-measures with N=15 fo
 ## References to read
 - `.agents/references/topics/finding-schema.md` — output contract; lifecycle transitions proposed → applied/rejected/regression.
 - `.agents/references/metrics/*.md` — each metric runbook has a "Most Common Optimizations" section and patch snippets.
-- `.agents/references/stacks/aem-eds.md`, `stacks/aem-cs.md` — framework-specific source-edit mappings (e.g., `loadEager` vs `loadLazy` vs `loadDelayed` placements, clientlib categorization).
+- `.agents/references/stacks/` — framework-specific source-edit mappings, when a stack pack is installed.
 - `.agents/references/topics/request-chains.md` — guidance on which chains to preload vs defer.
 - `.agents/references/topics/martech.md` — anti-patterns (never preconnect/preload analytics).
 

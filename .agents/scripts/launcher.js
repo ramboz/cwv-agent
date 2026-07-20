@@ -33,7 +33,7 @@ import { checkPreflight, formatPreflightGate } from './preflight.js';
 // ---------------------------------------------------------------------------
 import { PROFILES, applyProfile } from './profiles.js';
 
-const DEFAULT_EDS_STRUCTURE_SNAPSHOT_LIMIT = 10;
+const DEFAULT_STRUCTURE_SNAPSHOT_LIMIT = 10;
 
 // ---------------------------------------------------------------------------
 // CLI
@@ -86,13 +86,13 @@ Flags:
                             field CLS is a blend; measure each. (default: first-visit)
   --interact <selector>     CSS selector to click after load (for INP measurement)
   --interact-delay <ms>     Delay after click before snapshot (default: 500)
-  --eds-structure-snapshot  Capture an additive EDS page-structure snapshot in
+  --structure-snapshot  Capture an additive page-structure snapshot in
                             the measured page context: body.appear, first
                             sections, header/main overlap, and visible unloaded
                             blocks. Disabled by default.
-  --eds-structure-snapshot-limit <N>
+  --structure-snapshot-limit <N>
                             Number of top-level main sections to include in the
-                            EDS structure snapshot (default: ${DEFAULT_EDS_STRUCTURE_SNAPSHOT_LIMIT}).
+                            structure snapshot (default: ${DEFAULT_STRUCTURE_SNAPSHOT_LIMIT}).
   --screenshot <path>       Full-page PNG screenshot path (optional)
   --dom-snapshot-selector <list>
                             Comma-separated CSS selectors to snapshot from the
@@ -161,8 +161,8 @@ function parseArgs(argv) {
     interact: null,
     interactDelay: 500,
     domSnapshotSelectors: [],
-    edsStructureSnapshot: false,
-    edsStructureSnapshotLimit: DEFAULT_EDS_STRUCTURE_SNAPSHOT_LIMIT,
+    structureSnapshot: false,
+    structureSnapshotLimit: DEFAULT_STRUCTURE_SNAPSHOT_LIMIT,
     screenshot: null,
     output: null,
     stealth: false,
@@ -199,8 +199,8 @@ function parseArgs(argv) {
       case '--cohort': args.cohort = next(); break;
       case '--interact': args.interact = next(); break;
       case '--interact-delay': args.interactDelay = parseInt(next(), 10); break;
-      case '--eds-structure-snapshot': args.edsStructureSnapshot = true; break;
-      case '--eds-structure-snapshot-limit': args.edsStructureSnapshotLimit = parseInt(next(), 10); break;
+      case '--structure-snapshot': args.structureSnapshot = true; break;
+      case '--structure-snapshot-limit': args.structureSnapshotLimit = parseInt(next(), 10); break;
       case '--screenshot': args.screenshot = next(); break;
       case '--dom-snapshot-selector':
       case '--dom-snapshot-selectors': {
@@ -313,7 +313,7 @@ function normalizeEdsStructureSnapshotOptions(options = {}) {
   const rawLimit = Number(options && options.limit);
   const limit = Number.isFinite(rawLimit) && rawLimit > 0
     ? Math.min(50, Math.floor(rawLimit))
-    : DEFAULT_EDS_STRUCTURE_SNAPSHOT_LIMIT;
+    : DEFAULT_STRUCTURE_SNAPSHOT_LIMIT;
   const phase = typeof options.phase === 'string' && options.phase.trim()
     ? options.phase.trim()
     : 'snapshot';
@@ -966,8 +966,8 @@ async function executeRun({
   interact,
   interactDelay,
   domSnapshotSelectors = [],
-  edsStructureSnapshot = false,
-  edsStructureSnapshotLimit = DEFAULT_EDS_STRUCTURE_SNAPSHOT_LIMIT,
+  structureSnapshot = false,
+  structureSnapshotLimit = DEFAULT_STRUCTURE_SNAPSHOT_LIMIT,
   screenshot,
   injected,
   navTimeout = 60000,
@@ -1044,9 +1044,9 @@ async function executeRun({
     // buffered observers before any consent dismissal below.
     await page.waitForNetworkIdle({ idleTime: 1000, timeout: 15000 }).catch(() => {});
 
-    const edsStructureSnapshotPreScroll = edsStructureSnapshot
+    const structureSnapshotPreScroll = structureSnapshot
       ? await page.evaluate(captureEdsStructureSnapshotInPage, {
-        limit: edsStructureSnapshotLimit,
+        limit: structureSnapshotLimit,
         phase: 'pre-scroll',
       })
       : null;
@@ -1092,18 +1092,18 @@ async function executeRun({
     const resources = await page.evaluate(() => (window.__resources_snapshot ? window.__resources_snapshot() : null));
     const fonts = await page.evaluate(() => (window.__fonts_snapshot ? window.__fonts_snapshot() : null));
     const domSnapshot = await captureDomSnapshot(page, domSnapshotSelectors);
-    const edsStructureSnapshotFinal = edsStructureSnapshot
+    const structureSnapshotFinal = structureSnapshot
       ? await page.evaluate(captureEdsStructureSnapshotInPage, {
-        limit: edsStructureSnapshotLimit,
+        limit: structureSnapshotLimit,
         phase: scroll ? 'post-scroll' : 'final',
       })
       : null;
-    const edsStructureSnapshotResult = edsStructureSnapshot
+    const structureSnapshotResult = structureSnapshot
       ? {
-        ...(edsStructureSnapshotPreScroll || edsStructureSnapshotFinal),
+        ...(structureSnapshotPreScroll || structureSnapshotFinal),
         phase: 'pre-scroll',
-        preScroll: edsStructureSnapshotPreScroll,
-        final: edsStructureSnapshotFinal,
+        preScroll: structureSnapshotPreScroll,
+        final: structureSnapshotFinal,
       }
       : null;
 
@@ -1132,7 +1132,7 @@ async function executeRun({
 
     const result = { cwv, resources, fonts, viewport: renderedViewport, timestamp: new Date().toISOString() };
     if (domSnapshot) result.domSnapshot = domSnapshot;
-    if (edsStructureSnapshotResult) result.edsStructureSnapshot = edsStructureSnapshotResult;
+    if (structureSnapshotResult) result.structureSnapshot = structureSnapshotResult;
     if (scrollDiag) result.scroll = scrollDiag;
     if (domSnapshot) result.domSnapshot = domSnapshot;
     return result;
@@ -1273,8 +1273,8 @@ async function main() {
           interact: args.interact,
           interactDelay: args.interactDelay,
           domSnapshotSelectors: args.domSnapshotSelectors,
-          edsStructureSnapshot: args.edsStructureSnapshot,
-          edsStructureSnapshotLimit: args.edsStructureSnapshotLimit,
+          structureSnapshot: args.structureSnapshot,
+          structureSnapshotLimit: args.structureSnapshotLimit,
           screenshot: runIndex === 0 || multiRun ? runScreenshot : null,
           injected,
           navTimeout: args.navTimeout,
@@ -1385,7 +1385,7 @@ export {
   parseArgs,
   computeRunPlan,
   decideLauncherExit,
-  DEFAULT_EDS_STRUCTURE_SNAPSHOT_LIMIT,
+  DEFAULT_STRUCTURE_SNAPSHOT_LIMIT,
   normalizeDomSnapshotSelectors,
   redactDomSnapshotString,
   shouldRedactDomSnapshotAttribute,

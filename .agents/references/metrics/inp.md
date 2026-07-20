@@ -38,7 +38,6 @@ The Interaction to Next Paint (INP) metric measures user interface responsivenes
 - Cache complex computation or UI updates with [memoization](https://www.debugbear.com/blog/front-end-javascript-performance#memoization) techniques where appropriate
 - Defer UI updates outside of the current viewport
 - [Throttle or debounce](https://www.debugbear.com/blog/front-end-javascript-performance#event-listeners) repeated events firing on a short time-frame
-- Leverage performance helper methods from [aem-cwv-helper](https://github.com/ramboz/aem-cwv-helper) to break up long tasks, patch datalayer and event listeners from 3rd-party scripts
 
 ## How to measure
 

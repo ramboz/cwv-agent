@@ -35,7 +35,6 @@ MarTech solutions typically include:
   - defer any non-UI related MarTech integrations
 - Self-host or proxy the MarTech libraries through your domain to reduce [TTFB](../metrics/ttfb.md) and [FCP](../metrics/fcp.md)
 - Adjust Tag configurations to reduce impact on [INP](../metrics/inp.md)
-- Leverage the performance helper methods from [aem-cwv-helper](https://github.com/ramboz/aem-cwv-helper) to break patch datalayer and event listeners from 3rd-party scripts to reduce long tasks
 - Only enable 3rd-party libraries on pages that really need it
   - You only need conversion tracking on pages that are actually part of the conversion funnel. Your user profile config page is likely not one of those
 
@@ -46,7 +45,6 @@ MarTech solutions typically include:
 
 ## References
 
-- https://github.com/adobe-rnd/aem-martech
 - https://themuralimanohar.medium.com/mastering-core-web-vitals-ffa73e7192a4
 
 ---

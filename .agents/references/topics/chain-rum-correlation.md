@@ -1,6 +1,6 @@
 # Chain-to-RUM Correlation
 
-Bridges field signal (Helix RUM Bundler) and lab evidence (launcher output with
+Bridges field signal (an optional RUM bundle summary) and lab evidence (launcher output with
 `resources` + `cwv` attribution) into a single finding that carries both
 "users feel it" and "here is the cause." The output is emitted by
 `.agents/scripts/analyzers/chain-rum-correlator.js`.
@@ -371,14 +371,14 @@ validate run.
 
 ## Real-world validation — 2026-04-16 (www.cox.com, 930 bundles / 3 days)
 
-First live run against a Helix-instrumented production site exposed three
+First live run against a RUM-instrumented production site exposed three
 shape gaps the fixture tests couldn't have caught. All are now handled in the
 correlator; they're documented here so future work knows where live data
 deviates from the idealized shape.
 
-**Helix bundle event semantics (measured on raw bundles, not through rum-fetch.js):**
+**RUM bundle event semantics (measured on raw bundles):**
 
-The Helix collector uses two general-purpose fields on every event:
+This RUM collector family uses two general-purpose fields on every event:
 
 - `source` = DOM selector of the element involved (when applicable).
 - `target` = destination URL (for nav/click) or a flag/value (for
@@ -401,18 +401,18 @@ Per-metric attribution, measured across 525 aetna.com bundles 2026-04-14:
   bundle whose value/timing best matches the INP. `cwv-inp.timeDelta` is the
   *report* time (often visibilitychange), not the interaction time — so the
   correlation window needs to be several seconds, not ±100ms. Today C1 is
-  silent on all Helix sites because `rum-fetch.js` uses too narrow a window
+  silent on all measured sites because the fetch used too narrow a window
   AND reads the wrong field (`target` instead of `source`). Fixing
   `rum-fetch.js` should unlock C1 broadly.
 - **C2 (LCP resource):** Every `cwv-lcp` event has an element selector in
   `source`. Today `rum-fetch.js` drops it — the `topSlow` lcp array comes
   out empty even though the raw data is fully populated. This is an
   extraction bug, not a collector limit. Fixing it unlocks C2 RUM-side
-  matching on every Helix site.
+  matching on every measured site.
 - **C3 (CLS element):** Genuinely stuck at the collector boundary. No
   per-shift element info is emitted. C3 falls through to "rum-only" low
   confidence; C6 (lab PerformanceObserver shifts) is the real fix path.
-  Upgrading the Helix RUM collector to beacon `LayoutShiftAttribution.node`
+  Upgrading the RUM collector to beacon `LayoutShiftAttribution.node`
   per shift is the only way to improve this.
 - **C4 (field/lab disagreement):** Extended to cover CLS (originally LCP/INP
   only). Live data produced a legitimate LCP disagreement finding (lab 8417ms
@@ -422,12 +422,12 @@ Per-metric attribution, measured across 525 aetna.com bundles 2026-04-14:
 **`rum-fetch.js` extraction fixes — LANDED 2026-04-16:**
 
 1. **LCP** reads `ev.source` directly. Post-fix target coverage: 100% of
-   `topSlow` rows across 5 Helix sites (was 0%).
+   `topSlow` rows across 5 measured sites (was 0%).
 2. **INP** joins each `cwv-inp` to the nearest-time interaction event in the
    same bundle via `findBestInteraction()`. The scorer weights before-report
    interactions 2× (matches the normal report-after-interaction flow) and
    requires the interaction to have a `source` selector. Post-fix INP join
-   recovery across 5 sites: 70% (adobe) / 94% (lexmark) / 96% (aetna) /
+   recovery across 5 sites: 70% / 94% / 96% /
    98% (fcsamerica, metrobyt). Bundles with no interactions still emit the
    INP sample (so p75 stays correct) but omit `target`.
 3. **CLS** samples emit no `target` field at all. The `summarizeMetric`
@@ -443,7 +443,7 @@ site-wide INP p75 is 72 ms — but when a URL does cross the threshold, the
 attribution is now available instead of "unknown".
 
 Remaining collector-side gap (not fixable client-side): `cwv-cls` events
-carry no `LayoutShiftAttribution.node`. Until the Helix collector beacons
+carry no `LayoutShiftAttribution.node`. Until the RUM collector beacons
 per-shift element info, C3 continues to rely on lab data (C6) for CLS
 attribution. File this as an upstream ask if/when CLS attribution becomes
 load-bearing for the workflow.
@@ -452,7 +452,6 @@ load-bearing for the workflow.
 
 - [`finding-schema.md`](./finding-schema.md) — source tiers, evidence kinds,
   MIN_ACTIONABLE_IMPACT gates, lifecycle transitions.
-- [`rum.md`](./rum.md) — Helix RUM Bundler API and response shape.
 - [`request-chains.md`](./request-chains.md) — CRITICAL/DEFERRABLE/MIXED
   classification used to pick INP chain suspects.
 - [`csp.md`](./csp.md) — CSP violation capture and failed-patch evidence.

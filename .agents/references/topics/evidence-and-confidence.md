@@ -88,7 +88,7 @@ If nothing clears these thresholds, the correct output is "no findings" — don'
 
 Every finding is one of three types:
 
-- **`bottleneck`** — on the critical render path; directly blocks a metric right now. Examples: render-blocking script in `<head>` before LCP element, long task pre-LCP, slow TTFB from dispatcher MISS, CLS from above-fold unsized image.
+- **`bottleneck`** — on the critical render path; directly blocks a metric right now. Examples: render-blocking script in `<head>` before LCP element, long task pre-LCP, slow TTFB from a CDN cache MISS, CLS from above-fold unsized image.
 - **`waste`** — unused code/bytes loaded before LCP (opportunity for savings ≥30KB). Not blocking per se, but costs bandwidth and parse time. Examples: tree-shakeable library imported in full, unused CSS rules in critical bundle.
 - **`opportunity`** — missing optimization hint. Examples: missing `fetchpriority="high"` on hero image, missing preload, unused `async` candidate, missing dimensions on below-fold image (not currently shifting but might).
 

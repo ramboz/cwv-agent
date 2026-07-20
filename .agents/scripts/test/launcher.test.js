@@ -16,7 +16,7 @@ import {
   isNonEmptyPatchBundle,
   summarizePatchBundle,
   composePatchHandlers,
-  DEFAULT_EDS_STRUCTURE_SNAPSHOT_LIMIT,
+  DEFAULT_STRUCTURE_SNAPSHOT_LIMIT,
 } from '../launcher.js';
 import { describePatchModes } from '../patches/patch-modes.js';
 
@@ -230,33 +230,33 @@ test('normalizeDomSnapshotSelectors preserves array selector entries', () => {
 });
 
 // ---------------------------------------------------------------------------
-// EDS structure snapshot flag
+// structure snapshot flag
 // ---------------------------------------------------------------------------
 
-test('--eds-structure-snapshot is opt-in and uses a bounded default section limit', () => {
+test('--structure-snapshot is opt-in and uses a bounded default section limit', () => {
   const defaults = parseArgs(['--url', 'https://example.test/']);
-  assert.equal(defaults.edsStructureSnapshot, false);
-  assert.equal(defaults.edsStructureSnapshotLimit, DEFAULT_EDS_STRUCTURE_SNAPSHOT_LIMIT);
+  assert.equal(defaults.structureSnapshot, false);
+  assert.equal(defaults.structureSnapshotLimit, DEFAULT_STRUCTURE_SNAPSHOT_LIMIT);
 
-  const enabled = parseArgs(['--url', 'https://example.test/', '--eds-structure-snapshot']);
-  assert.equal(enabled.edsStructureSnapshot, true);
-  assert.equal(enabled.edsStructureSnapshotLimit, DEFAULT_EDS_STRUCTURE_SNAPSHOT_LIMIT);
+  const enabled = parseArgs(['--url', 'https://example.test/', '--structure-snapshot']);
+  assert.equal(enabled.structureSnapshot, true);
+  assert.equal(enabled.structureSnapshotLimit, DEFAULT_STRUCTURE_SNAPSHOT_LIMIT);
 });
 
-test('--eds-structure-snapshot-limit overrides the section scan cap', () => {
+test('--structure-snapshot-limit overrides the section scan cap', () => {
   const args = parseArgs([
     '--url', 'https://example.test/',
-    '--eds-structure-snapshot',
-    '--eds-structure-snapshot-limit', '12',
+    '--structure-snapshot',
+    '--structure-snapshot-limit', '12',
   ]);
-  assert.equal(args.edsStructureSnapshot, true);
-  assert.equal(args.edsStructureSnapshotLimit, 12);
+  assert.equal(args.structureSnapshot, true);
+  assert.equal(args.structureSnapshotLimit, 12);
 });
 
 test('normalizeEdsStructureSnapshotOptions bounds limit and preserves phase labels', () => {
   assert.deepEqual(
     normalizeEdsStructureSnapshotOptions({}),
-    { limit: DEFAULT_EDS_STRUCTURE_SNAPSHOT_LIMIT, phase: 'snapshot' },
+    { limit: DEFAULT_STRUCTURE_SNAPSHOT_LIMIT, phase: 'snapshot' },
   );
   assert.deepEqual(
     normalizeEdsStructureSnapshotOptions({ limit: 999, phase: 'pre-scroll' }),

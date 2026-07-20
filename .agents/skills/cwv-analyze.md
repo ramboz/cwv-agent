@@ -4,7 +4,7 @@ End-to-end CWV analysis orchestrator: URL in → ranked Findings + suggested fix
 
 ## Purpose
 
-Given a URL (and optionally a domain for RUM context), run the minimum set of collectors and analyzers needed to produce a prioritized, schema-conformant Finding envelope covering LCP / CLS / INP / FCP / TTFB, with patch candidates ready for `cwv-fix`.
+Given a URL, run the minimum set of collectors and analyzers needed to produce a prioritized, schema-conformant Finding envelope covering LCP / CLS / INP / FCP / TTFB, with patch candidates ready for `cwv-fix`.
 
 ## When to invoke
 
@@ -20,16 +20,15 @@ Do NOT invoke this when:
 
 - `launcher.js`, all four analyzers, and the finding-schema validator must be present and pass `node --check`.
 - Default profile: `local`. Field collection is skipped unless the operator
-  selects `field-google` and/or `field-aem-rum`.
+  selects `field-google`.
 - `field-google`: `GOOGLE_CRUX_API_KEY` in `.env`; optional
   `GOOGLE_PAGESPEED_INSIGHTS_API_KEY` for PSI fallback.
-- `field-aem-rum`: `RUM_DOMAIN_KEY` in `.env`.
 - Node ≥20, `npm ci` completed.
 
 ## Workflow
 
 ### Step 1 — Collect field signal (fast path)
-When `field-google` or `field-aem-rum` is selected, run `cwv-triage` for the
+When `field-google` is selected, run `cwv-triage` for the
 single URL (or its origin if URL-level CrUX returns no data). This produces
 `triage-findings.json` with `status: "draft"` entries tied to failing metrics.
 If CrUX returns no data AND PSI is unavailable, emit a single informational
@@ -41,7 +40,7 @@ profile, skip this step and record that field data was not consulted.
 envelope is in hand, check its top-level `status` field. If
 `status === "passing"` (triage Step 6b determined all queried form factors
 show every target metric strictly under the GOOD threshold with actual
-field data — CrUX and/or RUM, never PSI-only), **do not run the lab
+field data — CrUX, never PSI-only), **do not run the lab
 measurement or analyzers**. Emit a single line:
 ```
 field already passing on <metrics> (<form factor>); no action — pass --force to override
@@ -77,27 +76,6 @@ Puppeteer, set `STEALTH="--stealth"` and pass it to every browser-owning command
 below (`launcher.js`, `coverage.js`, `image-analysis.js`). Leave it empty by
 default; it opens headful real Chrome and is an explicit opt-in only.
 
-**Preserve the RUM bundle output.** When `field-aem-rum` is selected,
-`cwv-triage` Step 2a runs `rum-fetch.js` and writes `/tmp/rum.json`. If that
-file exists and is non-empty after triage, keep the path — Step 3 will feed it
-to `chain-rum-correlator`. If `field-aem-rum` was not selected,
-`RUM_DOMAIN_KEY` is unset, or `rum-fetch.js` exited 3 (wrong/mis-scoped key or
-non-AEM site — NOT "CS/AMS so no RUM"), the correlator runs in lab-only mode
-(C5/C6 still fire on `measure-cwv.js` event logs).
-
-**Use triage's sample-gated selection, not raw RUM top rows.** If triage emits
-both `rawTop` and `selectedTop`, the lab target is `selectedTop.url` with
-`selectedTop.recommendedProfile`. A raw 1-bundle `http://` variant can remain
-valuable evidence, but it must not silently steer a full lab/fix/validate run
-away from the highest-pressure load-bearing canonical URL.
-
-When `recommendedFormFactor` is not `"PHONE"`, re-fetch RUM with the matching
-filter so the correlator sees only the target surface:
-```
-node .agents/scripts/rum-fetch.js --domain <domain> \
-  --form-factor $RECOMMENDED_FORM_FACTOR --output /tmp/rum.json
-```
-
 ### Step 2 — Lab measurement
 Run the harness once with a screenshot, using the triage-recommended profile:
 ```
@@ -109,8 +87,9 @@ node .agents/scripts/launcher.js \
 ```
 If triage flagged INP, also pass `--interact "<CTA selector>" --interact-delay 500`. Pick the selector by inspecting the served HTML for a primary CTA (`button[type=submit]`, `a.cta`, `nav a`).
 
-If the target fingerprints as AEM EDS, or if prior/source evidence suggests an
-EDS reveal/page-shape issue, also pass `--eds-structure-snapshot`. This preserves
+If the page reveals content behind section gating (placeholder/skeleton
+sections), or prior/source evidence suggests a reveal/page-shape issue, also
+pass `--structure-snapshot`. This preserves
 rendered gate evidence in `/tmp/launcher.json` even when static fetch is blocked.
 
 **Field-faithful CLS (default).** `--scroll` is on by default (explicit above): the launcher dismisses consent, scrolls to quiescence, and captures post-load CLS, so `runs[0].cwv.cls.value` is the **field-faithful CLS of record** and `runs[0].cwv.cls.shiftSources[]` is the ranked shift attribution that the chain-rum-correlator's C6 consumes. Without it, CLS reads a false-negative and C6 has no runtime shift sources to flag. Add `--no-scroll` only for a load-only pass when CLS is not a target metric.
@@ -139,29 +118,28 @@ gate + `measure-quality.assessReliability` CLS abs floor 0.1), the total-CLS `no
   (`--cls-source`), never on total CLS. Carry `recommendedClsSource` forward.
 
 ### Step 3 — Fan out analyzers in parallel
-All five are independent — they each read pre-collected inputs (launcher output / URL / RUM bundle); none spawns work that the others depend on. Pass `$PROFILE` to the two analyzers that spin up Puppeteer (coverage + image-analysis) so their measurements match the lab run:
+All five are independent — they each read pre-collected inputs (launcher output / URL / optional RUM bundle); none spawns work that the others depend on. Pass `$PROFILE` to the two analyzers that spin up Puppeteer (coverage + image-analysis) so their measurements match the lab run:
 ```
 node .agents/scripts/analyzers/waterfall-shift.js       /tmp/launcher.json                                      > /tmp/waterfall.json &
 node .agents/scripts/analyzers/coverage.js              --url <URL> --profile $PROFILE $STEALTH --output /tmp/coverage.json &
 node .agents/scripts/analyzers/html-parse.js            --url <URL> --output /tmp/html.json &
 node .agents/scripts/analyzers/image-analysis.js        --url <URL> --profile $PROFILE $STEALTH --output /tmp/images.json &
-# chain-rum-correlator needs BOTH the launcher output (Step 2) AND rum.json (Step 1).
+# chain-rum-correlator reads the launcher output; pass --rum only when you have a RUM bundle summary.
 # Pass --html after html-parse completes — it enriches C3 with missing-dimensions hints.
-# For lab-only (no domain key / non-AEM site), substitute a stub RUM file: `{"siteWide":{},"byUrl":[]}`.
 node .agents/scripts/analyzers/chain-rum-correlator.js \
-  --rum /tmp/rum.json --launcher /tmp/launcher.json --output /tmp/correlator.json &
+  --launcher /tmp/launcher.json --output /tmp/correlator.json &
 wait
 ```
 Waterfall-shift, chain-rum-correlator, and html-parse do no browser work (pure data transforms / fetch). Coverage + image-analysis spawn their own Puppeteer sessions (this adds ~30–60s total on slow-4G). Parallelizing the five shaves the lab-time cost to roughly `max(coverage, images) + fast-analyzers`.
 
-On EDS pages, `html-parse` also emits `html/eds-structural-contract` when the
+On section-gated pages, `html-parse` also emits `html/structural-contract` when the
 reveal/page-shape gate fails. Keep that finding in the merged envelope and copy
 its `structuralGate` block through; `rank-candidates.js` consumes it before
 candidate promotion.
 
 **When the correlator matters most:**
-- C1 (INP chain) fires when URL p75 INP > 200ms and RUM has an interaction selector. Post the 2026-04-16 `rum-fetch.js` fix, INP attribution joins succeed at 70–98% across Helix sites.
-- C2 (LCP resource) fires when RUM LCP > 2500ms on the URL and a lab resource matches the RUM element. Now works broadly on Helix sites.
+- C1 (INP chain) fires when URL p75 INP > 200ms and a supplied RUM bundle has an interaction selector; in lab-only mode C1 relies on lab interaction data.
+- C2 (LCP resource) fires when a supplied RUM bundle shows LCP > 2500ms on the URL and a lab resource matches the RUM element.
 - C5/C6 (lab-only INP/CLS event logs) fire regardless of RUM availability — the launcher's `measure-cwv.js` captures per-interaction and per-shift arrays that drive these findings.
 
 If chain-rum-correlator emits a finding covering the same resource URL or element as a waterfall-shift / image-analysis / coverage finding, Step 5 deduplicates them with the correlator finding taking precedence (higher source tier — field > lab).
@@ -208,15 +186,15 @@ A chain-rum-correlator finding (`source: "rum"` with `mergedSources: ["rum", "ha
 - **Same attribution.target match key.** When both findings cite a non-null `evidence[].data.target` on a `kind: cwv-attribution` entry and the targets are identical, treat that as a dedup key regardless of URL form.
 - **Belt-and-braces:** `rank-candidates.js` runs the same dedup pre-ranking and enforces the **source-tier precedence** of Rule 5a in its keeper selection (`sourceTierOf`: field=1 … speculative=4 — a field/RUM finding is kept over a *higher-rankScore* lab finding on the same resource+intervention, not the reverse). The skill is the canonical rule; the script is deterministic enforcement. Each merge logs `event: "rank-candidates.dedupe"` to stderr with `reason: "source-tier-precedence"` (tier decided the keeper) or `"same-resource-or-target"` (rankScore decided) for audit.
 
-**Rule 5f — EDS structural gate controls CLS selector-shim promotion.** When the
+**Rule 5f — the structural gate controls CLS selector-shim promotion.** When the
 merged envelope contains a failing `structuralGate` from
-`html/eds-structural-contract`, selector-level CLS layout shims (`style`,
+`html/structural-contract`, selector-level CLS layout shims (`style`,
 `class`, min-height/display/visibility rewrites) are probe-only. The
 deterministic `rank-candidates.js` output sets `structuralGate` on the envelope
 and marks these candidates `probeOnly: true`, `promotionBlocked: true`, and caps
 confidence below the normal promotion threshold. They may still be measured, but
 they must not be treated as root-cause fixes unless a later source patch restores
-the EDS reveal/page-shape contract and passes the LCP guard.
+the reveal/page-shape contract and passes the LCP guard.
 
 Worked example — 2026-04-17 the pets-site case run emitted two candidates for the same LCP `<img>`:
 - `img-lcp-fetchpriority-1` — selector `img[src='https://pets.example.com/media_…&format=webply&optimize=medium']`, markup patch, confidence 0.75, `rootCause: true`.
@@ -224,11 +202,13 @@ Worked example — 2026-04-17 the pets-site case run emitted two candidates for 
 
 Canonicalized the two URLs differ (`format=webply` vs `format=jpg` are genuinely different resources — picture `source` sibling vs `img` fallback), so URL-match alone does NOT fire. If both findings carry `evidence[].kind: cwv-attribution` with matching `data.target` (e.g. `div.hero-banner>…>picture>img`), Rule 5e collapses them via the attribution.target match key: keep `img-lcp-fetchpriority-1` (higher rankScore), fold `diagnose-lcp-opportunity-3` into `relatedFindingIds`, union evidence, merge sources. If attribution.target is null on both (as in the captured 2026-04-17 envelope), the rule does NOT fire — the two candidates legitimately point at different resources and should both run.
 
-### Step 5b — Attribute ownership (is it AEM or the customer?)
-Detect the stack flavor and tag every merged finding with an `owner`. When source was fetched, pass `--source <dir>` — flavor resolution is then **channel-aware**: an `aemy` (EDS-frontend) repo resolves to `eds` even when the site's `deliveryType` is `aem_cs`, i.e. **XWalk** (don't let the author stack mislabel the published one). An explicit bare `--flavor eds|cs|ams|headless` still overrides; otherwise `--source` (aemy ⇒ eds) wins over a raw `--delivery-type` label. Fingerprints: `topics/stack-detection.md`.
+### Step 5b — Attribute ownership (platform, site code, or third party?)
+Tag every merged finding with an `owner`. Pass `--stack <name>` when a stack
+pack names the stack; otherwise attribution runs stack-neutral. Fingerprints:
+`topics/stack-detection.md`.
 ```
 node .agents/scripts/attribution.js /tmp/analyze-findings.json \
-  --source progress/<slug>/source --delivery-type <aem_cs|aem_edge> \
+  --stack <name> \
   --output /tmp/analyze-findings.json
 ```
 This adds `owner` ∈ {`platform-default`, `dispatcher-cdn`, `customer-code`, `customer-content`, `third-party`} + an `ownership` block to each finding, derived from the metric's playbook `applicable_flavors` + the stack doc + the finding's evidence. It is a single pass over the **whole merged envelope** (all six sources), so it's the authoritative ownership step — not just the correlator's findings. A first-party selector with no third-party resource is `customer-code`/`customer-content`, not `third-party`. See `topics/finding-schema.md` → "Platform-vs-customer attribution". (You can also pass `--flavor` to `chain-rum-correlator.js` in Step 3 to pre-tag its findings, but Step 5b is what covers the full set.)
@@ -282,7 +262,7 @@ Emit BOTH a human-readable report and a structured Findings envelope.
 - LCP X / CLS Y / INP Z / FCP / TTFB
 - Dominant LCP phase: <phase>, dominant INP phase: <phase>
 ## Ownership verdict
-- Is it AEM or the customer? One-line tally by `owner` (e.g. "4 customer-code, 1 third-party, 0 platform") + any `requires-operator` / `requires-launch-rule` call-outs.
+- Ownership verdict: one-line tally by `owner` (e.g. "4 customer-code, 1 third-party, 0 platform") + any `requires-operator` / `requires-tag-manager-rule` call-outs.
 ## Top 5 Findings
 [table: # | metric | severity | impact | source | owner | recommendation]
 ## Recommended patches.json
@@ -315,14 +295,12 @@ node .agents/scripts/finding-schema.js /tmp/analyze-findings.json
 - `.agents/references/topics/evidence-and-confidence.md` — CoT format, filtering thresholds.
 - `.agents/references/topics/waterfall-shift.md`, `coverage.md`, `html-structure.md`, `image-optimization.md`, `chain-rum-correlation.md` — per-analyzer methodology.
 - `.agents/references/topics/field-vs-lab.md` — reconciling CrUX/RUM with the lab run in the summary.
-- `.agents/references/topics/rum.md` — Helix RUM bundle shape + detection heuristics (relevant when deciding whether the correlator runs in field-fused or lab-only mode).
 - Metric runbooks (`metrics/*.md`) — read only those whose rating is not `good`.
-- Stack docs (`stacks/aem-eds.md`, `aem-cs.md`, `aem-ams.md`) + `topics/stack-detection.md` — detect the flavor (Step 5b).
+- Stack docs (`.agents/references/stacks/`, when a stack pack is installed) + `topics/stack-detection.md` — detect the stack (Step 5b).
 - Playbooks (`.agents/references/playbooks/<issue-type>.md`) — the remediation playbook per failing metric; `attribution.js --explain <metric> --flavor <flavor>` lists the applicable ones.
 
 ## Tools required
 - `.agents/scripts/launcher.js`
-- `.agents/scripts/rum-fetch.js` (optional; required for C1/C2 field-fused findings on any AEM site with a provisioned domain key)
 - All five analyzers under `.agents/scripts/analyzers/` — waterfall-shift, coverage, html-parse, image-analysis, chain-rum-correlator
 - `.agents/scripts/finding-schema.js` validator
 - `.agents/scripts/attribution.js` — ownership attribution + playbook router (`--explain`)
@@ -334,6 +312,6 @@ node .agents/scripts/finding-schema.js /tmp/analyze-findings.json
 - **Single URL, single device.** For multi-URL / multi-device audits, run this skill N times — do not try to batch inside a single invocation (the shape becomes unclear).
 - **Coverage and image analyzers each spin up their own browser.** Total wall time is dominated by these two Puppeteer sessions (~30–60s on slow-4G). Parallelizing the four analyzers shaves ~half that.
 - **Merge rules are heuristic.** Two findings pointing at the same URL via different evidence kinds (e.g., `coverage-row` vs `rule-violation`) will merge; but a waterfall-shift finding about a chain and an image finding about a single image in that chain will not auto-merge. Downstream skills (cwv-fix) will still apply them as separate patches.
-- **INP coverage is thin but better than it used to be.** If the user can't supply an `--interact` selector, `cwv.inp.value` is null but `measure-cwv.js` still records any interactions that happened during page load into `cwv.inp.interactions[]`. The correlator's C5 heuristic turns those into per-interaction findings (source `perf_observer`, cap 0.85) even without RUM. Field-side, C1 produces URL-level interaction findings when RUM has INP p75 > 200ms and at least one click event with a `source` selector in the same bundle (70–98% join recovery post the 2026-04-16 rum-fetch fix).
-- **CLS attribution from RUM is not available.** `cwv-cls` events carry no element info from the Helix collector at this version. C3 falls back to RUM-only low-confidence or lab-driven (C6 via `cls.shifts[]`). Tracked as an upstream ask in `docs/roadmap.md`.
+- **INP coverage is thin but better than it used to be.** If the user can't supply an `--interact` selector, `cwv.inp.value` is null but `measure-cwv.js` still records any interactions that happened during page load into `cwv.inp.interactions[]`. The correlator's C5 heuristic turns those into per-interaction findings (source `perf_observer`, cap 0.85) even without RUM. Field-side, C1 produces URL-level interaction findings when a supplied RUM bundle has INP p75 > 200ms and at least one click event with a `source` selector in the same bundle.
+- **CLS attribution from RUM is often unavailable.** RUM CLS events frequently carry no element info. C3 falls back to RUM-only low-confidence or lab-driven (C6 via `cls.shifts[]`).
 - **This is lab + field synthesis, not a real-user fix.** A `validated` status still requires `cwv-validate` with N=15 runs or a deployment + CrUX wait cycle.

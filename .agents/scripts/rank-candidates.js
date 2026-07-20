@@ -174,10 +174,10 @@ function findingToCandidate(f, minConfidence) {
 
 function normalizeStructuralGate(gate, source = {}) {
   if (!gate || typeof gate !== 'object') return null;
-  if (gate.name && gate.name !== 'eds-structural-contract') return null;
-  if (!gate.result && gate.name !== 'eds-structural-contract') return null;
+  if (gate.name && gate.name !== 'structural-contract') return null;
+  if (!gate.result && gate.name !== 'structural-contract') return null;
   const out = {
-    name: gate.name || 'eds-structural-contract',
+    name: gate.name || 'structural-contract',
     result: gate.result || 'warn',
     reasons: Array.isArray(gate.reasons) ? gate.reasons : [],
   };
@@ -192,10 +192,10 @@ function structuralGateFromFinding(f) {
   if (direct) return direct;
   for (const ev of f.evidence || []) {
     const data = ev && ev.data;
-    if (!data || data.ruleId !== 'html/eds-structural-contract') continue;
+    if (!data || data.ruleId !== 'html/structural-contract') continue;
     const context = data.context || {};
     return {
-      name: 'eds-structural-contract',
+      name: 'structural-contract',
       result: context.gateResult || context.result || 'warn',
       reasons: Array.isArray(context.reasons) ? context.reasons : [],
       sourceFindingId: f.id,
@@ -219,7 +219,7 @@ function deriveStructuralGate(input) {
   gates.push(...extractFindings(input).map(structuralGateFromFinding).filter(Boolean));
   if (gates.length === 0) {
     return {
-      name: 'eds-structural-contract',
+      name: 'structural-contract',
       result: 'not-run',
       sourceFindingIds: [],
       sourceFiles: [],
@@ -248,7 +248,7 @@ function deriveStructuralGate(input) {
     }
   }
   return {
-    name: 'eds-structural-contract',
+    name: 'structural-contract',
     result,
     sourceFindingIds,
     sourceFiles,
@@ -298,7 +298,7 @@ function applyStructuralGateToCandidates(candidates, gate) {
     next.rankScore = impact * cappedConfidence;
     next.probeOnly = true;
     next.promotionBlocked = true;
-    next.promotionBlockReason = 'EDS structural gate failed; selector-level CLS layout shim is a probe until the reveal/page-shape contract is restored and cross-metric guards pass.';
+    next.promotionBlockReason = 'Structural gate failed; selector-level CLS layout shim is a probe until the reveal/page-shape contract is restored and cross-metric guards pass.';
     next.structuralGate = {
       name: gate.name,
       result: gate.result,

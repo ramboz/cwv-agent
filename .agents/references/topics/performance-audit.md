@@ -61,13 +61,13 @@ Here we can see that we have a long running request for `/categories` that is re
 
 ![Render-blocking API call](../../../assets/devtools-performance-fcp-bad2.png)
 
-That particular request is to a reverse-proxi to a different origin than the AEM site, essentially a non AEM service running on the same hostname but different path name. We can see from the details that the TTFB (_time to first byte_) is 1.9s. So the browser is essentially just waiting for that request to complete before it can render the LCp and the rest of the page.
+That particular request is to a reverse-proxy to a different origin than the main site, essentially a separate service running on the same hostname but a different path name. We can see from the details that the TTFB (_time to first byte_) is 1.9s. So the browser is essentially just waiting for that request to complete before it can render the LCp and the rest of the page.
 We have several possible approaches to explore:
 1.	Can we move up the call to that resource in the page load cycle, possibly downloading it in parallel with the previous set of other JSON requests (the other small gray boxes that precede it)?
 2.	Most of the time spent on the request is waiting on the server to respond as can be seen in the Network tab when we select that particular request.
     - Can we speed up that request on the server-side?
     - Can we leverage some caching on the server to speed up follow-up requests?
-    - Can we maybe even cache this request directly on the AEM infrastructure?
+    - Can we maybe even cache this request directly on the site's own CDN?
     - Can we cache it client-side for the duration of the user session?
 
  

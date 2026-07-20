@@ -2,15 +2,15 @@
 
 ## Purpose
 Prepare or report prerequisites for a selected cwv-agent execution profile
-without touching customer data. Use this before optional provider work so the
-operator sees which local commands, credentials, services, and setup artifacts
-are ready.
+without touching site data. Use this before optional provider work so the
+operator sees which local commands, credentials, and setup artifacts are
+ready.
 
 ## When to Invoke
-- At the start of a new workbench session when the operator asks to set up the
-  local environment.
-- Before selecting an optional profile such as `source-s3`, `aem-clientlibs`,
-  `validate-aso`, `publish-spacecat`, or `adobe-full`.
+- At the start of a new session when the operator asks to set up the local
+  environment.
+- Before selecting an optional profile such as `field-google` or
+  `stealth-headful`.
 - When a provider command fails because a prerequisite may be missing.
 
 Do not invoke this as a substitute for validation. Setup reports readiness; it
@@ -34,29 +34,11 @@ does not prove a CWV fix.
    ```
    npm run setup -- --profile <profile> --dry-run
    ```
-4. For local ASO service setup, use explicit action flags:
-   ```
-   npm run setup -- --profile validate-aso --aso-build
-   npm run setup -- --profile validate-aso --aso-smoke
-   npm run setup -- --profile validate-aso --aso-start
-   npm run setup -- --profile validate-aso --aso-stop
-   ```
-   The setup script runs ASO's own `npm run image:build`,
-   `npm run image:smoke`, and `docker-compose.local.yml`; it does not submit
-   validation jobs.
-   Configure the checkout and service with `ASO_SHALLOW_VALIDATOR_DIR`,
-   `ASO_SHALLOW_VALIDATOR_BASE_URL`, and `ASO_SHALLOW_VALIDATOR_IMAGE`.
-   Short aliases (`ASO_VALIDATOR_DIR`, `ASO_BASE_URL`, `ASO_IMAGE_TAG`) are
-   accepted for local convenience, but prefer the long names in committed docs.
-5. Read every `missing` row. Each one includes the command or environment
+4. Read every `missing` row. Each one includes the command or environment
    variable needed to retry.
-6. For Docker-backed AEM CS source validation and ASO setup, trust the Docker distinction:
-   `Docker CLI not found` means install Docker; `daemon unavailable` means start
-   Docker Desktop or the configured daemon.
 
 Supported setup profiles mirror `npm run doctor -- --profile <profile>`:
-`local`, `source-s3`, `aem-clientlibs`, `validate-aso`, `publish-spacecat`,
-`adobe-full`, plus the other field/headful profiles exposed by doctor.
+`local`, `field-google`, and `stealth-headful`.
 
 ## Output Format
 
@@ -77,11 +59,8 @@ Each prerequisite has one setup status:
 
 ## Safety
 
-- Setup does not perform SpaceCat writes, customer-data mutations, or publish
-  actions.
-- The default `local` profile does not require Docker, ASO, mysticat, AWS, RUM,
-  Google API keys, or SpaceCat access.
+- Setup performs no external writes, site-data mutations, or publish actions.
+- The default `local` profile does not require Google API keys or any other
+  provider credentials.
 - Optional profiles may report missing credentials or tools, but environment
   variables never activate those providers by themselves.
-- `validate-aso` setup only manages the local ASO service. The validation job
-  adapter is a separate provider step and must not be implied by setup success.

@@ -200,7 +200,7 @@ async function test3c_tinyInlineSvgIgnored() {
   assert.ok(!ids.has('html/inline-svg-in-body'), 'tiny inline icon should not fire inline-svg rule');
 }
 
-async function test3d_edsStructuralContractFailure() {
+async function test3d_structuralContractFailure() {
   const html = `<!doctype html>
 <html><head>
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -231,9 +231,9 @@ body.appear main { display: block; }
 
   const { findings, meta } = await analyzeHtml(html, { url: 'https://pharma.example.com/savings', fromString: true });
   assertFindingsValid(findings, 'test3d');
-  assert.strictEqual(meta.stack && meta.stack.eds, true, 'expected EDS stack detection in meta');
+  assert.strictEqual(meta.stack && meta.stack.sectionBased, true, 'expected EDS stack detection in meta');
   const structural = findings.find((f) => f.evidence.some(
-    (e) => e.data && e.data.ruleId === 'html/eds-structural-contract',
+    (e) => e.data && e.data.ruleId === 'html/structural-contract',
   ));
   assert.ok(structural, 'expected EDS structural contract finding');
   assert.deepStrictEqual(structural.metric, ['CLS', 'LCP']);
@@ -243,7 +243,7 @@ body.appear main { display: block; }
     structural.structuralGate.reasons.some((reason) => /meaningful section/i.test(reason)),
     `expected meaningful-section depth reason, got ${JSON.stringify(structural.structuralGate.reasons)}`,
   );
-  const evidence = structural.evidence.find((e) => e.data && e.data.ruleId === 'html/eds-structural-contract');
+  const evidence = structural.evidence.find((e) => e.data && e.data.ruleId === 'html/structural-contract');
   assert.strictEqual(evidence.data.context.sectionCount, 6);
   assert.strictEqual(evidence.data.context.firstMeaningfulSection.index, 6);
   assert.ok(evidence.data.context.placeholderSectionsBeforeMeaningful >= 3);
@@ -277,9 +277,9 @@ async function test3e_cleanEdsStructureDoesNotFireGate() {
 
   const { findings, meta } = await analyzeHtml(html, { url: 'https://example.com/', fromString: true });
   assertFindingsValid(findings, 'test3e');
-  assert.strictEqual(meta.stack && meta.stack.eds, true, 'expected EDS stack detection in meta');
+  assert.strictEqual(meta.stack && meta.stack.sectionBased, true, 'expected EDS stack detection in meta');
   const ids = ruleIds(findings);
-  assert.ok(!ids.has('html/eds-structural-contract'), 'clean EDS page should not fail structural gate');
+  assert.ok(!ids.has('html/structural-contract'), 'clean EDS page should not fail structural gate');
 }
 
 async function test3f_preventFoucCommentDoesNotImplyRemovedGate() {
@@ -307,7 +307,7 @@ body:not(.appear) main { display: none; }
   assert.strictEqual(meta.structuralGate.result, 'pass');
   assert.strictEqual(meta.structuralGate.reasons.length, 0);
   const ids = ruleIds(findings);
-  assert.ok(!ids.has('html/eds-structural-contract'), 'benign prevent-FOUC comment should not fail structural gate');
+  assert.ok(!ids.has('html/structural-contract'), 'benign prevent-FOUC comment should not fail structural gate');
 }
 
 async function test4_cleanPageFiresFewRules() {
@@ -492,7 +492,7 @@ async function run() {
     test3bb_inlineSvgPayloadCrossingEarlyWindow,
     test3bc_inlineSvgPayloadAggregateThreshold,
     test3c_tinyInlineSvgIgnored,
-    test3d_edsStructuralContractFailure,
+    test3d_structuralContractFailure,
     test3e_cleanEdsStructureDoesNotFireGate,
     test3f_preventFoucCommentDoesNotImplyRemovedGate,
     test4_cleanPageFiresFewRules,

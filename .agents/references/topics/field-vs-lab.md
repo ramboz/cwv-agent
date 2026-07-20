@@ -108,7 +108,7 @@ for modern iPads but keeps fix recommendations safe.
 **`rum-fetch.js --form-factor` filter**: bundles are classified by
 `bundle.userAgent` prefix. Bots (`bot`, `bot:seo`) and unclassifiable
 userAgents are always dropped. TABLET is permissive — when asked for TABLET,
-PHONE bundles are also included because Helix rolls most tablet sessions
+PHONE bundles are also included because many RUM collectors roll most tablet sessions
 under `mobile`.
 
 **Invariant across the skill chain**: baseline and every treatment run in

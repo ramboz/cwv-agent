@@ -3,7 +3,7 @@
 /**
  * Chain-to-RUM correlator.
  *
- * Bridges field signal (Helix RUM Bundler) and lab evidence (launcher output
+ * Bridges field signal (an optional RUM bundle summary) and lab evidence (launcher output
  * with resources + cwv attribution) so findings carry both "users feel it"
  * and "here is the cause" in a single artifact.
  *
@@ -247,7 +247,7 @@ function isSelectorCovered(covered, target) {
 
 /**
  * Sentinels produced by rum-fetch when element attribution is absent from
- * the RUM event (common for cwv-inp and cwv-cls in Helix instrumentation —
+ * the RUM event (common when RUM instrumentation samples —
  * those events carry only {checkpoint, value, timeDelta} without a selector).
  */
 function isUnknownTarget(sel) {
@@ -651,7 +651,7 @@ function c1InpChain(rumBundle, run, ctx) {
       recommendation: loafAttribution
         ? `Profile and split the blocking interaction work in ${topScriptUrls.slice(0, 3).join(', ')}. Keep the "${target}" input path free of long synchronous tasks; yield non-urgent work with \`scheduler.yield()\` / \`setTimeout(..., 0)\` and defer analytics or hydration that does not need to run inside the handler.`
         : chainSuspects.length
-          ? `Defer or async-load: ${chainSuspects.map((r) => r.url).slice(0, 3).join(', ')}. Move tag-manager / analytics bootstrap behind \`requestIdleCallback\` or post-interaction (AEM EDS \`loadDelayed()\`). Keep the click handler path free of synchronous third-party work.`
+          ? `Defer or async-load: ${chainSuspects.map((r) => r.url).slice(0, 3).join(', ')}. Move tag-manager / analytics bootstrap behind \`requestIdleCallback\` or post-interaction (a delayed loading phase). Keep the click handler path free of synchronous third-party work.`
           : `Profile the click handler for "${target}" — RUM shows field INP is failing but lab did not capture the interaction. Re-run lab with \`launcher.js --interact "${target}"\` to reproduce.`,
       patches: !loafAttribution && chainSuspects.length ? {
         block: chainSuspects.map((r) => r.url),
@@ -1138,7 +1138,7 @@ function c7FontFaces(run, ctx, existingFindings) {
 // ---------------------------------------------------------------------------
 // Walks `run.cwv.inp.interactions` and emits one finding per slow interaction
 // (duration ≥ MIN_IMPACT.INP.delta). These complement C1 by surfacing
-// interactions that field RUM cannot attribute (Helix cwv-inp events carry no
+// interactions that field RUM cannot attribute (RUM interaction events often carry no
 // target). Source tier is `perf_observer` (cap 0.85).
 
 function c5LabInpInteractions(run, ctx, existingFindings) {
@@ -1185,7 +1185,7 @@ function c5LabInpInteractions(run, ctx, existingFindings) {
     const recommendation = phase === 'input-delay'
       ? `Interaction was blocked by main-thread work before the handler ran (inputDelay=${round(inputDelay)}ms). Defer or async-load scripts that execute before user input is possible; move tag-manager/analytics bootstrap behind \`requestIdleCallback\` or post-LCP.`
       : phase === 'processing'
-        ? `Event handler for "${it.target}" took ${round(processingDuration)}ms. Profile it and break up long synchronous work with \`scheduler.yield()\` or \`setTimeout(..., 0)\`. For AEM EDS, use \`yieldUnlessUrgent()\` in block decorators.`
+        ? `Event handler for "${it.target}" took ${round(processingDuration)}ms. Profile it and break up long synchronous work with \`scheduler.yield()\` or \`setTimeout(..., 0)\`.`
         : `Large DOM update after the handler (presentationDelay=${round(presentationDelay)}ms). Reduce DOM size in the interaction region, apply CSS \`contain: layout\`, or batch mutations inside \`requestAnimationFrame\`.`;
 
     const finding = {
@@ -1925,7 +1925,7 @@ function annotateFindingsWithCspEvidence(findings, cspDiagnostics, ctx) {
 // ---------------------------------------------------------------------------
 
 /**
- * Correlate lab waterfall/cwv data against a Helix RUM bundle summary.
+ * Correlate lab waterfall/cwv data against an optional RUM bundle summary.
  *
  * @param {object} input
  * @param {object} input.rumBundle        - Parsed output of rum-fetch.js.
@@ -1934,7 +1934,7 @@ function annotateFindingsWithCspEvidence(findings, cspDiagnostics, ctx) {
  * @param {object} [opts]
  * @param {string} [opts.skill="cwv-diagnose"]
  * @param {number} [opts.runIndex=0]
- * @param {string} [opts.flavor]            - stack flavor / SpaceCat deliveryType. When set,
+ * @param {string} [opts.flavor]            - stack name. When set,
  *                                            each finding is tagged with an `owner` (G5 attribution).
  * @param {object} [opts.responseHeaders]   - optional document response headers for the dispatcher/CDN signal.
  * @returns {{ findings: object[], summary: string }}
@@ -2054,7 +2054,7 @@ function parseArgs(argv) {
 
 function printHelp() {
   const help = `
-chain-rum-correlator.js — Correlate Helix RUM field signal with lab waterfall/CWV evidence.
+chain-rum-correlator.js — Correlate optional RUM field signal with lab waterfall/CWV evidence.
 
 Usage:
   node .agents/scripts/analyzers/chain-rum-correlator.js --rum <path> --launcher <path> [flags]
@@ -2064,7 +2064,7 @@ Flags:
   --launcher <path>    Parsed launcher.js JSON output (required).
   --html <path>        Optional html-parse findings array (for C3 missing-dimensions hint).
   --output <path>      Write envelope JSON to path (default: stdout).
-  --flavor <t>         Stack flavor / SpaceCat deliveryType (eds|cs|ams|headless, aem_cs, ...).
+  --flavor <t>         Stack name for ownership attribution (e.g. generic).
                        When set, tags each finding with an \`owner\` (G5 attribution).
   --help, -h           Show this help.
 
@@ -2079,8 +2079,8 @@ Exit codes:
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const args = parseArgs(process.argv.slice(2));
   if (args.help) { printHelp(); process.exit(0); }
-  if (!args.rum || !args.launcher) {
-    process.stderr.write('Error: --rum and --launcher are required.\n');
+  if (!args.launcher) {
+    process.stderr.write('Error: --launcher is required.\n');
     process.exit(64);
   }
   function readJson(p) {
@@ -2090,7 +2090,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       process.exit(65);
     }
   }
-  const rumBundle = readJson(args.rum);
+  const rumBundle = args.rum ? readJson(args.rum) : { siteWide: {}, byUrl: [] };
   const launcherOutput = readJson(args.launcher);
   const htmlFindings = args.html ? readJson(args.html) : null;
 

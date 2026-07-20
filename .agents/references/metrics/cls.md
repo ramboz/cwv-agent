@@ -45,7 +45,6 @@ CLS is essentially composed of:
 - Optimize your fallback fonts and `size-adjust` them to your custom font
   - https://web.dev/articles/css-size-adjust
   - https://www.debugbear.com/blog/web-font-layout-shift#adjusting-font-metrics
-  - https://www.aem.live/developer/font-fallback
 - [Avoid inserting new content without a clear user interaction](https://web.dev/articles/optimize-cls#avoid_inserting_new_content_without_a_user_interaction) (like a "load more" button on an infinite list, or toggling an accordion panel)
 - Leverage the [`scrollbar-gutter: stable`](https://developer.mozilla.org/en-US/docs/Web/CSS/scrollbar-gutter) CSS property
 
@@ -86,7 +85,6 @@ Follow the steps in one of:
 - https://www.debugbear.com/docs/metrics/cumulative-layout-shift
 - https://www.debugbear.com/blog/devtools-layout-shift
 - https://www.woorank.com/en/core-web-vitals/improving-cumulative-layout-shift
-- https://culture-tecture.adobe.com/en/publish/2024/08/26/aem-blog-cumulative-layout-shift-cls-a-developer-s-nightmare
 - https://css-triggers.com/
 - https://richstyle.org/?documentation/css-will-change-property-en
 

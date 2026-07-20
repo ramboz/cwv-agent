@@ -139,7 +139,7 @@ For source-only fixes (refactor a bundle, change build output), the rule notes "
   { "selector": "script[src*='header.js']", "attrs": { "defer": "" } }
 ]}
 ```
-**Impact:** 100–800 ms LCP. This pattern is especially common in AEM Edge Delivery sites — see stacks/eds.md.
+**Impact:** 100–800 ms LCP. This pattern is especially common on section-based frontends.
 **Confidence:** 0.85 (pattern match + timing).
 
 ### 10. redirects — pre-LCP redirect chain [category: Critical Path | metric: LCP, TTFB]

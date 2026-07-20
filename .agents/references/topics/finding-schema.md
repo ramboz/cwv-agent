@@ -71,7 +71,7 @@ field population; aggregate URL rows remain supporting evidence. `rawTop` and
   "schemaVersion": "1.0",
   "id": "diagnose-lcp-1",
   "timestamp": "2026-04-16T12:00:00Z",
-  "url": "https://www.adobe.com/",
+  "url": "https://www.example.com/",
   "skill": "cwv-diagnose",
   "source": "har",
   "metric": ["LCP"],
@@ -87,7 +87,7 @@ field population; aggregate URL rows remain supporting evidence. `rawTop` and
     },
     {
       "kind": "resource-timing",
-      "data": { "url": "https://www.adobe.com/hero.jpg", "startTime": 1850, "transferSize": 320000, "type": "img" }
+      "data": { "url": "https://www.example.com/hero.jpg", "startTime": 1850, "transferSize": 320000, "type": "img" }
     }
   ],
   "recommendation": "Add `<link rel=preload as=image href=/hero.jpg fetchpriority=high>` in `<head>` above the render-blocking stylesheet.",
@@ -136,9 +136,9 @@ field population; aggregate URL rows remain supporting evidence. `rawTop` and
 | `evidence` | array of object | yes | ≥1 typed evidence entries. See "Evidence kinds" below. |
 | `recommendation` | string | yes | What to do, in plain language. Specific and actionable. |
 | `patches` | object | no | A fragment of `patches.json` that the workbench harness can apply to validate the fix. CDP/DOM **runtime mutations** (`markup`/`preloads`/`block`/`responseHeaders`/`rewriteBody`) — **not** a diff. Omitted for findings that can't be tested via patch (e.g. server-side TTFB). |
-| `sourceEdits` | array of object | no | The structured **source-edit records** from [`source-mapper.js`](../../scripts/source-mapper.js) — the load-bearing subset `{ file, before, after, line? }`. The raw, tool-agnostic material from which `cwv-publish` (003-02) derives the SpaceCat unified-diff `patchContent` at upload. Required only for a deployable patch publish; guidance-mode publishes (`rootCause: true` with no safe patch) intentionally omit it. See "[fix-findings.json → suggestion-payload mapping](#fix-findingsjson--suggestion-payload-mapping)". |
-| `sourceAvailability` | object | no | Source-probe status for the source-translation/publish handoff. Shape: `{ status, siteId?, baseURL?, deliveryType?, sourceRoot?, manifestPath?, s3Key?, reason?, checkedAt? }`, where `status` is `unattempted` \| `fetched` \| `not_found` \| `auth_blocked` \| `mapping_failed`. Required in practice when a validated finding lacks `sourceEdits`, so `cwv-publish` can distinguish "source was never tried" from "source-s3 was attempted but unavailable/unmappable." |
-| `title` | string | no | **Publish presentation.** Short imperative phrase used as the SpaceCat issue heading (the `value` H2). Falls back to `recommendation` — but that is usually a paragraph, so set a real `title` for a publish-bound finding. |
+| `sourceEdits` | array of object | no | The structured **source-edit records** from [`source-mapper.js`](../../scripts/source-mapper.js) — the load-bearing subset `{ file, before, after, line? }`. The raw, tool-agnostic material from which `cwv-report` derives the unified diff in the handoff. Required only for a deployable diff; guidance-mode findings (`rootCause: true` with no safe patch) intentionally omit it. |
+| `sourceAvailability` | object | no | Source-probe status for the source-translation/publish handoff. Shape: `{ status, siteId?, baseURL?, deliveryType?, sourceRoot?, manifestPath?, s3Key?, reason?, checkedAt? }`, where `status` is `unattempted` \| `fetched` \| `not_found` \| `auth_blocked` \| `mapping_failed`. Required in practice when a validated finding lacks `sourceEdits`, so `cwv-report` can distinguish "source was never tried" from "source was attempted but unavailable/unmappable." |
+| `title` | string | no | **Report presentation.** Short imperative phrase used as the report heading. Falls back to `recommendation` — but that is usually a paragraph, so set a real `title` for a handoff-bound finding. |
 | `publishDescription` | string | no | **Publish presentation.** Concise, customer-facing problem statement for the issue Description. Falls back to `cause`. Use it to keep internal diagnostic detail (repo names, ref counts, "VERIFIED", N=runs) OUT of the customer record — Description = the problem, Implementation Details (`recommendation`) = the fix. |
 | `issueType` | string | no | **Publish presentation.** Overrides the metric-derived issue LABEL — but it MUST itself be an approved CWV metric (`lcp`/`cls`/`inp`/`ttfb`); a non-approved value throws. The default is the canonical metric (e.g. `cls`), NOT playbook vocab. (ADR-0009 amendment 2026-06-15.) |
 
@@ -161,7 +161,7 @@ field population; aggregate URL rows remain supporting evidence. `rawTop` and
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `owner` | enum | no | Who owns the cause: `platform-default` \| `dispatcher-cdn` \| `customer-code` \| `customer-content` \| `third-party`. The literal "is it AEM or the customer?" answer. Added by `attribution.js`. |
+| `owner` | enum | no | Who owns the cause: `platform-default` \| `cdn-edge` \| `customer-code` \| `customer-content` \| `third-party`. The literal "platform, site code, or third party?" answer. Added by `attribution.js`. |
 | `ownership` | object | no | Derivation detail: `{ owner, confidence (0..1), flavor, playbook (issue_type consulted), deliveryConstraint, rationale, signals[] }`. See "Platform-vs-customer attribution" below. |
 
 When both are present, `owner` MUST equal `ownership.owner`. Both are optional — findings emitted before the attribution pass simply omit them.
@@ -177,7 +177,7 @@ When both are present, `owner` MUST equal `ownership.owner`. Both are optional �
 | `cwv-attribution` | web-vitals attribution object, optionally filtered to relevant fields. Always include `metric` sibling. | LCP/CLS/INP/FCP/TTFB finding grounded in harness measurement. |
 | `resource-timing` | `{ url, startTime, transferSize, duration, ttfb?, renderBlockingStatus?, priority?, type?, nextHopProtocol?, serverTiming? }` | Pointing at a specific network resource from `collect-resources.js`, including transport/cache fields when exposed by Resource Timing. |
 | `crux-percentile` | `{ metric, p75, distribution: { good, needs_improvement, poor }, formFactor }` | Field data from CrUX API. |
-| `rum-bundle` | `{ metric, p75, samples, dateRange, byElement? }` | Field data from Helix RUM Bundler. |
+| `rum-bundle` | `{ metric, p75, samples, dateRange, byElement? }` | Field data from a RUM bundle summary. |
 | `psi-audit` | `{ auditId, displayValue, numericValue, savings? }` | PSI/Lighthouse audit row. |
 | `har-entry` | `{ url, startedDateTime, time, request, response }` (subset) | HAR-level evidence. |
 | `coverage-row` | `{ url, totalBytes, unusedBytes, unusedPct }` | JS/CSS coverage evidence. |
@@ -204,130 +204,67 @@ Rationale — see [evidence-and-confidence.md](./evidence-and-confidence.md). A 
 
 ---
 
-## Platform-vs-customer attribution (the `owner` field)
+## Ownership attribution (the `owner` field)
 
-Findings carry an optional `owner` answering the literal customer question —
-**"is it AEM or the customer?"** It is set by
+Findings carry an optional `owner` answering the literal question —
+**"platform, site code, or third party?"** It is set by
 [`../../scripts/attribution.js`](../../scripts/attribution.js), which derives it
-from three inputs in order of strength: the **mystique CWV playbook** for the
-finding's issue type (its `applicable_flavors` front matter — a type whose
+from three inputs in order of strength: the **CWV playbook** for the finding's
+issue type (its optional `applicable_stacks` front matter — a type whose
 playbook *excludes* the detected stack is platform-managed there), the **stack
-docs** (`stacks/aem-{eds,cs,ams}.md` — who owns each layer), and the finding's
-own **evidence + response headers** (third-party resource domains, cache
-HIT/MISS, the shifting selector).
+docs** (when a stack pack is installed — who owns each layer), and the
+finding's own **evidence + response headers** (third-party resource domains,
+cache HIT/MISS, the shifting selector).
 
 | `owner` | Means | Typical fix locus |
 |---------|-------|-------------------|
-| `platform-default` | The hosting platform's own behaviour / defaults (operator-managed). | EDS Fastly/VCL, fixed `head.html`, CDN minify + auto `Link: rel=preload`, platform-managed compression. Customer can't change without the operator. |
-| `dispatcher-cdn` | The caching / edge layer. | Dispatcher cache rules, CDN headers, `Cache-Control`. On AMS this is an Adobe ticket; on CS it's `cdn.yaml` via Cloud Manager. |
-| `customer-code` | The customer's own code. | EDS block JS/CSS + `scripts.js` phases; AEM CS/AMS clientlibs, HTL templates, Sling models. **Default for AEM** — most CWV issues are the customer's implementation. |
-| `customer-content` | Authored values. | DAM assets, component-dialog config, content positioning — fixable in the CMS without a code deploy. |
-| `third-party` | An external vendor's script. | analytics, tag managers, A/B test, chat, consent CMP (OneTrust/Cookiebot), ads, social pixels. Defer/async/gate safely; if Launch/DTM-injected, it's a Launch rule change. |
+| `platform-default` | The hosting platform's own behaviour / defaults (operator-managed). | Managed CDN behaviour, fixed shared head templates, platform-managed compression. The site can't change it without the operator. |
+| `cdn-edge` | The caching / edge layer. | CDN cache rules, response headers, `Cache-Control`, compression config. |
+| `customer-code` | The site's own code. | Templates, CSS bundles, component JS. **The default** — most CWV issues are the site's implementation. |
+| `customer-content` | Authored values. | CMS assets, component config, content positioning — fixable in the CMS without a code deploy. |
+| `third-party` | An external vendor's script. | analytics, tag managers, A/B test, chat, consent CMP (OneTrust/Cookiebot), ads, social pixels. Defer/async/gate safely; if tag-manager-injected, it's a tag-manager rule change. |
 
 A **first-party selector with no third-party resource in evidence is NOT
-`third-party`** — e.g. a site's own custom consent banner component
-(`.cookies__container` on the news-site case, AEM CS) is `customer-code`, not `third-party`,
-because the bytes/behaviour are the customer's even though the feature is a
-cookie bar. This is the exact distinction the the news-site case verdict turned on.
+`third-party`** — e.g. a site's own custom consent banner component is
+`customer-code`, not `third-party`, because the bytes/behaviour are the site's
+even though the feature is a cookie bar.
 
 `ownership.deliveryConstraint` flags when the fix isn't a normal code change:
-`requires-operator` (Fastly/Dispatcher/CDN/platform — Adobe ticket or Cloud
-Manager), `requires-launch-rule` (Adobe Launch/DTM-injected — editing markup is
-futile), or `null` (a normal in-repo fix).
+`requires-operator` (CDN/platform-managed), `requires-tag-manager-rule`
+(tag-manager-injected — editing markup is futile), or `null` (a normal
+in-repo fix).
 
 Tag findings with:
 ```bash
-node .agents/scripts/attribution.js analyze-findings.json --flavor <eds|cs|ams|headless> \
+node .agents/scripts/attribution.js analyze-findings.json \
   --output analyze-findings.json
 # or ask which playbooks apply to a metric:
-node .agents/scripts/attribution.js --explain CLS --flavor cs
+node .agents/scripts/attribution.js --explain CLS
 ```
 
 ---
 
-## `fix-findings.json` → suggestion-payload mapping
+## `fix-findings.json` → report handoff
 
-A `validated` finding in `fix-findings.json` is the hand-off `cwv-publish`
-(spec 003-02) consumes to author a SpaceCat **`CODE_CHANGE` suggestion**
-([spacecat-api.md](./spacecat-api.md)). `fix-findings.json` stays
-**Finding-native** — it carries the raw materials, **not** pre-built SpaceCat
-shapes. The SpaceCat-specific shapes (the unified-diff `patchContent`, the
-`kpiDeltas` keying, the `issue.value` Markdown) are **derived by `cwv-publish`
-at upload**, because the diff is needed only at SpaceCat upload and is best
-formatted against the source then (spec 003-04 publish-time-derivation decision;
-[ADR-0006](../../../docs/decisions/adr-0006-publish-findings-to-spacecat.md)).
+A `validated` finding in `fix-findings.json` is the hand-off `cwv-report`
+consumes to assemble the reviewable handoff. `fix-findings.json` stays
+**Finding-native** — it carries the raw materials (`sourceEdits`, evidence,
+measured deltas), **not** pre-built report shapes. The report-specific shapes
+(the unified diff via [`editsToUnifiedDiff`](../../scripts/source-edits.js),
+the per-fix Markdown sections) are **derived by `cwv-report` at handoff time**.
 
-This table is the contract that lets `cwv-publish` map fields with **no
-transformation guesswork**. Each row is tagged:
+### Source availability gate for deployable diffs
 
-- **direct** — copied verbatim into the payload.
-- **keyed-at-publish** — read from a Finding field and re-keyed into the payload
-  structure (e.g. measurement-delta → `kpiDeltas{metric}`).
-- **formatted-at-publish** — assembled by `cwv-publish` (Markdown / unified diff).
-
-| `fix-findings.json` source | → suggestion-payload destination | Disposition |
-|---|---|---|
-| `url` | `data.url` | **direct** |
-| (constant) | `data.type` = `"url"` | **direct** (literal) |
-| `metric[0]` | `data.aggregationKey` = `<url>\|<metric>` (the UI shows ONE row per key) | **keyed-at-publish** |
-| `title` (fallback `recommendation`) | issue `value` H2 title (`## <title>`) — keep it SHORT; escape HTML | **formatted-at-publish** |
-| `publishDescription` (fallback `cause`) | issue `value` `### Description` — concise, customer-facing PROBLEM (no internal diagnostics) | **formatted-at-publish** |
-| `recommendation` | issue `value` `### Implementation Details` — the FIX (code-level guidance) | **formatted-at-publish** |
-| `sourceEdits[]` | issue `patchContent` (clean unified diff) **only for patch publishes** — NOT re-embedded in `value`; omitted for guidance mode | **formatted-at-publish** — via [`editsToUnifiedDiff`](../../scripts/source-edits.js); reconcile vs real source for a git-applicable diff |
-| `evidence[kind=measurement-delta]` + `profile` | `kpiDeltas{<metric>}` — **only when `status==='validated'`; OMIT the key when empty** (an empty `{}` 500s the API). Lab-only numbers stay in the issue body. | **keyed-at-publish** |
-| FIELD p75 (triage/RUM) | `data.metrics[].<metric>` — use the FIELD value (drives the UI's "LCP x.xs"), NOT a lab baseline | **keyed-at-publish** |
-| `profile` (`*desktop*` ⇒ `desktop`, else `mobile`) | `deviceType` in `data.metrics[]` (+ `kpiDeltas` when present) | **keyed-at-publish** |
-| `issueType` (fallback `metricToIssueType(metric)`) | issue `type` (UI category hint; not validated; ADR-0008 locks CWV publishes to lowercase metric labels like `cls`/`lcp`/`inp`) | **keyed-at-publish** |
-| any issue carries a patch | `data.isCodeChangeAvailable` = `true` | **keyed-at-publish** |
-| **ALL findings for one URL** | **ONE** suggestion record; `data.issues[]` = one issue per finding (**NEVER split a URL across records**) — built by [`buildSuggestionFromFindings`](../../scripts/publish-payload.js) | **formatted-at-publish** |
-| publish gate | `status==='validated'` **OR** `rootCause===true` (guidance, ADR-0008) **OR** carries `sourceEdits`/patch | (pre-publish filter) |
-
-### Source availability gate for patch publishes
-
-A validated runtime patch without `sourceEdits` is not the same as "no customer
-code exists." Before producing a guidance-only SpaceCat record, the workflow must
+A validated runtime patch without `sourceEdits` is not the same as "no site
+code exists." Before producing a guidance-only entry, the workflow must
 attempt the source path and record the result:
 
-1. Resolve the SpaceCat site via `query-sites` or the Mysticat CLI fallback:
-   `mysticat site get <url> --json`.
-2. If the site record has imported code, run `cwv-source-fetch` /
-   `source-fetch.js --site-id <id>` and record `sourceAvailability.status:
-   "fetched"` with `manifestPath` / `sourceRoot`.
-3. Map/reconcile the source change into `sourceEdits`; publish uses those records
-   to derive `patchContent`.
-4. If source cannot become a patch, record the terminal status:
-   `not_found`, `auth_blocked`, or `mapping_failed` with `reason`.
-
-`sourceAvailability.status:"unattempted"` (or a missing field) means the handoff
-is incomplete for a validated finding without `sourceEdits`; it should not be
-treated as proof that patch content cannot be generated.
-
-### Known-absent / optional payload inputs
-
-These payload inputs are **not** captured in `fix-findings.json` today.
-`cwv-publish` defaults or omits them — they are explicitly **not silent gaps**:
-
-| Payload input | Disposition at publish |
-|---|---|
-| `data.metrics[]`, `data.organic`, `data.pageviews` | **read-probe enriched** — `fix-findings.json` carries lab measurements, not field traffic. For SpaceCat publishes, reuse the audit/read-probe values for the URL when available; otherwise omit optional traffic fields. |
-| `value` **Effort** line (`**Effort**: Low\|Medium\|High`) | **optional / known-absent** — not modelled on the Finding. `cwv-publish` defaults (e.g. from `severity`) or omits. |
-| suggestion `rank` | **read-probe enriched** — reuse the audit suggestion's rank for the URL when available (ADR-0008); severity-derived rank is only the local/dry-run fallback. |
-| issue `status` (e.g. `"NEW"`) | **derived-at-publish** — `cwv-publish` defaults to `"NEW"` for a fresh suggestion. |
-
-### What `cwv-publish` does NOT find here (and must do itself)
-
-- **Reconcile each `sourceEdits` record against the real source file** — line
-  numbers / surrounding context for a git-applicable diff. `sourceEdits` carries
-  the `before`/`after` snippets and a best-effort `line`; the
-  [`editsToUnifiedDiff`](../../scripts/source-edits.js) formatter produces a
-  diff from exactly those snippets, and 003-02 may widen hunks against the
-  checked-out source.
-- **Resolve URL → `siteId` and the existing `cwv` opportunity** (via
-  `query-sites`); **dedup** prior `NEW` suggestions for the URL → `OUTDATED`.
-- **Auth + POST** (mysticat Bearer token, 207 array handling). All of this is
-  spec 003-02 — see [spacecat-api.md](./spacecat-api.md).
-
----
+1. With a local checkout in the workspace, run `source-mapper.js` and map the
+   accepted patch into `sourceEdits`; record `sourceAvailability.status:
+   "fetched"`.
+2. If no source is available, record `sourceAvailability.status: "not_found"`.
+3. If source is present but the runtime patch cannot be mapped safely, record
+   `sourceAvailability.status: "mapping_failed"` with a `reason`.
 
 ## MIN_ACTIONABLE_IMPACT gates
 
@@ -379,7 +316,7 @@ Skills SHOULD emit findings inside a small envelope so downstream tooling can pi
 {
   "schemaVersion": "1.0",
   "skill": "cwv-diagnose",
-  "url": "https://www.adobe.com/",
+  "url": "https://www.example.com/",
   "timestamp": "2026-04-16T12:00:00Z",
   "findings": [ /* Finding objects */ ]
 }
@@ -434,7 +371,7 @@ both triage Step 6b and these fixtures.
   "schemaVersion": "1.0",
   "id": "triage-lcp-1",
   "timestamp": "2026-04-16T12:00:00Z",
-  "url": "https://www.adobe.com/",
+  "url": "https://www.example.com/",
   "skill": "cwv-triage",
   "source": "crux",
   "metric": ["LCP"],
@@ -460,7 +397,7 @@ both triage Step 6b and these fixtures.
   "schemaVersion": "1.0",
   "id": "diagnose-lcp-1",
   "timestamp": "2026-04-16T13:05:00Z",
-  "url": "https://www.adobe.com/",
+  "url": "https://www.example.com/",
   "skill": "cwv-fix",
   "source": "har",
   "metric": ["LCP"],
@@ -491,7 +428,7 @@ both triage Step 6b and these fixtures.
   "schemaVersion": "1.0",
   "id": "diagnose-inp-2",
   "timestamp": "2026-04-16T14:00:00Z",
-  "url": "https://www.adobe.com/",
+  "url": "https://www.example.com/",
   "skill": "cwv-validate",
   "source": "perf_observer",
   "metric": ["INP"],
@@ -514,7 +451,7 @@ both triage Step 6b and these fixtures.
 ### Validated fix with `sourceEdits` (the publish hand-off)
 
 A terminal `validated` finding carrying the structured `sourceEdits` records
-`cwv-publish` formats into the unified diff. See "[fix-findings.json →
+`cwv-report` formats into the unified diff. See "[fix-findings.json →
 suggestion-payload mapping](#fix-findingsjson--suggestion-payload-mapping)". A
 runnable copy is [`fix-findings.example.json`](../../scripts/test/fixtures/fix-findings.example.json).
 
@@ -549,7 +486,7 @@ runnable copy is [`fix-findings.example.json`](../../scripts/test/fixtures/fix-f
 ```
 
 The envelope around publish-bound findings SHOULD carry the top-level
-`profile` (and `formFactor`) — `cwv-publish` maps `profile` → `deviceType`
+`profile` (and `formFactor`) — the report maps `profile` → `deviceType`
 (`*desktop*` ⇒ `desktop`, else `mobile`) for `kpiDeltas`.
 
 ---

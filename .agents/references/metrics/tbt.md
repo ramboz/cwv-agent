@@ -38,7 +38,6 @@ The Total Blocking Time (TBT) metric measures the total amount of time after [Fi
   - Use the [`requestIdleCallback`](https://developer.mozilla.org/en-US/docs/Web/API/Window/requestIdleCallback) API to run low priority tasks when the browser is idle between rendering frames
   - Use the [`requestAnimationFrame`](https://developer.mozilla.org/en-US/docs/Web/API/Window/requestAnimationFrame) API to run tasks that modify the DOM and require a new frame to render
   - Use the [`scheduler.yield`](https://developer.mozilla.org/en-US/docs/Web/API/Scheduler/yield) API to hand over control to the main thread during a long task, so it can execute other tasks in-between if needed
-  - or directly leverage the performance helper methods from [aem-cwv-helper](https://github.com/ramboz/aem-cwv-helper) to break up long tasks, patch datalayer and event listeners from 3rd-party scripts
 - [Offload complex background work to a web worker](https://web.dev/articles/off-main-thread)
 - For `iframe`-like embeds (videos, maps, social widgets, etc.), try do defer loading with any of these techniques:
   - load the `iframe` only when the user scrolls to the embed, by leveraging an the [`IntersectionObserver`](https://developer.mozilla.org/en-US/docs/Web/API/IntersectionObserver) API
@@ -94,7 +93,7 @@ To diagnose TBT in lab, use two complementary signals:
 
 | Category | Audit signal | Fix direction |
 |----------|-------------|---------------|
-| Third-party scripts (GTM, analytics, martech) | `third-party-summary` high; `long-tasks` `attributableURLs` point to analytics/tag manager | Defer, `loadDelayed()` in AEM EDS, facade pattern |
+| Third-party scripts (GTM, analytics, martech) | `third-party-summary` high; `long-tasks` `attributableURLs` point to analytics/tag manager | Defer, a delayed loading phase, facade pattern |
 | First-party bundle too large | `bootup-time` dominated by site bundles | Code-split, tree-shake, route-level chunks |
 | Forced synchronous layout | LoAF with high `totalStyleAndLayoutDuration` | Batch DOM reads/writes, avoid layout thrash |
 | Heavy hydration (React/Next/Vue) | `long-tasks` with React/Vue internals in source | Stream/island hydration, defer below-fold |

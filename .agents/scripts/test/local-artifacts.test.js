@@ -107,7 +107,7 @@ function mkStructuralFinding(overrides = {}) {
     evidence: [{
       kind: 'rule-violation',
       data: {
-        ruleId: 'html/eds-structural-contract',
+        ruleId: 'html/structural-contract',
         context: {
           gateResult: 'fail',
           reasons: ['first meaningful section is section 6'],
@@ -119,7 +119,7 @@ function mkStructuralFinding(overrides = {}) {
     confidence: 0.7,
     impactReduction: { metric: 'CLS', score: 0.1 },
     structuralGate: {
-      name: 'eds-structural-contract',
+      name: 'structural-contract',
       result: 'fail',
       reasons: ['first meaningful section is section 6'],
     },
@@ -325,7 +325,7 @@ test('buildManifest surfaces EDS structural gate findings and ranked probe-only 
     schemaVersion: '1.0',
     url: 'https://example.com/',
     structuralGate: {
-      name: 'eds-structural-contract',
+      name: 'structural-contract',
       result: 'fail',
       sourceFindingIds: ['diagnose-eds-structure'],
       reasons: ['first meaningful section is section 6'],
@@ -335,7 +335,7 @@ test('buildManifest surfaces EDS structural gate findings and ranked probe-only 
       metric: 'CLS',
       probeOnly: true,
       promotionBlocked: true,
-      promotionBlockReason: 'EDS structural gate failed',
+      promotionBlockReason: 'Structural gate failed',
     }],
   });
 
@@ -355,7 +355,7 @@ test('buildManifest preserves EDS structural pass from finding-file metadata', (
   const envelope = mkEnvelope('cwv-diagnose', [mkDiagnoseFinding()]);
   envelope.meta = {
     structuralGate: {
-      name: 'eds-structural-contract',
+      name: 'structural-contract',
       result: 'pass',
       reasons: [],
     },

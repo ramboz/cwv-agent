@@ -31,7 +31,7 @@ Must load synchronously or be preloaded. These resources block rendering or cont
 **Examples:**
 - `main.js → app-framework.js → vendor-library.js` (3-level first-party bootstrap chain)
 - `optimizely.js → experiment-config.js → variant-payload.js` (above-fold A/B test)
-- `scripts.js → aem.js → blocks/hero/hero.js` (AEM EDS eager-phase block decoration)
+- `scripts.js → lib.js → components/hero/hero.js` (eager-phase component decoration)
 
 **Recommendation:** Preload or keep synchronous. Add `<link rel="preload" as="script">` for each discovered level so the browser can fetch them in parallel while still executing in dependency order. NEVER async/defer.
 
@@ -55,7 +55,7 @@ Must NOT be preloaded. Must NOT get `preconnect` hints. Should load after LCP.
 - `gtm.js → GA4 config → ga collect beacon` (analytics chain via tag manager)
 - `hotjar.com/c/hotjar-XXX.js → hotjar-session.js → replay-beacon.js` (session replay chain)
 
-**Recommendation:** `async` or `defer` attributes. Load after `DOMContentLoaded` or post-LCP. For AEM EDS, put them in `loadDelayed()` (3s after `load`). NEVER preload or preconnect.
+**Recommendation:** `async` or `defer` attributes. Load after `DOMContentLoaded` or post-LCP, or in a delayed loading phase (~3s after `load`). NEVER preload or preconnect.
 
 ## MIXED chains
 
@@ -90,7 +90,7 @@ Practical workflow:
 TTFB is a single number, but `Server-Timing` response headers expose what happened inside that number. The three tiers we care about for CDN-fronted sites:
 
 - **`cdn`** — time spent at the edge (Fastly, Akamai, CloudFront). Low here = cache HIT served from edge.
-- **`dispatcher`** — time spent at the reverse-proxy / middleware tier (Apache Dispatcher for AEM CS, Varnish, nginx). Shows cache layer decisions between edge and origin.
+- **`dispatcher`** — time spent at the reverse-proxy / middleware tier (Varnish, nginx, Apache). Shows cache layer decisions between edge and origin.
 - **`origin`** — time spent at the application tier (publish tier, Sling models, DB queries). High here = backend work.
 
 Format:
@@ -103,7 +103,7 @@ Interpretation rules:
 
 - `cdn` high (>100ms), `origin` low → network latency / CDN routing issue → check CDN region, shield config.
 - `cdn` low, `dispatcher` high → dispatcher cache MISS → check cache headers, TTLs, invalidation.
-- `cdn` low, `dispatcher` low, `origin` high (>200ms) → backend bottleneck → optimize Sling models, DB queries, cold-start.
+- `cdn` low, `dispatcher` low, `origin` high (>200ms) → backend bottleneck → optimize server-side rendering, DB queries, cold-start.
 - All three low but TTFB still high → client-side (service worker overhead, DNS, TLS) → check web-vitals TTFB attribution fields (`dnsDuration`, `connectionDuration`, `cacheDuration`).
 
 Always correlate `Server-Timing` with `X-Cache` / `Age` response headers to confirm cache status. If `Server-Timing` isn't present at all, the site is flying blind on TTFB; recommend adding it as a foundational observability improvement.

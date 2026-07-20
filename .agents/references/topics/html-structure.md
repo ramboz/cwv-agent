@@ -162,7 +162,7 @@ fix.
 
 ### 10. `html/eds-structural-contract`
 
-On AEM EDS pages, the analyzer inspects top-level sections under `<main>` and
+On section-based pages, the analyzer inspects top-level sections under `<main>` and
 source-visible reveal rules. It emits one structural finding when the page
 appears to violate the EDS reveal/page-shape contract:
 

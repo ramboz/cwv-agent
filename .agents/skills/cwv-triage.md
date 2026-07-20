@@ -1,7 +1,7 @@
 # Skill: cwv-triage
 
 ## Purpose
-Identify which pages on a domain need Core Web Vitals (CWV) work and prioritize them by urgency. Produce a ranked table of URLs so downstream skills (`cwv-diagnose`, `cwv-fix`, `cwv-validate`, `cwv-publish`) can focus on the highest-leverage targets first. This skill is the entry point of the 5-step CWV workflow (triage → diagnose → fix → validate → publish) — it never measures in lab; it reads real-user field data from the Chrome UX Report (CrUX) and falls back to PageSpeed Insights (PSI) when field data is unavailable.
+Identify which pages on a domain need Core Web Vitals (CWV) work and prioritize them by urgency. Produce a ranked table of URLs so downstream skills (`cwv-diagnose`, `cwv-fix`, `cwv-validate`, `cwv-report`) can focus on the highest-leverage targets first. This skill is the optional entry point of the 4-step CWV loop (diagnose → fix → validate → report) — it never measures in lab; it reads real-user field data from the Chrome UX Report (CrUX) and falls back to PageSpeed Insights (PSI) when field data is unavailable.
 
 ## When to invoke
 - A user asks "which pages on my site need performance work?"
@@ -13,14 +13,11 @@ Identify which pages on a domain need Core Web Vitals (CWV) work and prioritize 
 If the user has already picked a URL and wants lab diagnosis, skip this skill and go straight to `cwv-diagnose`.
 
 ## Prerequisites
-- Provider profile: `field-google` for CrUX/PageSpeed Insights, and/or
-  `field-aem-rum` for AEM RUM Bundler. `cwv-triage` is optional; the default
-  `local` workflow starts at diagnosis for a chosen URL when no field profile is
-  selected.
+- Provider profile: `field-google` for CrUX/PageSpeed Insights. `cwv-triage`
+  is optional; the default `local` workflow starts at diagnosis for a chosen
+  URL when no field profile is selected.
 - `field-google`: `GOOGLE_CRUX_API_KEY` set in `.env`; optional
   `GOOGLE_PAGESPEED_INSIGHTS_API_KEY` for PSI fallback when CrUX lacks data.
-- `field-aem-rum`: `RUM_DOMAIN_KEY` set in `.env` for any AEM site (EDS/CS/AMS)
-  with a provisioned domain key; see `topics/rum.md`.
 - Node.js >=20 for running one-off `fetch` scripts (no browser needed).
 - Optional: a sitemap URL (`sitemap.xml`) if the user wants a multi-URL scan.
 
@@ -33,15 +30,13 @@ field triage inside the `local` profile by themselves.
 ### Step 0 — Doctor preflight (ADR-0014 / spec 014)
 Before any field-API fetch, run the same standalone doctor preflight gate the
 5-step runbook enforces at every step. Resolve this skill's provider profile
-(the "Provider profile:" line above — `field-google` for CrUX/PSI,
-`field-aem-rum` for RUM), then run:
+(the "Provider profile:" line above — `field-google` for CrUX/PSI), then run:
 ```
 node .agents/scripts/preflight.js --profile field-google
-# or: npm run preflight -- --profile field-aem-rum
 ```
 Exit codes: `0` = ready (or advisory-only), `1` = a required prerequisite is
 **verifiably missing** (doctor `fail`/`not-wired`, e.g. `GOOGLE_CRUX_API_KEY`
-or `RUM_DOMAIN_KEY` unset), `2` = usage error. On exit 1, surface the command's
+unset), `2` = usage error. On exit 1, surface the command's
 own doctor rows verbatim and **stop** before any field fetch — do not re-derive
 the message. Prerequisites doctor **cannot self-verify** (status `unknown`) are
 printed as non-blocking advisories (`⚠ preflight: could not verify …`) and the
@@ -59,33 +54,6 @@ Ask the user for:
   and `DESKTOP`, compute pressure on each, and recommend whichever is worse.
   The user can override with an explicit `PHONE` | `DESKTOP` | `TABLET` to
   constrain the audit to one surface.
-
-### Step 2a — RUM first (any AEM site with a domain key)
-If the `field-aem-rum` profile is selected and `RUM_DOMAIN_KEY` is set, run:
-```
-node .agents/scripts/rum-fetch.js --domain <domain> --output /tmp/rum.json
-```
-RUM beats CrUX on this workflow because it is 7-day (vs 28-day) and exposes
-per-URL breakdowns directly, so you can skip the sitemap parse + per-URL
-CrUX loop entirely.
-
-`rum-fetch.js` always emits a `byFormFactor` block (PHONE / DESKTOP / TABLET
-p75s computed from the same bundles) so you can see which surface is worse
-without a second fetch. If the user explicitly scoped to one form factor,
-add `--form-factor PHONE|DESKTOP|TABLET` — the top-level `siteWide` and
-`byUrl` then reflect only that slice while `byFormFactor` still covers all
-three for comparison. Bot traffic is always excluded.
-
-If `rum-fetch.js` exits 0 with non-empty `byUrl`, keep BOTH RUM rankings:
-`byUrl` is the raw URL list, while `byCanonicalUrl` folds protocol/trailing-slash
-variants (e.g. `http://example.com/savings` + `https://example.com/savings`)
-and adds `sampleConfidence`. Use `byCanonicalUrl` for target selection and keep
-`byUrl` as supporting evidence. If it exits 3 (no data), `RUM_DOMAIN_KEY` is not
-set, or the `field-aem-rum` profile was not selected, continue with CrUX only
-when `field-google` is selected. Exit 3 means the key is wrong / scoped to a
-different host (apex vs `www`) or the site is genuinely non-AEM — it does
-**not** mean "CS/AMS, so no RUM" (all AEM delivery types emit RUM). See
-`topics/rum.md` for detection heuristics.
 
 ### Step 2 — Query CrUX at origin level
 Skip this step unless the `field-google` profile is selected.
@@ -116,7 +84,7 @@ If the API returns `404` / `"not found"`, note that URL+form-factor pair has
 insufficient traffic; do not treat absence as "good."
 
 ### Step 4 — Fall back to PSI when CrUX has no data
-(Fallback order at this point: RUM → CrUX → PSI. Step 4 is the last-resort
+(Fallback order at this point: CrUX → PSI. Step 4 is the last-resort
 single-URL lab proxy for pages CrUX has no data for.)
 
 For URLs with no CrUX data, issue:
@@ -149,7 +117,7 @@ factors on the same axis.
 ### Step 6a — Pick the dominant form factor
 Compute pressure **per form factor** on every row. For the overall triage
 recommendation, pick the form factor whose origin-level max-pressure is
-higher. Tie-break by bundle count (RUM) or URL-level sample count (CrUX) —
+higher. Tie-break by URL-level sample count —
 more samples = more confidence in the signal.
 
 Record the choice as `recommendedFormFactor` on the output envelope. The
@@ -174,12 +142,12 @@ the "top URL to analyze", apply these gates:
    the durable handoff is the form-factor-scoped `selectedTop`.
 1. Preserve `rawTop` exactly as the highest-pressure / highest-score raw row
    within that recommended surface.
-2. Collapse obvious URL variants via `byCanonicalUrl` when RUM is the source
-   (`http` vs `https`, trailing slash, fragments). Use the highest-traffic
-   variant as the navigable URL, but carry all variants in the evidence.
-3. Prefer `sampleConfidence: "load-bearing"` rows (`bundleCount >= 100`) for
-   the primary `selectedTop`. Rows below 100 bundles are **directional**: keep
-   them in the table and in `nearMisses`, but do not let a 1-bundle outlier beat
+2. Collapse obvious URL variants (`http` vs `https`, trailing slash,
+   fragments). Use the highest-traffic variant as the navigable URL, but carry
+   all variants in the evidence.
+3. Prefer high-sample rows for the primary `selectedTop`. Low-sample rows are
+   **directional**: keep them in the table and in `nearMisses`, but do not let
+   a 1-sample outlier beat
    a slightly lower-pressure page with enough traffic.
 4. If every failing row is directional, pick the highest-pressure directional
    row but label the selection `sampleConfidence: "directional"` and recommend
@@ -217,11 +185,11 @@ Rule:
   scoped to it), AND for **every** target metric (LCP, CLS, INP), check
   `metric_p75 / GOOD_threshold < 1.0` — i.e. the per-metric pressure is
   strictly under 1.0. GOOD thresholds: LCP ≤ 2500ms, CLS ≤ 0.1, INP ≤ 200ms.
-- If the dominant signal is **RUM** and RUM is GOOD, but CrUX is available
-  and shows NI/Poor on the same surface, be conservative and **do NOT
-  early-exit** — CrUX's 28-day window is authoritative and RUM's shorter
-  window may be masking a regression's ramp. Prefer RUM when it disagrees
-  downward (RUM worse than CrUX) but not upward.
+- If another RUM source is available and GOOD, but CrUX shows NI/Poor on the
+  same surface, be conservative and **do NOT early-exit** — CrUX's 28-day
+  window is authoritative and a shorter RUM window may be masking a
+  regression's ramp. Prefer the RUM source when it disagrees downward (worse
+  than CrUX) but not upward.
 - If the only available field signal is **CrUX** and CrUX is GOOD, early-exit.
 - If the only available signal is **PSI lab** (CrUX missing due to low URL
   traffic), **do NOT early-exit** — PSI is a single-location lab run, not
@@ -303,12 +271,12 @@ Emit BOTH a human-readable summary and a structured Findings envelope.
 ### Structured findings (REQUIRED)
 Emit one Finding per failing metric per URL into a `triage-findings.json` envelope conforming to [finding-schema.md](../references/topics/finding-schema.md). All findings from this skill have:
 - `skill: "cwv-triage"`
-- `source`: `crux` | `rum` | `psi` (whichever was used)
+- `source`: `crux` | `psi` (whichever was used)
 - `status: "draft"` — pick-ready candidates, no patches yet
 - no `patches` field
 - `confidence` capped at source tier (field 0.95, lab 0.85)
 - `id` format: `triage-<metric-lowercase>-<n>` (e.g. `triage-lcp-1`)
-- `evidence[]` containing a `crux-percentile` or `rum-bundle` or `psi-audit` entry
+- `evidence[]` containing a `crux-percentile` or `psi-audit` entry
 - `evidence[0].data.formFactor` — `"PHONE"` | `"DESKTOP"` | `"TABLET"` — always recorded
   so downstream skills can filter/group by surface
 
@@ -381,7 +349,6 @@ Downstream: `cwv-diagnose` reads this file and picks findings to deepen.
 
 ## References to read
 - `.agents/references/topics/finding-schema.md` — output contract for findings.
-- `.agents/references/topics/rum.md` — Helix RUM Bundler API, detection heuristics, `rum-fetch.js` usage, interpretation guide.
 - `.agents/references/topics/field-vs-lab.md` — threshold pressure formula, CrUX vs PSI signal hierarchy, 28-day data window caveats.
 - CWV thresholds (web.dev): Good/NI/Poor boundaries for LCP (2500/4000), CLS (0.1/0.25), INP (200/500).
 
@@ -395,7 +362,7 @@ Never use `launcher.js` in this skill — triage is an API-only pass, no browser
 
 ## Known limitations
 - CrUX only reports URL-level data for pages with ≥1000 real-user visits in the past 28 days. Low-traffic pages always fall back to PSI (lab-only, lower confidence).
-- CrUX data is 28-day aggregate — cannot detect a regression that landed yesterday. For recent regressions, cross-reference RUM (if available) with `cwv-diagnose` lab results.
+- CrUX data is 28-day aggregate — cannot detect a regression that landed yesterday. For recent regressions, cross-reference your own RUM (if available) with `cwv-diagnose` lab results.
 - PSI runs from a single Google-owned location; it cannot replicate real-user device/network diversity. Treat PSI numbers as directional, not ground truth.
 - Pressure thresholds (2500/0.1/200) are the same on PHONE and DESKTOP — they
   are user-experience thresholds, not device-specific — so pressure numbers are
@@ -406,8 +373,4 @@ Never use `launcher.js` in this skill — triage is an API-only pass, no browser
 - TABLET form factor in CrUX is low-traffic and frequently returns 404. Only
   query it when the user explicitly scopes to tablet; otherwise stick with
   PHONE+DESKTOP.
-- RUM userAgent classification is coarse: Helix splits into `mobile` / `desktop`
-  / `tablet` / `bot` prefixes only. Bots are always dropped; TABLET is treated
-  as a permissive superset of PHONE (matches CrUX's mobile-CSS-on-tablet
-  fallback) when filtering.
 - Rate limits: CrUX allows ~150 QPM; PSI ~240 QPM. For very large sitemaps (>500 URLs), chunk the work and cache responses locally. Querying two form factors doubles the call count — budget accordingly.
