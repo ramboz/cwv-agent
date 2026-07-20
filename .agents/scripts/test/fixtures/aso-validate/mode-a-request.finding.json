@@ -1,0 +1,40 @@
+{
+  "schemaVersion": "1.0",
+  "skill": "cwv-validate",
+  "url": "https://example.com/",
+  "profile": "desktop-cable-1xcpu",
+  "timestamp": "2026-07-02T00:00:00.000Z",
+  "findings": [
+    {
+      "schemaVersion": "1.0",
+      "id": "validate-defer-ads",
+      "timestamp": "2026-07-02T00:00:00.000Z",
+      "url": "https://example.com/",
+      "skill": "cwv-validate",
+      "source": "perf_observer",
+      "metric": ["LCP"],
+      "type": "opportunity",
+      "severity": "high",
+      "rootCause": true,
+      "cause": "render-blocking ads script in head",
+      "recommendation": "defer the ads script",
+      "confidence": 0.9,
+      "impactReduction": { "metric": "LCP", "value": 320 },
+      "status": "validated",
+      "classification": {
+        "class": 1,
+        "subclass": "generic",
+        "route": "mode-a",
+        "rationale": "generic mutation (op \"markup\") — ASV Mode A can splice + measure directly"
+      },
+      "patches": {
+        "markup": [
+          {
+            "selector": "script[src*=ads]",
+            "attrs": { "defer": "", "async": null }
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,53 @@
+{
+  "schemaVersion": "1.0",
+  "skill": "cwv-triage",
+  "url": "https://www.petplace.com/",
+  "timestamp": "2026-04-17T12:00:00.000Z",
+  "status": "passing",
+  "recommendedFormFactor": "PHONE",
+  "recommendedProfile": "mobile-slow4g-4xcpu",
+  "passing": {
+    "reason": "field-already-good",
+    "checked": ["LCP", "CLS", "INP"],
+    "byFormFactor": {
+      "PHONE": {
+        "LCP": 1393,
+        "CLS": 0.02,
+        "INP": 106,
+        "source": "crux",
+        "maxPressure": 0.5572
+      }
+    },
+    "thresholds": { "LCP": 2500, "CLS": 0.1, "INP": 200 }
+  },
+  "findings": [
+    {
+      "schemaVersion": "1.0",
+      "id": "triage-lcp-1",
+      "timestamp": "2026-04-17T12:00:00.000Z",
+      "url": "https://www.petplace.com/",
+      "skill": "cwv-triage",
+      "source": "crux",
+      "metric": ["LCP"],
+      "type": "opportunity",
+      "severity": "low",
+      "rootCause": false,
+      "cause": "LCP p75 1393ms on PHONE is below GOOD threshold (2500ms) — no action needed.",
+      "evidence": [
+        {
+          "kind": "crux-percentile",
+          "data": {
+            "metric": "LCP",
+            "p75": 1393,
+            "distribution": { "good": 0.88, "needs_improvement": 0.09, "poor": 0.03 },
+            "formFactor": "PHONE"
+          }
+        }
+      ],
+      "recommendation": "No action — field is already passing on LCP for PHONE.",
+      "confidence": 0.9,
+      "impactReduction": { "metric": "LCP", "valueMs": 0 },
+      "status": "rejected"
+    }
+  ]
+}

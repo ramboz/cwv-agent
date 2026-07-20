@@ -1,0 +1,53 @@
+{
+  "schemaVersion": "1.0",
+  "skill": "cwv-triage",
+  "url": "https://www.example.com/slow-page",
+  "timestamp": "2026-04-17T12:00:00.000Z",
+  "recommendedFormFactor": "PHONE",
+  "recommendedProfile": "mobile-slow4g-4xcpu",
+  "selectedTop": {
+    "url": "https://www.example.com/slow-page",
+    "canonicalUrl": "https://www.example.com/slow-page",
+    "source": "crux",
+    "rank": 1,
+    "sampleCount": 1200,
+    "traffic": { "sampleCount": 1200 },
+    "sampleConfidence": "load-bearing",
+    "failingMetrics": ["LCP"],
+    "pressure": 1.68,
+    "recommendedFormFactor": "PHONE",
+    "recommendedProfile": "mobile-slow4g-4xcpu",
+    "selectionReason": "Selected as the highest-pressure load-bearing URL: LCP pressure 1.68 with 1200 CrUX samples."
+  },
+  "nearMisses": [],
+  "findings": [
+    {
+      "schemaVersion": "1.0",
+      "id": "triage-lcp-1",
+      "timestamp": "2026-04-17T12:00:00.000Z",
+      "url": "https://www.example.com/slow-page",
+      "skill": "cwv-triage",
+      "source": "crux",
+      "metric": ["LCP"],
+      "type": "bottleneck",
+      "severity": "high",
+      "rootCause": false,
+      "cause": "CrUX LCP p75 4200ms on PHONE exceeds GOOD threshold (2500ms).",
+      "evidence": [
+        {
+          "kind": "crux-percentile",
+          "data": {
+            "metric": "LCP",
+            "p75": 4200,
+            "distribution": { "good": 0.42, "needs_improvement": 0.33, "poor": 0.25 },
+            "formFactor": "PHONE"
+          }
+        }
+      ],
+      "recommendation": "Run cwv-diagnose on this URL to identify LCP root cause.",
+      "confidence": 0.9,
+      "impactReduction": { "metric": "LCP", "valueMs": 1700 },
+      "status": "draft"
+    }
+  ]
+}

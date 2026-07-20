@@ -1,0 +1,42 @@
+{
+  "schemaVersion": "1.0",
+  "skill": "cwv-validate",
+  "url": "https://example.com/",
+  "profile": "mobile-slow4g-4xcpu",
+  "timestamp": "2026-07-02T00:00:00.000Z",
+  "findings": [
+    {
+      "schemaVersion": "1.0",
+      "id": "validate-clientlib-split",
+      "timestamp": "2026-07-02T00:00:00.000Z",
+      "url": "https://example.com/",
+      "skill": "cwv-validate",
+      "source": "perf_observer",
+      "metric": ["FCP"],
+      "type": "opportunity",
+      "severity": "high",
+      "rootCause": true,
+      "cause": "render-blocking clientlib-base monolith",
+      "recommendation": "rebuild the clientlib with reserved dimensions and splice as Mode B response",
+      "confidence": 0.8,
+      "impactReduction": { "metric": "FCP", "value": 260 },
+      "status": "guidance",
+      "classification": {
+        "class": 3,
+        "subclass": "clientlib",
+        "route": "local-build-modeb",
+        "rationale": "clientlib change whose effect is order/blocking-dependent — needs a local Mode-B build"
+      },
+      "patches": {
+        "response": [
+          {
+            "urlPattern": "/etc.clientlibs/example/clientlibs/clientlib-base.min.css",
+            "body": "Lmhlcm97bWluLWhlaWdodDozMjBweDthc3BlY3QtcmF0aW86MTYvOX0uYmFubmVye2NvbnRhaW46bGF5b3V0fQ==",
+            "encoding": "base64",
+            "contentType": "text/css"
+          }
+        ]
+      }
+    }
+  ]
+}
