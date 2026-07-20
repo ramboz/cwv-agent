@@ -5,7 +5,7 @@
  *
  * V1 made the *oracle* per-shift-source smart (`--cls-source`, A/A `--baseline2`),
  * but nothing on the diagnosis side told you WHICH shift source to target or that
- * a page's total CLS is noise-dominated — a human did that by hand on otempo. This
+ * a page's total CLS is noise-dominated — a human did that by hand on the news-site case. This
  * promotes the throwaway `loop-2026-06-10/analyze-variance.mjs` prototype into a
  * first-class, reusable report.
  *
@@ -30,7 +30,7 @@
  *
  * Stability is two-gated, because neither gate alone is sufficient:
  *   1. PRESENCE — a source absent from ≥20% of runs is intermittent (volatile)
- *      regardless of how tight it is when present. (Catches otempo's
+ *      regardless of how tight it is when present. (Catches the news-site case's
  *      `cmp-template-grid>article`, present 7/10, whose IQR sits under the CLS
  *      floor.)
  *   2. SPREAD   — `measure-quality.assessReliability` with the CLS abs floor 0.1:
@@ -62,7 +62,7 @@ const DEFAULT_MIN_SAMPLES = 3;
 // when building a source signature so the same logical source aligns across runs
 // even when the captured ancestor chain varies in depth.
 const UTILITY_CLASS = [
-  /^aem-Grid/, // aem-Grid, aem-Grid--12, aem-GridColumn
+  /^grid(-|$)|^grid--/, // grid, grid--12, grid-column
   /^font-/, // font-lato, font-bold, …
   /^has-(desktop|mobile|tablet)-width$/,
   /^(default|cmp)$/,

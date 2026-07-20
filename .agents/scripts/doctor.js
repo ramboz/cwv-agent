@@ -199,11 +199,6 @@ function createDefaultContext(projectRoot = DEFAULT_PROJECT_ROOT) {
         return null;
       }
     },
-    adapterExists(profile) {
-      return (FUTURE_ADAPTERS[profile] || []).some((relativePath) => (
-        fs.existsSync(path.join(projectRoot, relativePath))
-      ));
-    },
   };
 }
 
@@ -221,10 +216,6 @@ function info(id, label, detail) {
   return check(id, label, true, detail, { required: false, status: 'info' });
 }
 
-function unknown(id, label, detail) {
-  return check(id, label, false, detail, { required: true, status: 'unknown' });
-}
-
 function envCheck(name, ctx) {
   const value = ctx.env && ctx.env[name];
   return check(
@@ -232,16 +223,6 @@ function envCheck(name, ctx) {
     `${name} is set`,
     Boolean(value),
     value ? 'available' : 'missing',
-  );
-}
-
-function commandCheck(command, label, ctx) {
-  const available = ctx.commandAvailable(command);
-  return check(
-    `command:${command}`,
-    label || `${command} command is available`,
-    available,
-    available ? 'found on PATH' : 'not found on PATH',
   );
 }
 
@@ -253,10 +234,6 @@ function packageScriptCheck(scriptName, ctx) {
     Boolean(scripts[scriptName]),
     scripts[scriptName] || `missing; add npm script "${scriptName}"`,
   );
-}
-
-function optionalCheck(item) {
-  return { ...item, required: false };
 }
 
 function chromeCheck(ctx) {

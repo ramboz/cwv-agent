@@ -226,9 +226,9 @@ HIT/MISS, the shifting selector).
 
 A **first-party selector with no third-party resource in evidence is NOT
 `third-party`** — e.g. a site's own custom consent banner component
-(`.cookies__container` on otempo, AEM CS) is `customer-code`, not `third-party`,
+(`.cookies__container` on the news-site case, AEM CS) is `customer-code`, not `third-party`,
 because the bytes/behaviour are the customer's even though the feature is a
-cookie bar. This is the exact distinction the otempo verdict turned on.
+cookie bar. This is the exact distinction the the news-site case verdict turned on.
 
 `ownership.deliveryConstraint` flags when the fix isn't a normal code change:
 `requires-operator` (Fastly/Dispatcher/CDN/platform — Adobe ticket or Cloud

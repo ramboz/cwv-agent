@@ -492,13 +492,13 @@ test('extractCanonicalUrls: decodes &#x26; in evidence match', () => {
 
 test('extractCanonicalUrls: relative resolved against finding.url', () => {
   const f = mkFinding({
-    url: 'https://www.petplace.com/',
+    url: 'https://pets.example.com/',
     evidence: [
       { kind: 'resource-timing', data: { url: './media_abc.jpg?width=750&#x26;format=jpg' } },
     ],
   });
   const urls = extractCanonicalUrls(f);
-  assert(urls[0].startsWith('https://www.petplace.com/'), `got ${urls[0]}`);
+  assert(urls[0].startsWith('https://pets.example.com/'), `got ${urls[0]}`);
 });
 
 test('extractCanonicalUrls: patch URLs beat contextual attribution URLs', () => {
@@ -618,29 +618,29 @@ test('dedupeCandidates: same contextual LCP URL but different preload hrefs → 
   assert(out.length === 2, `expected 2, got ${out.length}`);
 });
 
-test('dedupeCandidates: petplace case — format=webply vs format=jpg → NOT merged by URL (documented gotcha)', () => {
+test('dedupeCandidates: the pets-site case case — format=webply vs format=jpg → NOT merged by URL (documented gotcha)', () => {
   const findings = mkDedupFindings({
-    url1: 'https://www.petplace.com/media_1a26.jpg?width=750&format=webply&optimize=medium',
+    url1: 'https://pets.example.com/media_1a26.jpg?width=750&format=webply&optimize=medium',
     url2: './media_1a26.jpg?width=750&#x26;format=jpg&#x26;optimize=medium',
     intervention1: 'fetchpriority',
     intervention2: 'fetchpriority',
   });
-  for (const f of findings) f.url = 'https://www.petplace.com/';
+  for (const f of findings) f.url = 'https://pets.example.com/';
   const cands = findings.map((f) => findingToCandidate(f, 0.5));
   const out = dedupeCandidates(cands, findings);
   assert(out.length === 2, `webply and jpg are distinct resources — got ${out.length} merged`);
 });
 
-test('dedupeCandidates: petplace case — BUT same attribution.target → merged', () => {
+test('dedupeCandidates: the pets-site case case — BUT same attribution.target → merged', () => {
   const findings = mkDedupFindings({
-    url1: 'https://www.petplace.com/media_1a26.jpg?width=750&format=webply&optimize=medium',
+    url1: 'https://pets.example.com/media_1a26.jpg?width=750&format=webply&optimize=medium',
     url2: './media_1a26.jpg?width=750&#x26;format=jpg&#x26;optimize=medium',
     intervention1: 'fetchpriority',
     intervention2: 'fetchpriority',
     target1: 'div.hero-banner>picture>img',
     target2: 'div.hero-banner>picture>img',
   });
-  for (const f of findings) f.url = 'https://www.petplace.com/';
+  for (const f of findings) f.url = 'https://pets.example.com/';
   const cands = findings.map((f) => findingToCandidate(f, 0.5));
   const out = dedupeCandidates(cands, findings);
   assert(out.length === 1, `attribution.target should merge — got ${out.length}`);

@@ -1,10 +1,10 @@
 /**
  * source-edits.js — format the Finding-native `sourceEdits` records into a
- * clean unified diff for the SpaceCat suggestion `patchContent`.
+ * clean unified diff for the fix handoff.
  *
  * `fix-findings.json` carries the raw, tool-agnostic source-edit records
  * (`sourceEdits: [{ file, before, after, line? }]`, the load-bearing subset of
- * source-mapper.js's edit objects). The SpaceCat-specific unified diff is needed
+ * source-mapper.js's edit objects). The unified diff is needed
  * ONLY at upload, so it is derived here at publish time — keeping the Finding
  * Finding-native (spec 003-04 publish-time-derivation decision, ADR-0006).
  *
@@ -77,7 +77,7 @@ function editToDiffSection(edit) {
  * coalesces same-file hunks against the real source).
  *
  * @param {Array<{file:string, before:string, after:string, line?:number|null}>} sourceEdits
- * @returns {string} a unified diff suitable for SpaceCat `patchContent`
+ * @returns {string} a unified diff for the fix handoff
  */
 function editsToUnifiedDiff(sourceEdits) {
   if (!Array.isArray(sourceEdits) || sourceEdits.length === 0) return '';

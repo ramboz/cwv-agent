@@ -1,6 +1,6 @@
 {
-  "_note": "Real otempo.com.br no-patch runs (baseline.json + baseline-2.json, 5+5) pooled, from progress/otempo-com-br/loop-2026-06-10/runs. clsShare rounded to 4dp. Self-contained acceptance fixture for cls-variance (ROADMAP V4). Untracked source artifacts not committed; this is the faithful committed reproduction.",
-  "url": "https://www.otempo.com.br",
+  "_note": "Real news.example.com no-patch runs (baseline.json + baseline-2.json, 5+5) pooled, from progress/the news-site case-com-br/loop-2026-06-10/runs. clsShare rounded to 4dp. Self-contained acceptance fixture for cls-variance (ROADMAP V4). Untracked source artifacts not committed; this is the faithful committed reproduction.",
+  "url": "https://news.example.com",
   "profile": "mobile-slow4g-4xcpu",
   "cohort": "first-visit",
   "runs": [

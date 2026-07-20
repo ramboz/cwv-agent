@@ -76,14 +76,25 @@ test('AC-4: resolving a root inside a known cycle terminates, each node once', (
 
 // --- AC-6 flavor filter -----------------------------------------------------
 
-test('AC-6: a reachable playbook not applicable to the flavor is excluded', () => {
-  // lcp-image -> layout-shift (complements). layout-shift applicable_flavors is
-  // [eds, cs] on the real graph, so on 'ams' it must be filtered out.
-  const ams = resolveChain('lcp-image', 'ams');
-  assert.ok(!entryFor(ams, 'layout-shift'), 'layout-shift excluded on ams');
-  // On eds it IS reachable (sanity: the filter is what removed it, not the graph).
-  const eds = resolveChain('lcp-image', 'eds');
-  assert.ok(entryFor(eds, 'layout-shift'), 'layout-shift present on eds');
+test('AC-6: a reachable playbook restricted via applicable_stacks is excluded', () => {
+  // Synthetic dir: root complements a target whose applicable_stacks excludes
+  // the resolved stack — the target must be filtered from the closure.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cwv-chain-stacks-'));
+  fs.writeFileSync(path.join(dir, 'root-pb.md'), [
+    '---', 'issue_type: root-pb', 'risk_tier: low',
+    'see_also:', '  - playbook: scoped-pb', '    edge: complements', '    reason: "pairs"',
+    '---', '# root',
+  ].join('\n'));
+  fs.writeFileSync(path.join(dir, 'scoped-pb.md'), [
+    '---', 'issue_type: scoped-pb', 'risk_tier: low', 'applicable_stacks: [lockedcms]',
+    '---', '# scoped',
+  ].join('\n'));
+  const generic = resolveChain('root-pb', 'generic', { dir });
+  assert.ok(!entryFor(generic, 'scoped-pb'), 'scoped-pb excluded on generic');
+  // On lockedcms it IS reachable (sanity: the filter removed it, not the graph).
+  const locked = resolveChain('root-pb', 'lockedcms', { dir });
+  assert.ok(entryFor(locked, 'scoped-pb'), 'scoped-pb present on lockedcms');
+  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 // --- AC-5 depth cap (synthetic fixture for an isolated, deterministic chain) -

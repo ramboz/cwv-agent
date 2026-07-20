@@ -75,14 +75,14 @@ export const VALIDATION_HANDLERS = {
   // blocking-resource
   no_synchronous_dependents: 'no synchronous dependents on the deferred resource',
   no_above_fold_selectors_in_css: 'no above-the-fold selectors in the deferred CSS',
-  clientlib_dependency_graph_clear: 'the clientlib dependency graph is clear',
+  bundle_dependency_graph_clear: 'the bundle dependency graph is clear',
   // bundling
   block_init_order_preserved: 'block init order preserved across the split',
   file_size_inventory_built: 'a file-size inventory has been built',
   target_template_scope_clear: 'the target template scope is clear',
   // compression
   cdn_yaml_present: 'cdn.yaml is present',
-  dispatcher_writable_for_ams: 'the dispatcher config is writable (AMS)',
+  server_config_writable: 'the CDN/server config is in this repo and writable',
   // general
   cannot_classify_to_specific_type: 'the finding cannot be classified to a specific type',
   // interaction
@@ -114,12 +114,12 @@ export const VALIDATION_HANDLERS = {
   resource_on_critical_render_path: 'the resource is on the critical render path',
   // third-party
   script_classified_by_deferral_safety: 'the third-party script is classified by deferral safety',
-  not_launch_dtm_managed: 'the script is not Adobe Launch/DTM-managed',
-  clientlib_or_inline_in_markup: 'the script is a clientlib or inline in markup',
+  not_tag_manager_managed: 'the script is not tag-manager-managed',
+  script_reference_in_markup: 'the script reference is in the markup or a bundle in this repo',
   // ttfb
   root_cause_classified: 'the TTFB root cause is classified',
-  dispatcher_conf_d_writable: 'the dispatcher conf.d is writable',
-  sling_profiling_available: 'Sling profiling is available',
+  server_cache_config_writable: 'the server cache config is in this repo and writable',
+  server_profiling_available: 'server-side profiling is available',
   jcr_query_plan_available: 'the JCR query plan is available',
   // unused-code
   lighthouse_coverage_confirms_unused: 'Lighthouse coverage confirms the code is unused',

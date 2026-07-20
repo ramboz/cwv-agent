@@ -383,8 +383,8 @@ test('evaluate: bit-identical LCP samples → NO_OP, exit 5', () => {
   assert(v.metrics[0].reason.includes('did not apply'));
 });
 
-test('evaluate: the petplace case — CLS identical to many decimals → NO_OP', () => {
-  // Reproduces the 2026-04-17 petplace diagnose-cls-c6-3 case: CLS
+test('evaluate: the the pets-site case case — CLS identical to many decimals → NO_OP', () => {
+  // Reproduces the 2026-04-17 the pets-site case diagnose-cls-c6-3 case: CLS
   // identical to 17 decimals across 5 samples each side.
   const cls = [
     0.09197906605871387,
@@ -393,8 +393,8 @@ test('evaluate: the petplace case — CLS identical to many decimals → NO_OP',
     0.09197906605871387,
     0.09197906605871387,
   ];
-  const base = mkLauncher('https://petplace.test/', [2000, 2100, 2200, 2300, 2400], { cls });
-  const treat = mkLauncher('https://petplace.test/', [2000, 2100, 2200, 2300, 2400], { cls });
+  const base = mkLauncher('https://the pets-site case.test/', [2000, 2100, 2200, 2300, 2400], { cls });
+  const treat = mkLauncher('https://the pets-site case.test/', [2000, 2100, 2200, 2300, 2400], { cls });
   const v = evaluate({ baseline: base, treatment: treat, metrics: ['CLS'], warmup: 0 });
   assert(v.verdict === 'NO_OP', `got ${v.verdict} (${v.metrics[0].reason})`);
   assert(v.exitCode === 5);

@@ -387,7 +387,7 @@ function playbooksForMetric(metric, flavor, opts) {
       issueType,
       riskTier: (fm && fm.riskTier) || null,
       applicableFlavors: flavors,
-      applicable: flavor ? flavors.includes(flavor) : true,
+      applicable: flavor && flavors.length > 0 ? flavors.includes(flavor) : true,
       loaded: Boolean(pb),
     };
   });

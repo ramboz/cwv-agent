@@ -1,14 +1,14 @@
 {
   "schemaVersion": "1.0",
   "skill": "cwv-diagnose",
-  "url": "https://www.otempo.com.br/",
+  "url": "https://news.example.com/",
   "timestamp": "2026-06-09T12:00:00.000Z",
   "findings": [
     {
       "schemaVersion": "1.0",
       "id": "diagnose-cls-c6-1",
       "timestamp": "2026-06-09T12:00:00.000Z",
-      "url": "https://www.otempo.com.br/",
+      "url": "https://news.example.com/",
       "skill": "cwv-diagnose",
       "source": "perf_observer",
       "metric": ["CLS"],
@@ -49,7 +49,7 @@
       "schemaVersion": "1.0",
       "id": "diagnose-lcp-c2-2",
       "timestamp": "2026-06-09T12:00:00.000Z",
-      "url": "https://www.otempo.com.br/",
+      "url": "https://news.example.com/",
       "skill": "cwv-diagnose",
       "source": "rum",
       "metric": ["LCP"],

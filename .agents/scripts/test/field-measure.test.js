@@ -5,12 +5,12 @@
  * behind launcher.js's field-faithful (`--scroll`) mode (ROADMAP G1).
  *
  * Browser-context (`scrollAndSettleInPage`) and Puppeteer-driven
- * (`dismissConsent`) helpers are exercised live against otempo, not here —
+ * (`dismissConsent`) helpers are exercised live against the news-site case, not here —
  * these tests cover only the pure logic, per repo convention (no network/
  * browser in the unit suite).
  *
- * The aggregateClsByNode fixtures are modeled on the real otempo scroll-probe
- * output (`results/otempo/scroll-cls-mobile.json`): the `t004-cookie`
+ * The aggregateClsByNode fixtures are modeled on the real the news-site case scroll-probe
+ * output (`results/the news-site case/scroll-cls-mobile.json`): the `t004-cookie`
  * consent banner's `.cookies__container` grows ~9× and dominates CLS.
  */
 
@@ -28,7 +28,7 @@ import {
 } from '../field-measure.js';
 
 // ---------------------------------------------------------------------------
-// Fixtures — otempo-shaped layout-shift records (measure-cwv.js shape).
+// Fixtures — the news-site case-shaped layout-shift records (measure-cwv.js shape).
 // ---------------------------------------------------------------------------
 
 const COOKIE_SEL =
@@ -40,8 +40,8 @@ function rect(y, height) {
 }
 
 // The consent banner growing into view (height 60 → 540) over several shifts,
-// pushing the template container down. Mirrors the dominant otempo CLS source.
-const OTEMPO_SHIFTS = [
+// pushing the template container down. Mirrors the dominant the news-site case CLS source.
+const SAMPLE_SHIFTS = [
   {
     value: 0.12,
     startTime: 800,
@@ -96,8 +96,8 @@ test('grewBy: missing rects or nullish → 0', () => {
 // aggregateClsByNode
 // ---------------------------------------------------------------------------
 
-test('aggregateClsByNode: otempo shape → consent banner is the top shift source', () => {
-  const agg = aggregateClsByNode(OTEMPO_SHIFTS);
+test('aggregateClsByNode: the news-site case shape → consent banner is the top shift source', () => {
+  const agg = aggregateClsByNode(SAMPLE_SHIFTS);
   const top = agg.topShiftingElements[0];
   assert.equal(top.node, COOKIE_SEL);
   // Banner grew on all three non-recent-input shifts it appears in.
@@ -110,14 +110,14 @@ test('aggregateClsByNode: otempo shape → consent banner is the top shift sourc
 });
 
 test('aggregateClsByNode: excludes hadRecentInput by default', () => {
-  const agg = aggregateClsByNode(OTEMPO_SHIFTS);
+  const agg = aggregateClsByNode(SAMPLE_SHIFTS);
   // 3 of the 4 shifts count (the 0.20 recent-input one is dropped).
   assert.equal(agg.shiftCount, 3);
   assert.equal(agg.totalShiftValue, 0.29); // 0.12 + 0.13 + 0.04
 });
 
 test('aggregateClsByNode: includeRecentInput=true keeps the post-click reflow', () => {
-  const agg = aggregateClsByNode(OTEMPO_SHIFTS, { includeRecentInput: true });
+  const agg = aggregateClsByNode(SAMPLE_SHIFTS, { includeRecentInput: true });
   assert.equal(agg.shiftCount, 4);
   assert.equal(agg.totalShiftValue, 0.49); // + 0.20
 });
@@ -168,8 +168,8 @@ test('aggregateClsByNode: empty / nullish input → zeros', () => {
 // ---------------------------------------------------------------------------
 
 test('windowedCls: sums one session (gaps < 1s, span < 5s); excludes recent-input', () => {
-  // otempo shape: startTimes 800/1200/1600 (gaps 400ms) → one session of 0.29.
-  assert.equal(windowedCls(OTEMPO_SHIFTS), 0.29);
+  // the news-site case shape: startTimes 800/1200/1600 (gaps 400ms) → one session of 0.29.
+  assert.equal(windowedCls(SAMPLE_SHIFTS), 0.29);
 });
 
 test('windowedCls: >1s gap starts a new session → max session, not total', () => {
@@ -191,7 +191,7 @@ test('windowedCls: span > 5s starts a new session even with small gaps', () => {
 });
 
 test('windowedCls: includeRecentInput keeps the post-click reflow', () => {
-  assert.ok(windowedCls(OTEMPO_SHIFTS, { includeRecentInput: true }) > 0.29);
+  assert.ok(windowedCls(SAMPLE_SHIFTS, { includeRecentInput: true }) > 0.29);
 });
 
 test('windowedCls: empty / nullish → 0', () => {
@@ -226,7 +226,7 @@ test('decideQuiescence: incomplete state → false (cannot confirm quiet)', () =
 // Constants / config
 // ---------------------------------------------------------------------------
 
-test('CONSENT_ACCEPT_SELECTORS: non-empty string list incl. otempo + OneTrust', () => {
+test('CONSENT_ACCEPT_SELECTORS: non-empty string list incl. the news-site case + OneTrust', () => {
   assert.ok(Array.isArray(CONSENT_ACCEPT_SELECTORS));
   assert.ok(CONSENT_ACCEPT_SELECTORS.length > 0);
   assert.ok(CONSENT_ACCEPT_SELECTORS.every((s) => typeof s === 'string' && s.length > 0));
@@ -248,15 +248,15 @@ test('DEFAULT_SCROLL_OPTS: sane positive tunables', () => {
 
 test('aggregateLauncherOutput: per-run aggregation over launcher shape', () => {
   const doc = {
-    url: 'https://www.otempo.com.br/',
+    url: 'https://news.example.com/',
     profile: 'mobile-slow4g-4xcpu',
     runs: [
-      { cwv: { cls: { value: 0.29, shifts: OTEMPO_SHIFTS } } },
+      { cwv: { cls: { value: 0.29, shifts: SAMPLE_SHIFTS } } },
       { cwv: { cls: { value: 0.0, shifts: [] } } },
     ],
   };
   const out = aggregateLauncherOutput(doc);
-  assert.equal(out.url, 'https://www.otempo.com.br/');
+  assert.equal(out.url, 'https://news.example.com/');
   assert.equal(out.runs.length, 2);
   assert.equal(out.runs[0].clsValue, 0.29);
   assert.equal(out.runs[0].topShiftingElements[0].node, COOKIE_SEL);

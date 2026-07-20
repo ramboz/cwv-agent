@@ -160,40 +160,7 @@ function seedProgressFixture(root) {
     runs: [],
   });
   writeJsonFile(path.join(progress, 'diagnose-findings.json'), mkEnvelope('cwv-diagnose', [mkDiagnoseFinding()]));
-  writeJsonFile(path.join(progress, 'diagnose-spacecat-draft.json'), {
-    schemaVersion: '1.0',
-    kind: 'diagnose-spacecat-draft',
-    publishState: 'draft',
-    mutatesBackend: false,
-    selectedUrl: 'https://example.com/',
-    metric: 'lcp',
-    aggregationKey: 'https://example.com/|lcp',
-    suggestion: { type: 'CODE_CHANGE', data: { issues: [] } },
-  });
   fs.writeFileSync(path.join(progress, 'diagnose-report.md'), '# Diagnose Report\n');
-  writeJsonFile(path.join(progress, 'remediation-payload.json'), {
-    schemaVersion: '1.0',
-    kind: 'remediation-payload',
-    remediationType: 'CODE_CHANGE',
-    selectedUrl: 'https://example.com/',
-    metric: 'cls',
-    aggregationKey: 'https://example.com/|cls',
-    issues: [],
-    suggestion: { type: 'CODE_CHANGE', data: { issues: [] } },
-  });
-  fs.writeFileSync(path.join(progress, 'remediation-report.md'), '# Remediation Report\n');
-  writeJsonFile(path.join(progress, 'publish-plan.json'), {
-    schemaVersion: '1.0',
-    kind: 'publish-plan',
-    mutatesBackend: false,
-    confirmBeforeWriteRequired: true,
-    siteId: 'site-123',
-    url: 'https://example.com/',
-    metric: 'cls',
-    aggregationKey: 'https://example.com/|cls',
-    suggestion: { action: 'PATCH', targetSuggestionId: 'suggestion-1', advisory: false },
-    writePayload: { suggestion: { type: 'CODE_CHANGE', data: { issues: [] } } },
-  });
   writeJsonFile(path.join(progress, 'ranked_patches.json'), {
     schemaVersion: '1.0',
     url: 'https://example.com/',
@@ -238,8 +205,7 @@ test('buildManifest indexes a runtime-only validation handoff without requiring 
   const manifest = buildManifest({ progressDir: progress });
 
   assert.equal(manifest.validationLayers.layers.runtime.status, 'passed');
-  assert.equal(manifest.validationLayers.layers.sourceBuild.status, 'missing');
-  assert.equal(manifest.validationLayers.layers.aso.status, 'missing');
+  assert.equal(manifest.validationLayers.layers.deployment.status, 'missing');
   assert.ok(manifest.validationArtifactIndex.some((entry) => (
     entry.provider === 'cwv-validate'
     && entry.validationLayer === 'runtime'
@@ -248,20 +214,8 @@ test('buildManifest indexes a runtime-only validation handoff without requiring 
     && entry.summary.status === 'valid'
   )));
   assert.ok(manifest.validationArtifactIndex.some((entry) => (
-    entry.validationLayer === 'sourceBuild'
-    && entry.path === 'aem-clientlib-build-result.json'
-    && entry.exists === false
-    && entry.status === 'missing'
-  )));
-  assert.ok(manifest.validationArtifactIndex.some((entry) => (
-    entry.validationLayer === 'aso'
-    && entry.path === 'aso-validation/summary.json'
-    && entry.exists === false
-    && entry.status === 'skipped'
-  )));
-  assert.ok(manifest.validationArtifactIndex.some((entry) => (
-    entry.validationLayer === 'publishing'
-    && entry.path === 'publish-plan.json'
+    entry.validationLayer === 'deployment'
+    && entry.path === 'deployment-remeasurement.json'
     && entry.exists === false
     && entry.status === 'skipped'
   )));
@@ -286,17 +240,14 @@ test('buildManifest indexes local artifacts, validates findings, and writes per-
   assert.deepEqual(manifest.integrationProviders.source.providers, ['local-source-repo']);
   assert.deepEqual(manifest.integrationProviders.diagnosis.providers, ['cwv-agent']);
   assert.deepEqual(manifest.integrationProviders.validation.providers, ['cwv-validate', 'oracle']);
-  assert.equal(manifest.integrationProviders.publishing.status, 'planned');
-  assert.deepEqual(manifest.integrationProviders.publishing.artifacts, ['publish-plan.json']);
+  assert.equal(manifest.integrationProviders.reporting.status, 'used');
+  assert.deepEqual(manifest.integrationProviders.reporting.artifacts, ['diagnose-report.md', 'SUMMARY.md']);
   assert.equal(manifest.validationLayers.layers.runtime.status, 'passed');
-  assert.equal(manifest.validationLayers.layers.sourceBuild.status, 'missing');
-  assert.equal(manifest.validationLayers.layers.aso.status, 'missing');
-  assert.equal(manifest.validationLayers.layers.aemDeployment.status, 'missing');
+  assert.equal(manifest.validationLayers.layers.deployment.status, 'missing');
   assert.deepEqual(
     manifest.validationLayers.warnings.map((warning) => warning.code),
-    ['aem-cs-source-builder-missing', 'aem-deployment-revalidation-missing'],
+    ['deployment-remeasurement-missing'],
   );
-  assert.equal(manifest.localCompletion.publishRequired, false);
   assert.equal(manifest.structuralGate.result, 'not-run');
   assert.equal(manifest.localCompletion.status, 'complete');
   assert.equal(manifest.localCompletion.findingValidationPassed, true);
@@ -308,11 +259,7 @@ test('buildManifest indexes local artifacts, validates findings, and writes per-
 
   assert.deepEqual(manifest.artifacts.baselineFiles.map((item) => item.path), ['baseline.json']);
   assert.deepEqual(manifest.artifacts.diagnoseFindings.map((item) => item.path), ['diagnose-findings.json']);
-  assert.deepEqual(manifest.artifacts.diagnoseDrafts.map((item) => item.path), ['diagnose-spacecat-draft.json']);
   assert.deepEqual(manifest.artifacts.diagnoseReports.map((item) => item.path), ['diagnose-report.md']);
-  assert.deepEqual(manifest.artifacts.remediationPayloads.map((item) => item.path), ['remediation-payload.json']);
-  assert.deepEqual(manifest.artifacts.remediationReports.map((item) => item.path), ['remediation-report.md']);
-  assert.deepEqual(manifest.artifacts.publishPlans.map((item) => item.path), ['publish-plan.json']);
   assert.ok(manifest.artifacts.patchCandidates.some((item) => item.path === 'ranked_patches.json'));
   assert.ok(manifest.artifacts.patchCandidates.some((item) => item.path === 'experiments/exp-001/patch.json'));
   assert.deepEqual(manifest.artifacts.treatmentMeasurements.map((item) => item.path), ['experiments/exp-001/result.json']);
@@ -338,13 +285,6 @@ test('buildManifest indexes local artifacts, validates findings, and writes per-
     && entry.validationLayer === 'sourcePatch'
     && entry.path === 'source-patches/validate-cls-banner.diff'
     && entry.exists === true
-  )));
-  assert.ok(manifest.validationArtifactIndex.some((entry) => (
-    entry.provider === 'cwv-publish'
-    && entry.validationLayer === 'publishing'
-    && entry.path === 'publish-plan.json'
-    && entry.exists === true
-    && entry.summary.confirmBeforeWriteRequired === true
   )));
 });
 
@@ -441,7 +381,7 @@ test('buildManifest preserves explicit integration provider metadata from the se
     mkDiagnoseFinding({
       id: 'triage-lcp-1',
       skill: 'cwv-triage',
-      source: 'rum',
+      source: 'crux',
       status: 'draft',
       patches: undefined,
     }),
@@ -454,184 +394,44 @@ test('buildManifest preserves explicit integration provider metadata from the se
     integrationProviders: {
       fieldData: {
         status: 'used',
-        profiles: ['field-aem-rum'],
-        providers: ['rum-fetch'],
-        artifacts: ['triage-findings.json', 'rum.json'],
+        profiles: ['field-google'],
+        providers: ['crux'],
+        artifacts: ['triage-findings.json', 'crux.json'],
       },
       source: {
         status: 'used',
-        profiles: ['source-s3'],
-        providers: ['source-fetch'],
-        artifacts: ['source/.cwv-source-manifest.json'],
+        profiles: ['local'],
+        providers: ['local-source-repo'],
+        artifacts: ['source/'],
       },
       diagnosis: {
         status: 'used',
-        profiles: ['diagnose-cwv-agent'],
-        providers: ['hosted-cwv-diagnoser'],
+        profiles: ['local'],
+        providers: ['external-diagnoser'],
         notes: ['fixture adapter'],
       },
       validation: {
         status: 'used',
-        profiles: ['validate-aso'],
-        providers: ['aso-shallow-validator'],
+        profiles: ['local'],
+        providers: ['oracle'],
       },
-      publishing: {
+      reporting: {
         status: 'not-used',
-        profiles: ['publish-spacecat'],
-        providers: ['cwv-publish'],
-        spaceCatApiCalls: [],
+        profiles: [],
+        providers: ['cwv-report'],
       },
     },
   });
 
   const manifest = buildManifest({ progressDir: progress });
 
-  assert.deepEqual(manifest.integrationProviders.fieldData.profiles, ['field-aem-rum']);
-  assert.deepEqual(manifest.integrationProviders.fieldData.providers, ['rum-fetch']);
-  assert.deepEqual(manifest.integrationProviders.source.profiles, ['source-s3']);
-  assert.deepEqual(manifest.integrationProviders.diagnosis.providers, ['hosted-cwv-diagnoser']);
-  assert.deepEqual(manifest.integrationProviders.diagnosis.notes, ['fixture adapter']);
-  assert.deepEqual(manifest.integrationProviders.validation.profiles, ['validate-aso']);
-  assert.deepEqual(manifest.integrationProviders.publishing.spaceCatApiCalls, []);
-});
-
-test('buildManifest indexes ASO validation artifacts and provider metadata when present', () => {
-  const root = mkTempDir();
-  const { progress } = seedProgressFixture(root);
-  fs.mkdirSync(path.join(progress, 'aem-clientlib-builder-logs'), { recursive: true });
-  fs.mkdirSync(path.join(progress, 'aem-clientlib-builder-dist'), { recursive: true });
-  writeJsonFile(path.join(progress, 'aem-clientlib-build-result.json'), {
-    schemaVersion: '1.0',
-    tool: 'aem-clientlib-build.js',
-    provider: 'aem-clientlib-builder',
-    logsDir: path.join(progress, 'aem-clientlib-builder-logs'),
-    distDir: path.join(progress, 'aem-clientlib-builder-dist'),
-    success: true,
-    steps: [
-      {
-        goal: 'npm build',
-        exitCode: 0,
-        stderrLogFile: path.join(progress, 'aem-clientlib-builder-logs', 'npm-build.stderr.log'),
-      },
-      {
-        goal: 'clientlib',
-        exitCode: 0,
-      },
-    ],
-  });
-  writeJsonFile(path.join(progress, 'aso-validation', 'request.json'), { requestId: 'req-1' });
-  writeJsonFile(path.join(progress, 'aso-validation', 'submit-response.json'), { status: 202, body: { jobId: 'job-1' } });
-  writeJsonFile(path.join(progress, 'aso-validation', 'poll-trail.json'), []);
-  writeJsonFile(path.join(progress, 'aso-validation', 'final-verdict.json'), { verdict: 'PASS', reasonCodes: [] });
-  writeJsonFile(path.join(progress, 'aso-validation', 'summary.json'), {
-    schemaVersion: '1.0',
-    kind: 'aso-validation-summary',
-    provider: 'aso-shallow-validator',
-    jobId: 'job-1',
-    verdict: 'PASS',
-  });
-
-  const manifest = buildManifest({ progressDir: progress });
-
-  assert.deepEqual(manifest.artifacts.asoValidation.map((item) => item.path).sort(), [
-    'aso-validation/final-verdict.json',
-    'aso-validation/poll-trail.json',
-    'aso-validation/request.json',
-    'aso-validation/submit-response.json',
-    'aso-validation/summary.json',
-  ]);
-  assert.deepEqual(manifest.artifacts.sourceBuilds.map((item) => item.path), ['aem-clientlib-build-result.json']);
-  assert.deepEqual(manifest.artifacts.sourceBuildLogs.map((item) => item.path), ['aem-clientlib-builder-logs']);
-  assert.deepEqual(manifest.artifacts.sourceBuildDists.map((item) => item.path), ['aem-clientlib-builder-dist']);
-  assert.deepEqual(manifest.integrationProviders.validation.profiles, ['local', 'validate-aso']);
-  assert.deepEqual(manifest.integrationProviders.validation.providers, ['cwv-validate', 'oracle', 'aso-shallow-validator']);
-  assert.ok(manifest.integrationProviders.validation.artifacts.includes('aso-validation/summary.json'));
-  assert.equal(manifest.validationLayers.layers.runtime.status, 'passed');
-  assert.equal(manifest.validationLayers.layers.sourceBuild.status, 'passed');
-  assert.equal(manifest.validationLayers.layers.aso.status, 'passed');
-  assert.equal(manifest.validationLayers.layers.aemDeployment.status, 'missing');
-  assert.deepEqual(
-    manifest.validationLayers.warnings.map((warning) => warning.code),
-    ['aem-deployment-revalidation-missing'],
-  );
-  const builderEntry = manifest.validationArtifactIndex.find((entry) => (
-    entry.validationLayer === 'sourceBuild'
-    && entry.path === 'aem-clientlib-build-result.json'
-  ));
-  assert.equal(builderEntry.summary.status, 'passed');
-  assert.equal(builderEntry.summary.stderrLogCount, 1);
-  assert.ok(manifest.validationArtifactIndex.some((entry) => (
-    entry.validationLayer === 'sourceBuild'
-    && entry.kind === 'aem-clientlib-builder-logs'
-    && entry.exists === true
-    && entry.type === 'directory'
-  )));
-  assert.ok(manifest.validationArtifactIndex.some((entry) => (
-    entry.validationLayer === 'aso'
-    && entry.path === 'aso-validation/summary.json'
-    && entry.summary.status === 'passed'
-  )));
-});
-
-test('buildManifest treats zero-exit builder steps as source-build success without requiring a success flag', () => {
-  const root = mkTempDir();
-  const { progress } = seedProgressFixture(root);
-  writeJsonFile(path.join(progress, 'aem-clientlib-build-result.json'), {
-    schemaVersion: '1.0',
-    tool: 'aem-clientlib-build.js',
-    provider: 'aem-clientlib-builder',
-    steps: [
-      { goal: 'npm install', exitCode: 0 },
-      { goal: 'npm build', exitCode: 0, stderrLogFile: 'aem-clientlib-builder-logs/npm-build.stderr.log' },
-    ],
-  });
-
-  const manifest = buildManifest({ progressDir: progress });
-  const builderEntry = manifest.validationArtifactIndex.find((entry) => (
-    entry.validationLayer === 'sourceBuild'
-    && entry.path === 'aem-clientlib-build-result.json'
-  ));
-
-  assert.equal(manifest.validationLayers.layers.sourceBuild.status, 'passed');
-  assert.equal(builderEntry.summary.status, 'passed');
-  assert.equal(builderEntry.summary.stderrLogCount, 1);
-});
-
-test('buildManifest infers source-s3 only from source-fetch manifests', () => {
-  const root = mkTempDir();
-  const { progress } = seedProgressFixture(root);
-  writeJsonFile(path.join(progress, 'source', '.cwv-source-manifest.json'), {
-    schemaVersion: '1.0',
-    tool: 'source-fetch',
-    siteId: 'site-123',
-    localPath: path.join(progress, 'source'),
-  });
-
-  const manifest = buildManifest({ progressDir: progress });
-
-  assert.equal(manifest.integrationProviders.source.status, 'used');
-  assert.deepEqual(manifest.integrationProviders.source.profiles, ['source-s3']);
-  assert.deepEqual(manifest.integrationProviders.source.providers, ['source-fetch']);
-  assert.deepEqual(manifest.integrationProviders.source.artifacts, ['source/.cwv-source-manifest.json']);
-});
-
-test('buildManifest does not mislabel eds-source-fetch manifests as source-s3', () => {
-  const root = mkTempDir();
-  const { progress } = seedProgressFixture(root);
-  writeJsonFile(path.join(progress, 'source', '.cwv-source-manifest.json'), {
-    schemaVersion: '1.0',
-    tool: 'eds-source-fetch',
-    source: 'prod-reconstruction',
-    localPath: path.join(progress, 'source'),
-  });
-
-  const manifest = buildManifest({ progressDir: progress });
-
-  assert.equal(manifest.integrationProviders.source.status, 'used');
+  assert.deepEqual(manifest.integrationProviders.fieldData.profiles, ['field-google']);
+  assert.deepEqual(manifest.integrationProviders.fieldData.providers, ['crux']);
   assert.deepEqual(manifest.integrationProviders.source.profiles, ['local']);
-  assert.deepEqual(manifest.integrationProviders.source.providers, ['eds-source-fetch']);
-  assert.deepEqual(manifest.integrationProviders.source.artifacts, ['source/.cwv-source-manifest.json']);
-  assert.deepEqual(manifest.integrationProviders.source.notes, ['prod-reconstruction']);
+  assert.deepEqual(manifest.integrationProviders.diagnosis.providers, ['external-diagnoser']);
+  assert.deepEqual(manifest.integrationProviders.diagnosis.notes, ['fixture adapter']);
+  assert.deepEqual(manifest.integrationProviders.validation.providers, ['oracle']);
+  assert.deepEqual(manifest.integrationProviders.reporting.providers, ['cwv-report']);
 });
 
 test('buildManifest reports unknown source manifests without inventing a profile', () => {

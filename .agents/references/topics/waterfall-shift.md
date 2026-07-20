@@ -66,9 +66,9 @@ lets the preload scanner fire the request alongside HTML parsing.
 `startTime − 100ms` (best-case: we could shave nearly all discovery delay),
 then corrected by two bandwidth guards below.
 
-**Bandwidth guards (petplace 2026-04-17 learning)**. H1 originally predicted
+**Bandwidth guards (the pets-site case 2026-04-17 learning)**. H1 originally predicted
 raw discovery-delay savings and historically over-estimated by 10× on
-bandwidth-constrained profiles — petplace baseline predicted -2130ms; live
+bandwidth-constrained profiles — the pets-site case baseline predicted -2130ms; live
 measurement was +203ms regression because the preload stole bandwidth from
 render-blocking CSS, delaying FCP. Three guards now fire in order:
 
@@ -91,7 +91,7 @@ LCP=3400ms, 10KB of render-blocking CSS. 2200 > 1800 → guard 1 skipped.
 `rld = 1920`, `rbTransferMs ≈ 50` → cap ≈ 1870. Raw = 2100. Finding emits
 with `valueMs = 1870`, `confidence = 0.75`.
 
-**Worked example (rejected — petplace)**: Hero image at `startTime=1989ms`,
+**Worked example (rejected — the pets-site case)**: Hero image at `startTime=1989ms`,
 FCP=2047ms. `1989 ≤ 2047` → guard 1 fires. Finding emits as
 `status: rejected`, `valueMs = 0`, cause cites the pre-FCP discovery.
 `rank-candidates.js` filters it out.

@@ -169,10 +169,11 @@ function playbookRules(pb, flavor) {
 
   const admit = (entry) => {
     if (!entry || typeof entry.pattern !== 'string') return;
-    // A rule's on_flavors (default = the playbook's applicable_flavors). When a
-    // flavor is resolved, drop a rule not applicable to it (AC-4). With no
-    // resolved flavor we cannot scope, so every rule is admitted.
-    const rawOn = entry.on_flavors;
+    // A rule's on_stacks (default = the playbook's applicable_stacks; the
+    // legacy on_flavors spelling is honored). When a stack is resolved, drop a
+    // rule not applicable to it. With no resolved stack we cannot scope, so
+    // every rule is admitted.
+    const rawOn = entry.on_stacks !== undefined ? entry.on_stacks : entry.on_flavors;
     const on = Array.isArray(rawOn) ? rawOn : (rawOn == null ? defaultFlavors : [rawOn]);
     if (flavor && Array.isArray(on) && on.length > 0 && !on.includes(flavor)) return;
     out.push({ pattern: entry.pattern, reason: entry.reason || '', playbook: pb.issueType });

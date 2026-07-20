@@ -13,7 +13,9 @@
       "url": "https://www.parcelpro.com/us/en/home.html",
       "skill": "cwv-validate",
       "source": "perf_observer",
-      "metric": ["CLS"],
+      "metric": [
+        "CLS"
+      ],
       "type": "opportunity",
       "severity": "high",
       "rootCause": true,
@@ -32,17 +34,40 @@
         },
         {
           "kind": "measurement-delta",
-          "data": { "metric": "CLS", "baseline": 0.144, "treatment": 0.025, "deltaScore": -0.119, "runs": 15, "baselineIQR": [0.130, 0.158], "treatmentIQR": [0.018, 0.032], "iqrOverlap": false }
+          "data": {
+            "metric": "CLS",
+            "baseline": 0.144,
+            "treatment": 0.025,
+            "deltaScore": -0.119,
+            "runs": 15,
+            "baselineIQR": [
+              0.13,
+              0.158
+            ],
+            "treatmentIQR": [
+              0.018,
+              0.032
+            ],
+            "iqrOverlap": false
+          }
         },
         {
           "kind": "screenshot",
-          "data": { "path": "screenshots/attempt-1.png", "phase": "attempt-1" }
+          "data": {
+            "path": "screenshots/attempt-1.png",
+            "phase": "attempt-1"
+          }
         }
       ],
       "recommendation": "Make the sticky header `position: sticky` so it reserves its own space, and drop the header.js paddingTop spacer toggle.",
       "patches": {
         "markup": [
-          { "selector": "header.nav", "attrs": { "style": "position:sticky;top:0" } }
+          {
+            "selector": "header.nav",
+            "attrs": {
+              "style": "position:sticky;top:0"
+            }
+          }
         ]
       },
       "sourceEdits": [
@@ -60,9 +85,14 @@
         }
       ],
       "confidence": 0.85,
-      "impactReduction": { "metric": "CLS", "score": 0.119 },
+      "impactReduction": {
+        "metric": "CLS",
+        "score": 0.119
+      },
       "status": "validated",
-      "relatedFindingIds": ["diagnose-cls-1"],
+      "relatedFindingIds": [
+        "diagnose-cls-1"
+      ],
       "owner": "customer-code"
     }
   ]

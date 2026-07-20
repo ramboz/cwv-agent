@@ -420,15 +420,6 @@ function summarizeArtifactJson(progressDir, record) {
   return shortJsonSummary(data);
 }
 
-function progressRelativeFromPath(progressDir, rawPath) {
-  if (typeof rawPath !== 'string' || !rawPath.trim()) return null;
-  const progressRoot = path.resolve(progressDir);
-  const raw = rawPath.trim();
-  const resolved = path.isAbsolute(raw) ? path.resolve(raw) : path.resolve(progressRoot, raw);
-  if (resolved !== progressRoot && !resolved.startsWith(`${progressRoot}${path.sep}`)) return null;
-  return toPosix(path.relative(progressRoot, resolved));
-}
-
 function buildValidationArtifactIndex({
   progressDir,
   artifacts,

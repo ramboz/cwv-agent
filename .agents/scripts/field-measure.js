@@ -6,10 +6,10 @@
  * `launcher.js` historically finalized CLS right after `load` + a fixed
  * network-idle wait, and never scrolled or interacted. That misses the
  * post-load CLS that dominates the field: scroll-lazy ads, late banners, and
- * consent UI. On otempo.com.br a single load read CLS 0.0075 while CrUX field
+ * consent UI. On news.example.com a single load read CLS 0.0075 while CrUX field
  * p75 is 0.14 and a hand-written scroll probe read 0.30 — attributing it to the
  * cookie-consent banner (`.cookies__container`). See
- * `results/otempo/scroll-cls-probe.cjs` (the prototype this module lifts).
+ * `results/the news-site case/scroll-cls-probe.cjs` (the prototype this module lifts).
  *
  * This module factors that prototype into:
  *   - `aggregateClsByNode`  — fold per-shift `sources[]` into ranked shifting
@@ -38,8 +38,8 @@ import fs from 'node:fs';
 
 /**
  * Best-effort consent accept/close selectors, most-specific first. Lifted from
- * the otempo prototype and extended with the common consent-management
- * platforms. The PT-BR `aceitar` variants matter for the otempo (LGPD) case.
+ * the the news-site case prototype and extended with the common consent-management
+ * platforms. The PT-BR `aceitar` variants matter for the the news-site case (LGPD) case.
  *
  * Order is the click priority: the first selector that matches a present
  * element wins. Clicking only dismisses the banner *after* its entrance shift
@@ -64,7 +64,7 @@ const CONSENT_ACCEPT_SELECTORS = Object.freeze([
   // Adopt / Cookiefirst / generic vendors
   'button#adopt-accept-all-button',
   '.cookiefirst-root [data-cookiefirst-button="primary"]',
-  // otempo `t004-cookie` component (AEM): "Aceitar todos os cookies"
+  // the news-site case `t004-cookie` component (AEM): "Aceitar todos os cookies"
   '.button__cookie--accept',
   '.cookies__button--accept',
   // Quantcast / IAB TCF
@@ -131,7 +131,7 @@ function grewBy(source) {
 /**
  * Fold an array of raw layout-shift records into ranked shifting elements.
  *
- * Mirrors the otempo scroll probe: each shift's value is split evenly across
+ * Mirrors the the news-site case scroll probe: each shift's value is split evenly across
  * its `sources[]`, accumulated per node selector, and the top-N nodes by
  * accumulated CLS share are returned. `grewEvents` counts how often that node
  * was the *growing* source (height delta > 1px), which distinguishes the shift

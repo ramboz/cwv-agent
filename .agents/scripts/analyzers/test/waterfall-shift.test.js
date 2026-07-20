@@ -232,20 +232,20 @@ function makeH1Fixture({ heroStart, fcp, lcp, rbCssBytes, hasUrl = true }) {
   };
 }
 
-// Case 1: petplace-shaped regression — LCP img starts before FCP → rejected.
+// Case 1: the pets-site case-shaped regression — LCP img starts before FCP → rejected.
 {
   const out = analyzeWaterfall(makeH1Fixture({
     heroStart: 1989, fcp: 2047, lcp: 3039, rbCssBytes: 37615,
   }));
   const h1 = out.findings.filter((f) => f.id.includes('-h1-'));
-  report('H1 petplace: emits exactly one H1 finding', h1.length === 1, `got ${h1.length}`);
+  report('H1 the pets-site case: emits exactly one H1 finding', h1.length === 1, `got ${h1.length}`);
   const f = h1[0];
   if (f) {
-    report('H1 petplace: status=rejected (pre-FCP discovery)', f.status === 'rejected', `status=${f.status}`);
-    report('H1 petplace: impact valueMs=0', f.impactReduction && f.impactReduction.valueMs === 0,
+    report('H1 the pets-site case: status=rejected (pre-FCP discovery)', f.status === 'rejected', `status=${f.status}`);
+    report('H1 the pets-site case: impact valueMs=0', f.impactReduction && f.impactReduction.valueMs === 0,
       `valueMs=${f.impactReduction && f.impactReduction.valueMs}`);
-    report('H1 petplace: cause mentions FCP', /FCP/i.test(f.cause || ''), f.cause ? f.cause.slice(0, 100) : 'no cause');
-    report('H1 petplace: no preload recommendation issued',
+    report('H1 the pets-site case: cause mentions FCP', /FCP/i.test(f.cause || ''), f.cause ? f.cause.slice(0, 100) : 'no cause');
+    report('H1 the pets-site case: no preload recommendation issued',
       !(f.patches && f.patches.preloads && f.patches.preloads.length > 0));
   }
 }

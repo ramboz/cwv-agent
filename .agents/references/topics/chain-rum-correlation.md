@@ -277,7 +277,7 @@ Fires on every run that has `cls.shifts` populated. For each shift with
    `.show(duration)`; for conditional reveals toggle a class or use `@starting-style` +
    `transition-behavior: allow-discrete`.*
 
-Worked example — otempo consent banner 2026-06-10 (animated-reveal, V5):
+Worked example — the news-site case consent banner 2026-06-10 (animated-reveal, V5):
 
 ```
 The banner is revealed by jQuery .show(duration), which tweens its box over ~6 frames:
@@ -297,7 +297,7 @@ diagnosis (the as-shipped position-pin override was causally inert; the real fix
 entrance animation). The sibling close-button (`64×64` every frame — no growth) and the
 accept/settings buttons (one frame each) are correctly **not** flagged.
 
-Worked example — petplace 2026-04-17:
+Worked example — the pets-site case 2026-04-17:
 
 ```
 Before:

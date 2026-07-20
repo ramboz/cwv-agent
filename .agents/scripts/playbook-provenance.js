@@ -139,7 +139,7 @@ export function checkFreshness(dir) {
 export function writeProvenance(dir, meta = {}) {
   const files = playbookFiles(dir);
   const marker = {
-    source: meta.source || 'spacecat/mystique:docs/opportunities/cwv/playbooks',
+    source: meta.source || 'cwv-agent:.agents/references/playbooks (owned in-repo)',
     sourceRef: meta.sourceRef || null,
     syncedAt: meta.syncedAt || new Date().toISOString(),
     playbookCount: files.length,

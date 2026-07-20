@@ -103,7 +103,7 @@ const result = await mapToSource({ patches, repoRoot, apply: false, stack: undef
 ## Known limitations
 
 - **HTL is not auto-edited.** AEM CS components are full Sling models — a syntactic edit can break `data-sly-*` semantics, Sling resolution, or component dialogs. The mapper emits a best-guess path and stops.
-- **AEM CS source-mapping + publish is verified; clientlib *rebuild* is not.** The end-to-end path — pull the `cm` repo (`source-fetch --site-id`), resolve selectors→files, reconcile a git-applicable diff against the real source, and publish it as a SpaceCat guidance suggestion — is verified live (mauriceblackburn `/super-claim-check/`, 2026-06-15). What stays out of scope: **rebuilding the `.lc-<hash>` clientlib bundles from source to lab-validate the rebuilt output** — the harness measures the live prod URL, not a locally rebuilt clientlib. So AEM CS fixes ship as guidance + git-applicable diffs for the customer to build/deploy, not as post-rebuild lab-proven patches.
+- **AEM CS source-mapping + publish is verified; clientlib *rebuild* is not.** The end-to-end path — pull the `cm` repo (`source-fetch --site-id`), resolve selectors→files, reconcile a git-applicable diff against the real source, and publish it as a SpaceCat guidance suggestion — is verified live (the law-firm case `/super-claim-check/`, 2026-06-15). What stays out of scope: **rebuilding the `.lc-<hash>` clientlib bundles from source to lab-validate the rebuilt output** — the harness measures the live prod URL, not a locally rebuilt clientlib. So AEM CS fixes ship as guidance + git-applicable diffs for the customer to build/deploy, not as post-rebuild lab-proven patches.
 - **Selector grammar is simple.** See the "markup" table above. Complex selectors fall back to manual-review warnings.
 - **Ambiguous matches are never auto-applied.** If a selector matches >1 location, all candidates are listed and the operator picks.
 - **CDN config is preview-only.** Fastly VCL, CloudFront Functions, Nginx, and Vercel rewrites have incompatible syntaxes — and header changes are operational, not code. The mapper prints a VCL starting point; operators translate.
@@ -171,15 +171,15 @@ repo is ground truth. Its file-tree heuristics are depth-tolerant and recognize 
 delegates to `detectStack`, and as a final backstop infers `aem-cs` from the presence of real
 `cq:Component` dirs under `/apps/`. Pass `--stack aem-cs` / `--stack aem-eds` to force it.
 
-### Worked example (otempo golden case)
+### Worked example (the news-site case golden case)
 
-`.cookies__container` → component **`t004-cookie`** (`otempo/components/content/otempo/t004-cookie`,
+`.cookies__container` → component **`t004-cookie`** (`the news-site case/components/content/the news-site case/t004-cookie`,
 matching the model's `RESOURCE_TYPE`) → trace: inline `position:fixed` (model-driven) + Sling
 model `T004Cookie`/`T004CookieImpl` (emits left/right/top|bottom from authored values) +
 authored dialog (`positionProperty`/`marginValue`/`marginLeft`/`marginRight`) + **no committed
 CSS** for `.cookies__container` (the base CSS ships in the vendor-built netbiis `.all` package)
 → base-CSS origin **vendor-built** → delivery **`override-clientlib`** (category
-`otempo.cwv-fixes`), matching the hand-shipped `progress/otempo-com-br/fix/clientlib-cwv-fixes/`.
+`the news-site case.cwv-fixes`), matching the hand-shipped `progress/the news-site case-com-br/fix/clientlib-cwv-fixes/`.
 
 `source-mapper`'s AEM CS `markup` path calls this resolver automatically, so a markup patch's
 manual-review note names the actual component + HTL file instead of a guessed path.

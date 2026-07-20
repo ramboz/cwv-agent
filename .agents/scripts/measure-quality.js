@@ -3,7 +3,7 @@
 /**
  * Measurement-reliability assessor (ROADMAP G2).
  *
- * The otempo run exposed a silent failure: a heavy ad page under
+ * The the news-site case run exposed a silent failure: a heavy ad page under
  * mobile-slow4g-4xcpu yielded 0–1 usable web-vitals samples, yet the oracle
  * happily produced a verdict from a single reading (n=1 → zero-width IQR →
  * spurious VALIDATED/INCONCLUSIVE). The fix is to make "the measurement itself
@@ -24,7 +24,7 @@
  *      Requiring meaningful absolute spread avoids false-positiving fast pages,
  *      where a cold-run-1 outlier makes relative spread large but the absolute
  *      swing is trivial (e.g. example.com LCP 220ms ± 190ms). It fires on
- *      genuine ad/3p variance (otempo LCP swinging multiple seconds).
+ *      genuine ad/3p variance (the news-site case LCP swinging multiple seconds).
  *
  * Diagnostics → stderr, JSON → stdout. `require.main` CLI assesses a launcher
  * output file's per-metric reliability.

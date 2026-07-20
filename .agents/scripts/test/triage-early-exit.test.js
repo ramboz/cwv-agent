@@ -31,7 +31,7 @@ const FIXTURES = path.join(__dirname, 'fixtures');
 // computePressure
 // ---------------------------------------------------------------------------
 
-test('computePressure: petplace-shaped GOOD reading', () => {
+test('computePressure: the pets-site case-shaped GOOD reading', () => {
   const { maxPressure, perMetric } = computePressure({ LCP: 1393, CLS: 0.02, INP: 106 });
   assert.ok(maxPressure < 1.0, `expected < 1.0, got ${maxPressure}`);
   assert.ok(perMetric.LCP < 1.0);
@@ -55,7 +55,7 @@ test('computePressure: missing metric → null, not 0', () => {
 // decideEarlyExit — the core rule
 // ---------------------------------------------------------------------------
 
-test('decideEarlyExit: petplace 2026-04-17 (all GOOD on PHONE + DESKTOP) → passing', () => {
+test('decideEarlyExit: the pets-site case 2026-04-17 (all GOOD on PHONE + DESKTOP) → passing', () => {
   const dec = decideEarlyExit({
     formFactorSignals: {
       PHONE:   { source: 'crux', metrics: { LCP: 1393, CLS: 0.02, INP: 106 } },
@@ -203,7 +203,7 @@ test('buildPassingEnvelope produces a validator-clean envelope (empty findings)'
     },
   });
   const env = buildPassingEnvelope({
-    url: 'https://www.petplace.com/',
+    url: 'https://pets.example.com/',
     recommendedFormFactor: 'PHONE',
     recommendedProfile: 'mobile-slow4g-4xcpu',
     passing: dec.passing,
@@ -214,8 +214,8 @@ test('buildPassingEnvelope produces a validator-clean envelope (empty findings)'
   assert.equal(res.valid, true, `validator errors: ${JSON.stringify(res.errors)}`);
 });
 
-test('passing envelope fixture validates clean (petplace, empty findings)', () => {
-  const env = JSON.parse(fs.readFileSync(path.join(FIXTURES, 'triage-passing-petplace.json'), 'utf8'));
+test('passing envelope fixture validates clean (the pets-site case, empty findings)', () => {
+  const env = JSON.parse(fs.readFileSync(path.join(FIXTURES, 'triage-passing.json'), 'utf8'));
   assert.equal(env.status, 'passing');
   const res = validateEnvelope(env);
   assert.equal(res.valid, true, `validator errors: ${JSON.stringify(res.errors)}`);

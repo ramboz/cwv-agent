@@ -1008,12 +1008,12 @@ process.stdout.write('C6: dedupe against C3\n');
   assert('C6 suppressed (same target as C3)', c6.length === 0, `got ${c6.length}`);
 }
 
-// Regression: petplace had C3 cite "#main" (RUM byElement shape — just id)
+// Regression: the pets-site case had C3 cite "#main" (RUM byElement shape — just id)
 // while C6 cited "main#main" (lab PerformanceObserver layout-shift source —
 // tag + id). Before the fix, the strict Set equality on normalized leaf
 // tokens didn't collapse these, producing a duplicate finding for the same
 // element. Both shapes must now be treated as semantically equivalent.
-process.stdout.write('C6: tag#id dedupes against #id (petplace regression)\n');
+process.stdout.write('C6: tag#id dedupes against #id (the pets-site case regression)\n');
 {
   const rumBundle = mkRumBundle({
     clsP75: 0.15,
@@ -1161,7 +1161,7 @@ process.stdout.write('Regression: CSS-escape HAR URLs in patches.markup selector
 
 // ---------------------------------------------------------------------------
 // Regression: C6 attribution must cite the GROWN element, not the MOVED victim.
-// Mirrors the petplace 2026-04-17 case: an async promo banner was injected
+// Mirrors the the pets-site case 2026-04-17 case: an async promo banner was injected
 // into <header>; the header grew, and <main> slid down as a consequence.
 // Pre-fix, C6 cited main#main (first/widest source that moved) — any patch
 // reserving min-height on <main> is a no-op because <main>'s height didn't
@@ -1315,7 +1315,7 @@ process.stdout.write('C6: multi-grown picks earliest (smallest previousRect.y)\n
 // V5: animated-reveal CLS mechanism classifier (detectAnimatedReveals + C6 wiring)
 // ---------------------------------------------------------------------------
 
-// The otempo consent banner: jQuery .show(duration) tweens its size across many
+// The the news-site case consent banner: jQuery .show(duration) tweens its size across many
 // frames — monotonic width+height growth over consecutive layout shifts.
 const BANNER = 'div.t004-cookie.aem-GridColumn > section.cookies__container.font-lato';
 function bannerGrowthShifts() {
@@ -1362,7 +1362,7 @@ process.stdout.write('V5: detectAnimatedReveals — negative cases (no false pos
   const oneShot = [{ value: 0.4, startTime: 100, hadRecentInput: false, sources: [{ target: 'div.hero', previousRect: { width: 300, height: 0 }, currentRect: { width: 300, height: 400 } }] }];
   assert('single grow-from-0 is NOT a reveal', detectAnimatedReveals(oneShot).size === 0);
 
-  // A flat element repositioned across frames (otempo close button, 64×64 each) — no growth.
+  // A flat element repositioned across frames (the news-site case close button, 64×64 each) — no growth.
   const flat = [1, 2, 3, 4, 5].map((i) => ({ value: 0.001, startTime: 100 * i, hadRecentInput: false, sources: [{ target: 'button.close', previousRect: { width: 64, height: 64 }, currentRect: { width: 64, height: 64 } }] }));
   assert('flat (no net growth) is NOT a reveal', detectAnimatedReveals(flat).size === 0);
 

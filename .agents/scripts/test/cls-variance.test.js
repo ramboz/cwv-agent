@@ -3,7 +3,7 @@
 /**
  * Tests for cls-variance.js (ROADMAP V4).
  *
- * Acceptance (real otempo fixture, 10 pooled no-patch runs):
+ * Acceptance (real the news-site case fixture, 10 pooled no-patch runs):
  *   - `.cookies__container` classifies STABLE and is the recommended --cls-source
  *     (mean clsShare ~0.14 under oracle substring-sum semantics).
  *   - `list__wrapper` and `cmp-template-grid>article` classify VOLATILE.
@@ -29,7 +29,7 @@ import {
 import { MIN_IMPACT } from '../finding-schema.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const FIXTURE = path.join(__dirname, 'fixtures', 'otempo-cls-baseline-10run.json');
+const FIXTURE = path.join(__dirname, 'fixtures', 'cls-baseline-10run.json');
 
 const close = (a, b, eps = 1e-3) => Math.abs(a - b) <= eps;
 
@@ -52,7 +52,7 @@ function launcher(runs, { url = 'https://x.test', profile = 'mobile-slow4g-4xcpu
 test('clsSourceSig normalizes a node to a stable cross-run signature', () => {
   assert.strictEqual(
     clsSourceSig(
-      'div#container-32e9778d0f > div.aem-Grid.aem-Grid--12 > div.t004-cookie.aem-GridColumn > section.cookies__container.font-lato',
+      'div#container-32e9778d0f > div.grid.grid--12 > div.t004-cookie.grid-column > section.cookies__container.font-lato',
     ),
     't004-cookie>cookies__container',
   );
@@ -63,7 +63,7 @@ test('clsSourceSig normalizes a node to a stable cross-run signature', () => {
     'cmp-template-grid>article',
   );
   // Utility/layout/font/grid-spec classes are dropped; tag is the fallback.
-  assert.strictEqual(clsSourceSig('div.aem-Grid > div.font-bold'), 'div>div');
+  assert.strictEqual(clsSourceSig('div.grid > div.font-bold'), 'div>div');
 });
 
 test('oracleToken derives the leaf-most class token from a sig', () => {
@@ -72,15 +72,15 @@ test('oracleToken derives the leaf-most class token from a sig', () => {
   assert.strictEqual(oracleToken('hero>banner'), 'banner');
 });
 
-// -- acceptance: real otempo pooled baseline -------------------------------
+// -- acceptance: real the news-site case pooled baseline -------------------------------
 
-test('otempo acceptance — banner stable & recommended, content volatile, noise-dominated', () => {
+test('the news-site case acceptance — banner stable & recommended, content volatile, noise-dominated', () => {
   const fixture = JSON.parse(fs.readFileSync(FIXTURE, 'utf8'));
   const r = analyzeClsVariance([fixture]);
 
   assert.strictEqual(r.runs, 10, 'pools all 10 runs');
 
-  // Total-CLS noise floor is the run-to-run range; otempo ~0.198 >> 0.03 floor.
+  // Total-CLS noise floor is the run-to-run range; the news-site case ~0.198 >> 0.03 floor.
   assert.ok(close(r.noiseFloor, 0.1981, 0.01), `noiseFloor ${r.noiseFloor} ~ 0.198`);
   assert.strictEqual(r.noiseDominated, true, 'total CLS is noise-dominated');
   assert.strictEqual(r.minActionableImpact, MIN_IMPACT.CLS.delta);
@@ -106,7 +106,7 @@ test('otempo acceptance — banner stable & recommended, content volatile, noise
   // captures the banner, (c) measure as the stable ~0.14 contribution.
   assert.ok(r.recommendedClsSource, 'a stable target is recommended');
   assert.ok(
-    'div.t004-cookie.aem-GridColumn > section.cookies__container.font-lato'.includes(
+    'div.t004-cookie.grid-column > section.cookies__container.font-lato'.includes(
       r.recommendedClsSource,
     ),
     `recommended token "${r.recommendedClsSource}" matches the banner node`,

@@ -259,7 +259,7 @@ paint and can create the CLS you are trying to remove.
 **Can't rebuild the source yet?** If the reveal lives in a vendor bundle you can't rebuild
 immediately, the minimal interim fix is to drop the animation duration so the element paints
 at final size in one frame — e.g. jQuery `$('.x').show(400)` → `$('.x').show()`. That alone
-took otempo's consent banner from **0.138 → 0.000** CLS (lab-validated). You can prove such a
+took the news-site case's consent banner from **0.138 → 0.000** CLS (lab-validated). You can prove such a
 served-JS fix in the lab before shipping — see `cwv-validate.md` → "Validating a served-JS fix
 with `rewriteBody`".
 

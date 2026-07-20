@@ -218,8 +218,8 @@ confidence below the normal promotion threshold. They may still be measured, but
 they must not be treated as root-cause fixes unless a later source patch restores
 the EDS reveal/page-shape contract and passes the LCP guard.
 
-Worked example — 2026-04-17 petplace run emitted two candidates for the same LCP `<img>`:
-- `img-lcp-fetchpriority-1` — selector `img[src='https://www.petplace.com/media_…&format=webply&optimize=medium']`, markup patch, confidence 0.75, `rootCause: true`.
+Worked example — 2026-04-17 the pets-site case run emitted two candidates for the same LCP `<img>`:
+- `img-lcp-fetchpriority-1` — selector `img[src='https://pets.example.com/media_…&format=webply&optimize=medium']`, markup patch, confidence 0.75, `rootCause: true`.
 - `diagnose-lcp-opportunity-3` — selector `img[src="./media_…&#x26;format=jpg&#x26;optimize=medium"]`, markup patch, confidence 0.6.
 
 Canonicalized the two URLs differ (`format=webply` vs `format=jpg` are genuinely different resources — picture `source` sibling vs `img` fallback), so URL-match alone does NOT fire. If both findings carry `evidence[].kind: cwv-attribution` with matching `data.target` (e.g. `div.hero-banner>…>picture>img`), Rule 5e collapses them via the attribution.target match key: keep `img-lcp-fetchpriority-1` (higher rankScore), fold `diagnose-lcp-opportunity-3` into `relatedFindingIds`, union evidence, merge sources. If attribution.target is null on both (as in the captured 2026-04-17 envelope), the rule does NOT fire — the two candidates legitimately point at different resources and should both run.

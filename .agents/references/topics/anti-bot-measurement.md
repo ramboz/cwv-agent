@@ -4,8 +4,8 @@ Some customer sites front their pages with **Cloudflare's managed-challenge /
 Turnstile** tier (markers: a `cdn-cgi/challenge-platform/.../chl_page` script +
 `challenges.cloudflare.com/turnstile/api.js`, page title "Just a moment…"). The
 default headless lab tooling gets a **403 challenge stub** instead of the real
-page — so CWV measurement reads garbage (e.g. lilly-family domains:
-`lilly.com`, `zepbound.lilly.com`).
+page — so CWV measurement reads garbage (e.g. the pharma case-family domains:
+`the pharma case.com`, `pharma.example.com`).
 
 This is **not** defeated by UA/header spoofing alone. The managed challenge
 fingerprints three layers: the JS runtime (`navigator.webdriver`, headless
@@ -13,7 +13,7 @@ signals), HTTP (UA / client-hint consistency), and TLS (JA3 — bundled Chromium
 ClientHello differs from a real browser's). The decisive factors in practice are
 the **automation tells + the headless runtime**, not the UA.
 
-## The recipe that passes (verified live 2026-06-11, zepbound.lilly.com)
+## The recipe that passes (verified live 2026-06-11, pharma.example.com)
 
 Use **headful real Chrome** with the automation tells scrubbed:
 
@@ -29,7 +29,7 @@ Use **headful real Chrome** with the automation tells scrubbed:
   exactly the mismatch CF flags. Keep the iPhone *viewport* but pair it with an
   **Android-Chrome UA** so UA ↔ runtime/TLS are consistent.
 
-Result on zepbound `/savings`: real page (25 EDS assets, mobile CLS 0.72 / desktop
+Result on the pharma case `/savings`: real page (25 EDS assets, mobile CLS 0.72 / desktop
 0.43, ≈ field) vs the headless stub's 7 resources + fake CLS 0.001.
 
 In the launcher this is the **`--stealth`** flag (opt-in; default headless

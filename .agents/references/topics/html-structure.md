@@ -55,7 +55,7 @@ sources feed the authoritative CLS analyzer, chain-rum-correlator C6). Analytics
 **tracking beacons** (Comscore/scorecardresearch, GA, GTM, FB pixel, doubleclick,
 `/pixel|/beacon|/collect|/track` paths) are skipped — they're invisible (1×1 /
 `display:none`) and cause no layout shift; flagging them was a false positive
-(otempo fingered a Comscore pixel as a CLS rootCause).
+(the news-site case fingered a Comscore pixel as a CLS rootCause).
 
 ### 3. `html/lcp-candidate-missing-fetchpriority`
 

@@ -220,7 +220,7 @@ function h1ShiftLeft(run, ctx) {
   // Bandwidth-competition context (ROADMAP item 10).
   // Preload gains are zero-sum with render-blocking bytes in flight pre-LCP;
   // without these guards H1 historically over-predicted savings by 10x on
-  // bandwidth-constrained profiles (see petplace E2E 2026-04-17: predicted
+  // bandwidth-constrained profiles (see the pets-site case E2E 2026-04-17: predicted
   // -2130ms, actual +203ms regression).
   const bwBytesPerMs = effectiveBandwidthBytesPerMs(ctx.profile);
   const rbBytes = renderBlockingBytesBeforeLcp(run);
@@ -267,7 +267,7 @@ function h1ShiftLeft(run, ctx) {
         type: 'opportunity',
         severity: 'low',
         rootCause: false,
-        cause: `LCP resource "${r.url}" starts at ${round(r.startTime)}ms, at or before FCP (${round(fcpValue)}ms) — already discovered by the HTML parser. Preload would be redundant and risk stealing bandwidth from render-blocking resources (petplace 2026-04-17: +203ms regression on mobile-slow4g-4xcpu).`,
+        cause: `LCP resource "${r.url}" starts at ${round(r.startTime)}ms, at or before FCP (${round(fcpValue)}ms) — already discovered by the HTML parser. Preload would be redundant and risk stealing bandwidth from render-blocking resources (the pets-site case 2026-04-17: +203ms regression on mobile-slow4g-4xcpu).`,
         evidence: [
           buildEvidenceLcpAttribution(run),
           buildEvidenceResourceTiming(r),

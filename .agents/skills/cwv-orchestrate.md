@@ -197,7 +197,7 @@ Never mix stealth and non-stealth runs inside one oracle comparison.
 ### Step 1b — CLS noise-floor probe (only when CLS is a target metric)
 A page whose CLS comes from several shift sources (news / ad-heavy / content-variable)
 has a total CLS that swings run-to-run from the *non-targeted* sources — so a total-CLS
-A/B comparison can false-VALIDATE (an A/A control on otempo oracle'd to VALIDATED/HIGH
+A/B comparison can false-VALIDATE (an A/A control on the news-site case oracle'd to VALIDATED/HIGH
 from zero intervention). This step decides, from data, whether to validate a single
 stable shift source instead of total CLS, and auto-captures the A/A control the oracle
 needs. It removes the "a human has to know to pass `--cls-source`" gap.
@@ -389,7 +389,7 @@ while session.pendingCandidateIds is non-empty:
     --metrics   {session.targetMetrics.join(',')} \
     {clsFlags} \
     --output    progress/{slug}/experiments/{id}/verdict.json
-  # A stable targeted source validates cleanly (otempo banner: CLS@cookies__container
+  # A stable targeted source validates cleanly (the news-site case banner: CLS@cookies__container
   # 0.138→0, VALIDATED/high) while total CLS is correctly A/A-gated UNRELIABLE. A volatile
   # source self-flags UNRELIABLE rather than false-VALIDATE. See cwv-validate.md
   # "Multi-source / content-variable pages" + the V1/V4 ROADMAP entries.

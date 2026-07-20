@@ -139,24 +139,24 @@ test('canonicalUrl: path percent-decoding', () => {
   );
 });
 
-test('canonicalUrl: petplace-shaped relative vs absolute with same format', () => {
+test('canonicalUrl: the pets-site case-shaped relative vs absolute with same format', () => {
   const abs = canonicalUrl(
-    'https://www.petplace.com/media_1a26a7465e8bcd9751e2447e462206315d58ed488.jpg?width=750&format=webply&optimize=medium',
+    'https://pets.example.com/media_1a26a7465e8bcd9751e2447e462206315d58ed488.jpg?width=750&format=webply&optimize=medium',
   );
   const rel = canonicalUrl(
     './media_1a26a7465e8bcd9751e2447e462206315d58ed488.jpg?width=750&#x26;format=webply&#x26;optimize=medium',
-    'https://www.petplace.com/',
+    'https://pets.example.com/',
   );
   assertEq(abs, rel, 'relative + entities should canonicalize to the absolute form');
 });
 
 test('canonicalUrl: different format= values DO NOT match (documented gotcha)', () => {
   const webply = canonicalUrl(
-    'https://www.petplace.com/media_1a26.jpg?width=750&format=webply',
+    'https://pets.example.com/media_1a26.jpg?width=750&format=webply',
   );
   const jpg = canonicalUrl(
     './media_1a26.jpg?width=750&#x26;format=jpg',
-    'https://www.petplace.com/',
+    'https://pets.example.com/',
   );
   assert(webply !== jpg, 'webply and jpg are genuinely different resources');
 });
@@ -237,12 +237,12 @@ test('extractUrlsFromSelector: non-string → empty', () => {
   assertEq(extractUrlsFromSelector(undefined).length, 0);
 });
 
-test('extractUrlsFromSelector: petplace-shaped absolute src', () => {
-  const sel = "img[src='https://www.petplace.com/media_1a26.jpg?width=750&format=webply&optimize=medium']";
+test('extractUrlsFromSelector: the pets-site case-shaped absolute src', () => {
+  const sel = "img[src='https://pets.example.com/media_1a26.jpg?width=750&format=webply&optimize=medium']";
   const out = extractUrlsFromSelector(sel);
   assertEq(out.length, 1);
   assertEq(out[0].mode, 'exact');
-  assert(out[0].url.startsWith('https://www.petplace.com/'));
+  assert(out[0].url.startsWith('https://pets.example.com/'));
 });
 
 // ---------------------------------------------------------------------------

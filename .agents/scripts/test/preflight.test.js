@@ -147,61 +147,6 @@ test('a required check with status `fail` blocks the run (exit 1)', () => {
   assert.match(text, /Puppeteer package availability/);
 });
 
-test('a genuinely missing required command (fail) still blocks a provider profile', () => {
-  // No commands on PATH → mysticat/curl/jq are required `fail`s. That is a
-  // verifiable-missing prerequisite, so it blocks regardless of the `unknown`
-  // auth check that also sits in this profile.
-  const context = makeHealthyContext({
-    commandAvailable() {
-      return false;
-    },
-  });
-  const result = checkPreflight({ profile: 'publish-spacecat', context });
-
-  assert.equal(result.ok, false);
-  assert.ok(result.blockingChecks.some((c) => c.id === 'command:mysticat'));
-  const { exitCode } = formatPreflightGate(result);
-  assert.equal(exitCode, 1);
-});
-
-test('a required `unknown` check ADVISES (exit 0, visible warning) — does not refuse', () => {
-  // publish-spacecat with all its required commands present: the only
-  // remaining required non-pass is `manual:publish-spacecat-auth` (status
-  // `unknown` — a zero-write doctor can't verify auth). doctor rolls this up
-  // to ok:false, but the gate must NOT refuse a fully-tooled operator's run.
-  const context = makeHealthyContext({
-    commandAvailable() {
-      return true; // mysticat, curl, jq all present
-    },
-  });
-  const result = checkPreflight({ profile: 'publish-spacecat', context });
-
-  assert.equal(result.doctorResult.ok, false, 'doctor still rolls up ok:false on the unknown');
-  assert.equal(result.ok, true, 'gate ok — no fail/not-wired blockers');
-  assert.equal(result.blockingChecks.length, 0);
-  assert.ok(result.advisoryChecks.some((c) => c.id === 'manual:publish-spacecat-auth'));
-
-  const { text, exitCode } = formatPreflightGate(result);
-  assert.equal(exitCode, 0, 'unknown must not refuse the run');
-  assert.match(text, /could not verify/i);
-  assert.match(text, /SpaceCat api-service access|publish-spacecat-auth|mysticat/i);
-});
-
-test('a required `not-wired` adapter blocks the run (exit 1)', () => {
-  // diagnose-cwv-agent's adapter is `not-wired` in this repo → a positive
-  // "provider is unwired" determination, which blocks (unlike `unknown`).
-  const result = checkPreflight({ profile: 'diagnose-cwv-agent', context: makeHealthyContext({
-    adapterExists() {
-      return false;
-    },
-  }) });
-
-  assert.equal(result.ok, false);
-  assert.ok(result.blockingChecks.some((c) => c.status === 'not-wired'));
-  const { exitCode } = formatPreflightGate(result);
-  assert.equal(exitCode, 1);
-});
-
 // ---------------------------------------------------------------------------
 // AC4 — --skip-preflight bypasses a would-fail check, distinguishable from
 // a clean pass.
@@ -255,7 +200,7 @@ test('preflight never invokes setup.js, only doctor checks', () => {
       return { status: 0, stdout: '', stderr: '', error: null };
     },
   });
-  checkPreflight({ profile: 'aem-clientlibs', context });
+  checkPreflight({ profile: 'field-google', context });
 
   assert.ok(
     runCommandCalls.every((call) => !/setup\.js/.test(call)),
@@ -288,27 +233,11 @@ test('CLI: default profile (local) exits 0 cleanly (no blockers, no advisories)'
 });
 
 test('CLI: --profile with a VERIFIABLE-missing required prerequisite refuses (exit 1)', () => {
-  // diagnose-cwv-agent's adapter is `not-wired` in-repo — a deterministic,
-  // host-independent block (no env/tool dependency), unlike publish-spacecat
-  // whose only non-pass on a tooled host is the non-blocking `unknown` auth.
-  const result = runPreflightCli(['--profile', 'diagnose-cwv-agent']);
+  // field-google requires GOOGLE_* env keys; with none set the missing env is
+  // a deterministic, verifiable fail that must refuse the run.
+  const result = runPreflightCli(['--profile', 'field-google']);
   assert.equal(result.status, 1);
-  assert.match(result.stdout, /diagnose-cwv-agent provider adapter/);
-});
-
-test('CLI: --profile publish-spacecat ADVISES on unverifiable auth, does not refuse (exit 0)', () => {
-  // On this repo's host, publish-spacecat's required commands (mysticat/curl/jq)
-  // may or may not be present. If any are missing it's a genuine fail (exit 1);
-  // if all present, only the `unknown` auth remains → advisory (exit 0). Assert
-  // the key property: a bare `unknown` is never the sole reason for a refusal.
-  const result = runPreflightCli(['--profile', 'publish-spacecat']);
-  if (result.status === 0) {
-    assert.match(result.stdout, /could not verify/i, 'exit 0 must carry the unknown advisory');
-  } else {
-    assert.equal(result.status, 1);
-    // A block here must be a real fail (a missing command), not the unknown auth.
-    assert.match(result.stdout, /not found on PATH|FAIL/i);
-  }
+  assert.match(result.stdout, /GOOGLE_CRUX_API_KEY|GOOGLE_PAGESPEED_INSIGHTS_API_KEY/);
 });
 
 test('CLI: --skip-preflight bypasses the gate, exit 0, visible, no browser', () => {

@@ -88,7 +88,7 @@ function fakeEvent(url) {
 }
 
 test('responseReplacer: matches the request URL and returns the supplied bytes (AC1)', () => {
-  const url = 'https://www.example.com/etc.clientlibs/example/clientlibs/clientlib-base.min.css';
+  const url = 'https://www.example.com/assets/bundles/site-base.min.css';
   const handlers = composePatchHandlers({
     response: [{ urlPattern: url, body: '.hero{contain:layout}', contentType: 'text/css' }],
   });
@@ -103,9 +103,9 @@ test('responseReplacer: matches the request URL and returns the supplied bytes (
 
 test('responseReplacer: glob patterns match; non-matching URLs return null', () => {
   const handlers = composePatchHandlers({
-    response: [{ urlPattern: '*/clientlib-base.min.css', body: '.a{}' }],
+    response: [{ urlPattern: '*/site-base.min.css', body: '.a{}' }],
   });
-  assert.ok(handlers.responseReplacer(fakeEvent('https://x/etc.clientlibs/p/clientlibs/clientlib-base.min.css')));
+  assert.ok(handlers.responseReplacer(fakeEvent('https://x/assets/bundles/site-base.min.css')));
   assert.equal(handlers.responseReplacer(fakeEvent('https://x/other.css')), null, 'non-match returns null');
 });
 
@@ -358,8 +358,8 @@ test('--preflight-profile and --skip-preflight parse; default to off', () => {
   assert.equal(defaults.preflightProfile, null);
   assert.equal(defaults.skipPreflight, false);
 
-  const withProfile = parseArgs(['--url', 'https://example.test/', '--preflight-profile', 'validate-aso']);
-  assert.equal(withProfile.preflightProfile, 'validate-aso');
+  const withProfile = parseArgs(['--url', 'https://example.test/', '--preflight-profile', 'field-google']);
+  assert.equal(withProfile.preflightProfile, 'field-google');
   assert.equal(withProfile.skipPreflight, false);
 
   const withSkip = parseArgs(['--url', 'https://example.test/', '--skip-preflight']);
@@ -375,13 +375,13 @@ test('CLI: no --preflight-profile is a no-op — usage error path unaffected (ex
 });
 
 test('CLI: --preflight-profile with a VERIFIABLE-missing required prerequisite refuses before any measurement (exit 1)', () => {
-  // diagnose-cwv-agent's adapter is `not-wired` in-repo — a deterministic,
-  // host-independent BLOCK (fail/not-wired), unlike a bare `unknown` which the
-  // gate now surfaces as a non-blocking advisory (ADR-0014: block on
-  // fail+not-wired, advise on unknown). The gate runs before any Puppeteer work.
-  const result = runLauncherCli(['--url', 'https://example.test/', '--preflight-profile', 'diagnose-cwv-agent']);
+  // field-google requires GOOGLE_* env keys; with none configured the missing
+  // env is a deterministic BLOCK (fail), unlike a bare `unknown` which the
+  // gate surfaces as a non-blocking advisory (block on fail+not-wired, advise
+  // on unknown). The gate runs before any Puppeteer work.
+  const result = runLauncherCli(['--url', 'https://example.test/', '--preflight-profile', 'field-google']);
   assert.equal(result.status, 1);
-  assert.match(result.stderr, /diagnose-cwv-agent provider adapter/);
+  assert.match(result.stderr, /GOOGLE_CRUX_API_KEY|GOOGLE_PAGESPEED_INSIGHTS_API_KEY/);
 });
 
 test('CLI: an unknown --preflight-profile is a clean usage error (exit 2), not an uncaught throw', () => {

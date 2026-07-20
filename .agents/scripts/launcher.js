@@ -63,7 +63,7 @@ Flags:
                             flaky slow target) is skipped/retried, not fatal. 0 =
                             strict abort on the first failure.
   --nav-timeout <ms>        Per-navigation timeout (default: 60000). Raise for very
-                            slow cold targets (otempo cold LCP up to 11 s on slow-4G).
+                            slow cold targets (the news-site case cold LCP up to 11 s on slow-4G).
   --reliability-metrics <l> Comma list the adaptive loop waits to stabilize
                             (default: LCP,CLS,FCP,TTFB; +INP when --interact)
   --block <glob,...>        Comma-separated URL globs to block (ad/3p noise).
@@ -109,7 +109,7 @@ Flags:
                             automation tells scrubbed (no --enable-automation,
                             --disable-blink-features=AutomationControlled,
                             navigator.webdriver patched), to pass Cloudflare /
-                            anti-bot managed challenges (e.g. lilly-family domains
+                            anti-bot managed challenges (e.g. the pharma case-family domains
                             where default headless gets a 403 "Just a moment" stub).
                             NOTE: opens a real Chrome window per run — this is
                             mandatory; headless:'new' with the same scrub still 403s.
@@ -124,8 +124,8 @@ Flags:
   --preflight-profile <name>
                             ADR-0014 opt-in preflight: before measurement starts,
                             run npm run doctor's checks for this EXECUTION/PROVIDER
-                            profile (doctor.js vocabulary: local, validate-aso,
-                            publish-spacecat, ... — NOT the --profile throttle
+                            profile (doctor.js vocabulary: local, field-google,
+                            stealth-headful — NOT the --profile throttle
                             profile above) and refuse to start if a required
                             prerequisite is missing. Omit this flag (the default)
                             for a true no-op — no doctor call at all. Callers that
@@ -659,8 +659,8 @@ function composePatchHandlers(bundle) {
   }
 
   // Mode B `response` op (spec 016-04): fulfill a request URL with SUPPLIED bytes
-  // — distinct from bodyRewriter's find/replace. The Class-3-clientlib producer
-  // (clientlib-producer.js) rebuilds a `/etc.clientlibs/**` bundle locally and
+  // — distinct from bodyRewriter's find/replace. A local build step can
+  // rebuild a served bundle locally and
   // supplies the rebuilt bytes here; the launcher fulfils exactly those bytes
   // instead of the origin's, so the effect on the live page can be measured.
   //
@@ -754,7 +754,7 @@ async function installFetchInterceptor(client, handlers, interceptMode = 'fulfil
       }
 
       // Mode B `response` op (spec 016-04): if a response op matches this request
-      // URL, fulfill with the SUPPLIED bytes (a locally-rebuilt clientlib bundle)
+      // URL, fulfill with the SUPPLIED bytes (a locally-rebuilt bundle)
       // INSTEAD of fetching + find/replacing the origin body. This is the
       // whole-response fulfill path — we never call Fetch.getResponseBody or the
       // find/replace bodyRewriter for a matched request.
@@ -991,7 +991,7 @@ async function executeRun({
 
     // Cold-cache fidelity (first-visit cohort): disable the HTTP cache so the
     // measured load is a TRUE cold load. A warm cache (a) masks cold-load cost
-    // — warm clientlibs/images can paint before first paint, hiding LCP/CLS
+    // — warm bundles/images can paint before first paint, hiding LCP/CLS
     // regressions — and (b) lets resources be served from disk WITHOUT hitting
     // the CDP Fetch interceptor, silently no-op'ing block/rewriteBody patches.
     // The returning cohort deliberately keeps the cache warm (its throwaway load
@@ -1244,7 +1244,7 @@ async function main() {
   let exitCode = 0;
   try {
     // --stealth: headful real Chrome with automation tells scrubbed, to pass
-    // Cloudflare/anti-bot managed challenges (lilly-family). Verified the only
+    // Cloudflare/anti-bot managed challenges (the pharma case-family). Verified the only
     // combo that works — headless (incl. headless:'new') gets a 403 challenge stub.
     // See references/topics/anti-bot-measurement.md.
     browser = await puppeteer.launch(buildLaunchOptions(args.stealth));

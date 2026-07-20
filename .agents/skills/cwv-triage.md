@@ -351,7 +351,7 @@ the refusal message:
 {
   "schemaVersion": "1.0",
   "skill": "cwv-triage",
-  "url": "https://www.petplace.com/",
+  "url": "https://pets.example.com/",
   "timestamp": "2026-04-17T12:00:00.000Z",
   "status": "passing",
   "recommendedFormFactor": "PHONE",

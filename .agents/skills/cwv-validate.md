@@ -185,7 +185,7 @@ Then compare the two IQRs and medians per metric:
 - **`--cls-source <selector>`** adds a `CLS@<selector>` target that compares only the matching shift sources' summed `clsShare` (from `cwv.cls.shiftSources[]`; a run that didn't shift that source counts as `0`). The normal reliability gate applies, so a **stable** target source (e.g. `cookies__container`) validates cleanly while a **volatile** one (e.g. a lazy `list__wrapper` carousel) self-reports `UNRELIABLE` — precisely the sources you can vs. cannot trust an A/B on. Matching is a node substring, so an ancestor token (`cookies__container`) captures the whole banner stack.
 - **`--baseline2 <path>`** supplies a *second no-patch baseline* and turns on the **A/A noise-floor gate**: any metric (total or per-source) whose two baselines themselves differ past `MIN_ACTIONABLE_IMPACT` (with separated medians) is forced to `UNRELIABLE` (with an `aa` field recording the control delta) — the page's run-to-run drift exceeds the effect size, so an A/B verdict there can't be trusted. A gated total-CLS verdict is silent in the roll-up, so a clean `CLS@<source>` target still decides the overall result.
 
-Worked example (otempo.com.br consent-banner fix): total `CLS` read Δ−0.041 → `VALIDATED (moderate)` under the plain comparison, but `--baseline2` showed a *no-patch* A/A control moving Δ−0.074 → total `CLS` → `UNRELIABLE`; `--cls-source cookies__container` showed the banner Δ+0.014 → `BELOW_THRESHOLD`. Net: that fix (a structural position-pin override) did **not** validate — the plain total-CLS `VALIDATED` was a false positive, and the per-source target showed the override was causally inert (the real shift is the banner's *entrance animation*, not its position). (Diagnosis + data: `progress/otempo-com-br/loop-2026-06-10/`.)
+Worked example (news.example.com consent-banner fix): total `CLS` read Δ−0.041 → `VALIDATED (moderate)` under the plain comparison, but `--baseline2` showed a *no-patch* A/A control moving Δ−0.074 → total `CLS` → `UNRELIABLE`; `--cls-source cookies__container` showed the banner Δ+0.014 → `BELOW_THRESHOLD`. Net: that fix (a structural position-pin override) did **not** validate — the plain total-CLS `VALIDATED` was a false positive, and the per-source target showed the override was causally inert (the real shift is the banner's *entrance animation*, not its position). (Diagnosis + data: `progress/the news-site case-com-br/loop-2026-06-10/`.)
 
 **Validating a served-JS fix with `rewriteBody` (incl. cross-origin vendor bundles).**
 `rewriteBody` is not limited to CSS/HTML. The launcher intercepts **every** served response
@@ -198,7 +198,7 @@ lab can only patch first-party CSS/HTML.) A `rewriteBody` rule is
 decoded response body, so it must match the **served** bytes (use `isRegex` for minified
 bundles where whitespace/identifiers vary).
 
-Worked example (otempo — the fix that *did* validate): the consent banner is revealed by
+Worked example (the news-site case — the fix that *did* validate): the consent banner is revealed by
 jQuery `$('.cookies__container').show(e)` (an animation duration → it tweens width/height open;
 this is the `animated-reveal` C6 flags) inside a vendored `theme.js`. The treatment patch
 rewrites the reveal to be instant:

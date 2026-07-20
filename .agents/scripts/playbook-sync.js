@@ -2,7 +2,7 @@
 
 /**
  * playbook-sync.js — the 015-06 supported playbook sync path (ADR-0015
- * §Consequences: "the manual `cp`-from-mystique sync becomes a real risk that
+ * §Consequences: "the manual `cp` sync becomes a real risk that
  * needs a supported path"). Replaces the ad-hoc `cp` documented in
  * `references/playbooks/README.md`.
  *
@@ -14,8 +14,7 @@
  * Source directory resolution (first hit wins):
  *   1. `--source <dir>` CLI flag
  *   2. `CWV_PLAYBOOKS_DIR` env
- *   3. the documented mystique default:
- *      `$HOME/Projects/spacecat/mystique/docs/opportunities/cwv/playbooks`
+ *   3. nothing (the set is owned in-repo).
  *
  * Modes:
  *   (default) refresh — copy `*.md` issue-type playbooks from the source into

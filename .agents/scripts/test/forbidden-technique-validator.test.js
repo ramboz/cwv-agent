@@ -141,23 +141,36 @@ test('AC-3: a complements-reached rule fires; a prefer_instead/orthogonal-reache
   assert.ok(pl.violations.some((v) => v.playbook === 'font-preload'));
 });
 
-// --- AC-4: on_flavors scoping — a rule scoped to [eds] does not fire for cs. -
-test('AC-4: an on_flavors:[eds] rule does not fire for flavor cs', () => {
-  // lcp-image has: pattern rel="preload" as="image" with on_flavors: [eds].
+// --- AC-4: on_stacks scoping — a rule scoped to one stack does not fire for another.
+test('AC-4: an on_stacks-scoped rule does not fire for another stack', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cwv-ftv-stacks-'));
+  fs.writeFileSync(path.join(dir, 'demo.md'), [
+    '---',
+    'issue_type: demo',
+    'risk_tier: low',
+    'forbidden_techniques:',
+    "  - pattern: 'rel\\s*=\\s*\"preload\"\\s+as\\s*=\\s*\"image\"'",
+    '    reason: "no image preload on lockedcms"',
+    '    on_stacks: [lockedcms]',
+    "  - pattern: 'loading\\s*=\\s*\"lazy\"'",
+    '    reason: "universal rule"',
+    '---',
+    '# demo',
+  ].join('\n'));
   const diff = '+++ b/head.html\n+<link rel="preload" as="image" href="/hero.jpg">';
 
-  const eds = validateFixDiff(diff, 'lcp-image', 'eds', { dir: PLAYBOOKS_DIR });
-  assert.ok(eds.violations.some((v) => v.playbook === 'lcp-image' && /preload/.test(v.pattern)),
-    'the [eds]-scoped preload-image rule must fire for eds');
+  const locked = validateFixDiff(diff, 'demo', 'lockedcms', { dir });
+  assert.ok(locked.violations.some((v) => v.playbook === 'demo' && /preload/.test(v.pattern)),
+    'the lockedcms-scoped rule must fire for lockedcms');
 
-  const cs = validateFixDiff(diff, 'lcp-image', 'cs', { dir: PLAYBOOKS_DIR });
-  assert.ok(!cs.violations.some((v) => /as\\s\*=\\s\*"image"/.test(v.pattern) && v.playbook === 'lcp-image'),
-    'the [eds]-scoped preload-image rule must NOT fire for cs');
-  // The other lcp-image rules (loading=lazy) are universal, so cs may still have
-  // violations from those — but not from the eds-only preload-image rule.
-  const edsOnlyRule = collectForbiddenRules('lcp-image', 'cs', { dir: PLAYBOOKS_DIR })
-    .filter((r) => /as\\s\*=\\s\*"image"/.test(r.pattern));
-  assert.equal(edsOnlyRule.length, 0, 'the eds-only preload-image rule must be dropped from the cs rule set');
+  const generic = validateFixDiff(diff, 'demo', 'generic', { dir });
+  assert.ok(!generic.violations.some((v) => /preload/.test(v.pattern)),
+    'the lockedcms-scoped rule must NOT fire for generic');
+
+  const genericRules = collectForbiddenRules('demo', 'generic', { dir });
+  assert.equal(genericRules.filter((r) => /preload/.test(r.pattern)).length, 0,
+    'the scoped rule must be dropped from the generic rule set');
+  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 // --- AC-5: on match, ok:false and the violation carries the reason verbatim. -

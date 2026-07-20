@@ -4,7 +4,7 @@ risk_tier: medium
 
 required_validation:
   - script_classified_by_deferral_safety
-  - not_launch_dtm_managed
+  - not_tag_manager_managed
   - script_reference_in_markup
 
 forbidden_techniques:

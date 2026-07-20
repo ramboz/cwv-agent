@@ -442,7 +442,7 @@ function checkMissingImgDimensions(body, ctx) {
     if (hasW && hasH) continue;
     // Skip analytics/tracking beacons — they're invisible (display:none / 1×1)
     // and cause no layout shift, so flagging them as a CLS source is a false
-    // positive. (otempo G3: a Comscore tracking pixel with no width/height was
+    // positive. (the news-site case G3: a Comscore tracking pixel with no width/height was
     // fingered as a CLS rootCause.)
     if (/scorecardresearch|comscore|doubleclick\.net|google-analytics|googletagmanager|facebook\.com\/tr|\/(pixel|beacon|collect|track(?:ing)?)([./?]|$)/i.test(src)) continue;
     findings.push(makeFinding({

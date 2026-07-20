@@ -76,7 +76,7 @@ async function test2_imgDimensionsAndLcpFetchPriority() {
 
 async function test2b_trackingPixelNotFlaggedAsClsSource() {
   // G3: a Comscore-style tracking beacon with no width/height is invisible and
-  // causes no CLS — it must NOT be flagged as a CLS source (otempo false positive).
+  // causes no CLS — it must NOT be flagged as a CLS source (the news-site case false positive).
   const html = `<!doctype html>
 <html><head>
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -229,7 +229,7 @@ body.appear main { display: block; }
 </main>
 </body></html>`;
 
-  const { findings, meta } = await analyzeHtml(html, { url: 'https://zepbound.lilly.com/savings', fromString: true });
+  const { findings, meta } = await analyzeHtml(html, { url: 'https://pharma.example.com/savings', fromString: true });
   assertFindingsValid(findings, 'test3d');
   assert.strictEqual(meta.stack && meta.stack.eds, true, 'expected EDS stack detection in meta');
   const structural = findings.find((f) => f.evidence.some(

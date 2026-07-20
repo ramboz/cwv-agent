@@ -11,14 +11,11 @@
  *     publish step formats into a unified diff. (`patches` is CDP/DOM runtime
  *     mutations, NOT a diff, so it cannot serve this role.)
  *
- *  2. A finished, validated `fix-findings.json` round-trips into a SpaceCat
- *     suggestion payload: every payload field in spacecat-api.md is present or
- *     derivable from the Finding via the documented field→payload mapping —
- *     INCLUDING that a unified diff is derivable from `sourceEdits`.
+ *  2. A finished, validated `fix-findings.json` yields a handoff-ready
+ *     unified diff derivable purely from `sourceEdits`.
  *
- * The full publish/POST flow (kpiDeltas keying, issue.value Markdown assembly,
- * the API client) is 003-02's job — NOT exercised here. We only assert
- * derivability with the minimum scaffolding the mapping table promises.
+ * The report/handoff assembly is the cwv-report skill's job — NOT exercised
+ * here. We only assert derivability.
  */
 
 import assert from 'node:assert/strict';
@@ -196,88 +193,6 @@ test('editsToUnifiedDiff turns sourceEdits into a clean unified diff', () => {
   assert.match(diff, /^\+position: sticky;$/m);
   // no prose leaks into the diff
   assert.ok(!/Rationale|Auto-applicable/.test(diff));
-});
-
-// ---------------------------------------------------------------------------
-// AC#3 — the documented field→payload mapping round-trips into a valid
-// SpaceCat suggestion payload (spacecat-api.md "data shape (CWV)" + issue object).
-// ---------------------------------------------------------------------------
-
-/**
- * Apply the documented mapping (finding-schema.md "fix-findings → suggestion
- * payload" table) to build the SpaceCat suggestion `data`/`kpiDeltas`. This is
- * the minimal stand-in for what cwv-publish (003-02) does at upload — exercised
- * here only to prove every payload field is present or derivable.
- */
-function findingToSuggestion(finding, envelope) {
-  const md = finding.evidence.find((e) => e.kind === 'measurement-delta');
-  const metric = (finding.metric[0] || md.data.metric).toLowerCase();
-  const before = md.data.baseline;
-  const after = md.data.treatment;
-  const delta = md.data.deltaMs !== undefined ? md.data.deltaMs : md.data.deltaScore;
-  const deviceType = profileToDeviceType(envelope.profile || finding.profile);
-
-  return {
-    type: 'CODE_CHANGE',
-    rank: 1,
-    kpiDeltas: { [metric]: { before, after, delta, deviceType } },
-    data: {
-      url: finding.url,
-      type: 'url',
-      metrics: [{ deviceType, [metric]: before }],
-      issues: [
-        {
-          type: metric,
-          status: 'NEW',
-          // issue.value Markdown is assembled by cwv-publish; the formal diff
-          // lives only in patchContent.
-          value: `## ${finding.recommendation}\n\n### Description\n${finding.cause}\n\n_A ready-to-apply unified diff is provided as the code patch for this issue._`,
-          patchContent: editsToUnifiedDiff(finding.sourceEdits),
-        },
-      ],
-    },
-  };
-}
-
-function profileToDeviceType(profile) {
-  if (!profile) return 'mobile';
-  return /desktop/i.test(profile) ? 'desktop' : 'mobile';
-}
-
-test('a validated fix-findings.json round-trips into a valid SpaceCat suggestion payload', () => {
-  const { env, finding } = loadExampleFinding();
-  const sugg = findingToSuggestion(finding, env);
-
-  // Suggestion-level required fields (spacecat-api.md suggestion table).
-  assert.equal(sugg.type, 'CODE_CHANGE');
-  assert.equal(typeof sugg.rank, 'number');
-  assert.ok(sugg.data && typeof sugg.data === 'object' && Object.keys(sugg.data).length > 0, 'data must be a non-empty object');
-
-  // CWV `data` projection fields ['url','type','metrics','issues'].
-  assert.ok(/^https?:\/\//.test(sugg.data.url), 'data.url must be http(s)');
-  assert.equal(sugg.data.type, 'url');
-  assert.ok(Array.isArray(sugg.data.metrics) && sugg.data.metrics.length >= 1, 'data.metrics[]');
-  assert.ok(typeof sugg.data.metrics[0].deviceType === 'string');
-  assert.equal(sugg.data.metrics[0].cls, 0.144, 'data.metrics[0] carries the keyed metric value (the before measurement)');
-
-  // Exactly one issue object with the lean 4-key shape {type,value,status,patchContent}.
-  assert.equal(sugg.data.issues.length, 1, 'one issue object = one fix');
-  const issue = sugg.data.issues[0];
-  assert.equal(issue.type, 'cls', 'issue.type is the lowercase metric label');
-  assert.ok(typeof issue.value === 'string' && issue.value.startsWith('## '), 'value starts at the title heading');
-  assert.ok(typeof issue.status === 'string' && issue.status.length > 0);
-  // patchContent is a clean unified diff derived from sourceEdits — the crux.
-  assert.match(issue.patchContent, /^--- a\//m);
-  assert.match(issue.patchContent, /^\+\+\+ b\//m);
-  assert.match(issue.patchContent, /^@@ /m);
-
-  // kpiDeltas keyed by metric, carrying before/after/delta/deviceType.
-  const kpi = sugg.kpiDeltas.cls;
-  assert.ok(kpi, 'kpiDeltas keyed by the metric (cls)');
-  assert.equal(typeof kpi.before, 'number');
-  assert.equal(typeof kpi.after, 'number');
-  assert.equal(typeof kpi.delta, 'number');
-  assert.equal(typeof kpi.deviceType, 'string');
 });
 
 test('the round-trip diff is derivable purely from sourceEdits (no patches needed)', () => {
