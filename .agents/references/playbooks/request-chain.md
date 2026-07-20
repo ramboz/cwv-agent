@@ -1,12 +1,11 @@
 ---
 issue_type: request-chain
-applicable_flavors: [eds, cs, ams]
 risk_tier: medium
 
 required_validation:
   - chain_mapped_to_specific_calls
   - reordering_safe_per_dependency_graph
-  - clientlib_dependency_graph_clear
+  - bundle_dependency_graph_clear
 
 forbidden_techniques:
   - pattern: '<link\s+[^>]*rel\s*=\s*"preload"[^>]*>\s*<link\s+[^>]*rel\s*=\s*"preload"[^>]*>\s*<link\s+[^>]*rel\s*=\s*"preload"[^>]*>\s*<link\s+[^>]*rel\s*=\s*"preload"[^>]*>'
@@ -24,20 +23,13 @@ see_also:
     reason: "when a chain link involves a cross-origin handshake, preconnect to that origin (LCP-critical-chain gate)"
   - playbook: bundling
     edge: complements
-    reason: "splitting an oversized clientlib often shortens the chain as a side effect"
+    reason: "splitting an oversized bundle often shortens the chain as a side effect"
 
-flavor_overrides:
-  cs:
-    extra_validation:
-      - clientlib_categories_traced
-  ams:
-    extra_validation:
-      - clientlib_categories_traced
 ---
 
 # Request chain
 
-> **Risk tier:** medium · **Applies to:** EDS, CS, AMS · **CWV metric:** LCP, FCP
+> **Risk tier:** medium · **CWV metric:** LCP, FCP
 
 ## What this addresses
 
@@ -49,7 +41,7 @@ This playbook is a **router** — it covers the diagnosis (recognizing a deep wa
 |---|---|
 | **Discoverable resource arrives late** in the document → browser doesn't preload it | [`resource-preload.md`](./resource-preload.md) — the canonical preload mechanism (correct `as=`, `crossorigin`, URL stability) |
 | **JS-driven serial fetch chain** (handlers awaiting one fetch before kicking off the next) | Inline below — Promise.all parallelization |
-| **Clientlib dependency graph** (CS/AMS — categories chained via `dependencies` / `embed`) | Inline below — clientlib reordering |
+| **Build-time bundle dependency graph** (bundles chained via declared dependencies) | Inline below — dependency reordering |
 | **Configuration / data fetched late by JS** that could be inlined | Inline below — inline-the-trigger pattern |
 | **Chain is dictated by external services** (third-party tag manager → analytics) | [`third-party.md`](./third-party.md) — defer / split / gate |
 
@@ -59,12 +51,12 @@ Lighthouse calls this audit ["Minimize critical request depth"](https://develope
 
 **Apply when:**
 - Lighthouse "critical request chains" identifies a specific chain feeding the LCP element
-- The chain can be mapped to specific code points (block `loadScript()` calls in EDS, or specific clientlib categories in CS/AMS)
+- The chain can be mapped to specific code points (loader calls or declared bundle dependencies)
 - Reordering is safe per the dependency graph (no init-order breakage)
 
 **Skip when:**
 - Chain is dictated by external services (third-party tag manager → analytics → events) — different fix path, see [`third-party.md`](./third-party.md)
-- (CS/AMS) Clientlib dependency graph isn't fully traced — risk of init-order breakage too high
+- The bundle dependency graph isn't fully traced — risk of init-order breakage too high
 
 ## Recommended approaches
 
@@ -105,20 +97,6 @@ render(config, content);
 
 Same pattern at the `<link>` level: if both resources are statically discoverable, they should be in `<head>` rather than discovered via JS one after the other.
 
-### CS/AMS: reorder clientlib dependencies
-
-When a clientlib chain is `clientlib-base → clientlib-utils → clientlib-page`, and `clientlib-page` doesn't actually depend on `clientlib-utils`, removing the unnecessary `dependencies` entry shortens the chain.
-
-```xml
-<!-- In .content.xml, remove the unneeded dependency -->
-<jcr:root jcr:primaryType="cq:ClientLibraryFolder"
-          categories="[clientlib-page]"
-          dependencies="[clientlib-base]"/>
-<!-- (was: dependencies="[clientlib-base,clientlib-utils]") -->
-```
-
-## Anti-patterns
-
 ### Preloading every resource in the chain
 
 ```html
@@ -145,19 +123,9 @@ window.addEventListener('load', async () => {
 
 **Why this is bad:** Adds a new sequential roundtrip to the chain instead of removing one. Always reduce chain length, never add to it.
 
-## Flavor-specific notes
-
-### EDS
-
-The chain typically maps to block `loadScript()` calls. Map the Lighthouse waterfall URLs to specific block files; reordering is safe because EDS blocks are self-contained modules.
-
-### CS / AMS
-
-Tracing the chain requires the clientlib `categories` × `dependencies` × `embed` graph. Reordering or removing a `dependencies` entry in `.content.xml` is the typical fix, but only safe once the full graph confirms no init-order break.
-
 ## Related playbooks
 
 - [`resource-preload.md`](./resource-preload.md) — **the canonical preload mechanism.** This playbook diagnoses long chains and decides *which* link to preload; resource-preload covers *how* to write the preload tag correctly.
 - [`resource-hints.md`](./resource-hints.md) — when a chain link involves a cross-origin handshake, preconnect to that origin (only if it's on the LCP critical chain — same gate applies).
 - [`third-party.md`](./third-party.md) — chains dictated by third-party tag managers (consent → analytics → events) can't be reordered from this repo; the fix is split / defer / gate via the third-party deferral-safety table.
-- [`bundling.md`](./bundling.md) — splitting an oversized clientlib often shortens the chain as a side effect.
+- [`bundling.md`](./bundling.md) — splitting an oversized bundle often shortens the chain as a side effect.

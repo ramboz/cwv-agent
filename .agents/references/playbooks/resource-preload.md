@@ -1,6 +1,5 @@
 ---
 issue_type: resource-preload
-applicable_flavors: [eds, cs, ams]
 risk_tier: medium
 
 required_validation:
@@ -20,7 +19,7 @@ forbidden_techniques:
 see_also:
   - playbook: lcp-image
     edge: prefer_instead
-    reason: "for the LCP image, use lcp-image (prefer fetchpriority=high on the <img>, never rel=preload on EDS)"
+    reason: "for the LCP image, use lcp-image (prefer fetchpriority=high on the <img> over rel=preload)"
   - playbook: font-preload
     edge: prefer_instead
     reason: "for fonts, use font-preload — it has the additional crossorigin and stability rules"
@@ -34,7 +33,7 @@ see_also:
 
 # Resource preload (non-font, non-image)
 
-> **Risk tier:** medium · **Applies to:** EDS, CS, AMS · **CWV metric:** LCP, FCP
+> **Risk tier:** medium · **CWV metric:** LCP, FCP
 
 ## What this addresses
 
@@ -127,5 +126,5 @@ Use when a `<script src="...">` reference is far down in the body and the browse
 
 - [`request-chain.md`](./request-chain.md) — **the diagnostic context for when to reach for preload.** When Lighthouse identifies a deep critical-request chain feeding the LCP element, request-chain.md walks through identifying the 1–2 LCP-blocking links to preload; the actual preload mechanics (this playbook) then take over.
 - [`resource-hints.md`](./resource-hints.md) — when the preload target is on a cross-origin host, pair with a preconnect to that origin (subject to the LCP-critical-chain gate).
-- [`lcp-image.md`](./lcp-image.md) — for LCP image preload, use that playbook (which has stricter rules: never on EDS, prefer `fetchpriority="high"` on the `<img>` tag).
+- [`lcp-image.md`](./lcp-image.md) — for LCP image preload, use that playbook (which has stricter rules: prefer `fetchpriority="high"` on the `<img>` tag over preload).
 - [`font-preload.md`](./font-preload.md) — for font preload (different `as=` value, different `crossorigin` rules, narrow `font-display: optional` gate).

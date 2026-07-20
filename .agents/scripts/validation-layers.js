@@ -1,5 +1,19 @@
-const PASS_ASO_VERDICTS = new Set(['PASS', 'PASSED', 'VALIDATED']);
-const FAIL_ASO_VERDICTS = new Set(['FAIL', 'FAILED', 'REJECT', 'REGRESSION', 'INCONCLUSIVE', 'UNRELIABLE']);
+/**
+ * validation-layers.js — the honest validation-claim ladder.
+ *
+ * A lab-validated patch and a change that is live in production are different
+ * claims, and handoff material must never blur them. This module summarizes
+ * which validation layers a run actually passed, and guards customer-facing
+ * text against claiming more than the artifacts prove.
+ *
+ * Layers:
+ *   - runtime    (required) — the launcher/oracle A/B run proved the treatment
+ *                 improved the target metric on the live URL under the fixed
+ *                 lab profile.
+ *   - deployment (optional) — the source change was landed and a post-deploy
+ *                 re-measurement artifact exists.
+ */
+
 const PASS_RUNTIME_VERDICTS = new Set(['VALIDATED']);
 const NON_PASS_RUNTIME_VERDICTS = new Set([
   'REGRESSION',
@@ -14,26 +28,14 @@ const LAYER_TEXT = {
   runtime: {
     label: 'Runtime launcher/oracle validation',
     proves: 'The runtime treatment improved the target metric on the production URL under the fixed lab profile.',
-    doesNotProve: 'The translated source patch rebuilds, deploys, or routes through AEM.',
+    doesNotProve: 'The equivalent source change was landed, deployed, or re-measured live.',
     customerPhrase: 'Lab validation confirmed the runtime treatment improved the target metric.',
   },
-  sourceBuild: {
-    label: 'AEM CS source builder validation',
-    proves: 'The translated source patch rebuilt into Granite clientlibs through the AEM CS source/build contract.',
-    doesNotProve: 'The rebuilt bytes were deployed or routed into the live AEM environment.',
-    customerPhrase: 'Source-build validation confirmed the patch rebuilds into AEM clientlibs.',
-  },
-  aso: {
-    label: 'ASO validation',
-    proves: 'The optional ASO provider accepted the source patch and returned its own validation verdict.',
-    doesNotProve: 'Actual AEM or Cloud Manager deployment happened.',
-    customerPhrase: 'ASO validation provided an additional service-style check of the source patch.',
-  },
-  aemDeployment: {
-    label: 'AEM deployment/revalidation',
-    proves: 'An explicit AEM deployment or post-deployment revalidation artifact exists.',
-    doesNotProve: 'Nothing beyond the artifact itself; inspect the deployment record before claiming production status.',
-    customerPhrase: 'AEM deployment/revalidation evidence is recorded for this patch.',
+  deployment: {
+    label: 'Deployment/re-measurement',
+    proves: 'An explicit post-deployment re-measurement artifact exists for the landed change.',
+    doesNotProve: 'Nothing beyond the artifact itself; inspect the record before claiming production status.',
+    customerPhrase: 'Post-deployment re-measurement evidence is recorded for this change.',
   },
 };
 
@@ -65,30 +67,6 @@ function layer(key, { status, required = false, artifacts = [], notes = [] } = {
   };
 }
 
-function summarizeAsoStatus(verdicts) {
-  const normalized = uniqueStrings(verdicts).map((verdict) => verdict.toUpperCase());
-  if (normalized.some((verdict) => PASS_ASO_VERDICTS.has(verdict))) return 'passed';
-  if (normalized.some((verdict) => FAIL_ASO_VERDICTS.has(verdict))) return 'failed';
-  return normalized.length > 0 ? 'unknown' : 'missing';
-}
-
-function summarizeSourceBuildStatus(results) {
-  const values = Array.isArray(results) ? results : [];
-  if (values.some((result) => {
-    if (!result || typeof result !== 'object') return false;
-    if (result.success === true) return true;
-    const steps = Array.isArray(result.steps) ? result.steps : [];
-    return steps.length > 0 && steps.every((step) => step && step.exitCode === 0);
-  })) return 'passed';
-  if (values.some((result) => {
-    if (!result || typeof result !== 'object') return false;
-    if (result.success === false) return true;
-    const steps = Array.isArray(result.steps) ? result.steps : [];
-    return steps.some((step) => step && step.exitCode !== 0);
-  })) return 'failed';
-  return values.length > 0 ? 'unknown' : 'missing';
-}
-
 function summarizeRuntimeStatus(results) {
   const values = Array.isArray(results) ? results : [];
   const verdicts = values
@@ -102,153 +80,77 @@ function summarizeRuntimeStatus(results) {
 function buildValidationLayerSummary({
   runtimeArtifacts = [],
   runtimeResults = [],
-  sourceBuildArtifacts = [],
-  sourceBuildResults = [],
-  asoArtifacts = [],
-  asoVerdicts = [],
-  aemDeploymentArtifacts = [],
+  deploymentArtifacts = [],
 } = {}) {
   const runtimeStatus = summarizeRuntimeStatus(runtimeResults);
-  const sourceBuildStatus = summarizeSourceBuildStatus(sourceBuildResults);
-  const asoStatus = summarizeAsoStatus(asoVerdicts);
-  const deploymentArtifacts = uniqueStrings(aemDeploymentArtifacts);
+  const deployment = uniqueStrings(deploymentArtifacts);
   const layers = {
     runtime: layer('runtime', {
       status: runtimeStatus,
       required: true,
       artifacts: runtimeArtifacts,
     }),
-    sourceBuild: layer('sourceBuild', {
-      status: sourceBuildStatus,
-      required: true,
-      artifacts: sourceBuildArtifacts,
-    }),
-    aso: layer('aso', {
-      status: asoStatus,
+    deployment: layer('deployment', {
+      status: deployment.length > 0 ? 'passed' : 'missing',
       required: false,
-      artifacts: asoArtifacts,
-    }),
-    aemDeployment: layer('aemDeployment', {
-      status: deploymentArtifacts.length > 0 ? 'passed' : 'missing',
-      required: false,
-      artifacts: deploymentArtifacts,
+      artifacts: deployment,
     }),
   };
 
   const warnings = [];
-  if (layers.sourceBuild.status !== 'passed') {
+  if (layers.runtime.status !== 'passed') {
     warnings.push({
-      code: 'aem-cs-source-builder-missing',
+      code: 'runtime-validation-missing',
       severity: 'warning',
-      layer: 'sourceBuild',
-      message: 'AEM CS source-builder validation has not passed; do not present this as a source-build-validated handoff.',
+      layer: 'runtime',
+      message: 'Runtime launcher/oracle validation has not passed; do not present this as a lab-validated handoff.',
     });
   }
-  if (layers.aemDeployment.status !== 'passed') {
+  if (layers.deployment.status !== 'passed') {
     warnings.push({
-      code: 'aem-deployment-revalidation-missing',
+      code: 'deployment-remeasurement-missing',
       severity: 'info',
-      layer: 'aemDeployment',
-      message: 'No AEM deployment/revalidation artifact is present; customer-facing language must not claim deployment or AEM revalidation.',
+      layer: 'deployment',
+      message: 'No deployment/re-measurement artifact is present; customer-facing language must not claim the change is deployed or re-validated live.',
     });
   }
 
   return {
     schemaVersion: '1.0',
-    target: 'aem-cs-source-patch',
+    target: 'source-patch',
     layers,
     warnings,
   };
 }
 
-function validationLayerWarnings(summary, {
-  aemCs = false,
-  aso = 'advisory',
-} = {}) {
-  const warnings = [];
-  const layers = summary && summary.layers ? summary.layers : {};
-  const sourceBuild = layers.sourceBuild || {};
-  const runtime = layers.runtime || {};
-  const asoLayer = layers.aso || {};
-  const deployment = layers.aemDeployment || {};
-  const asoRequired = aso === 'required' || aso === true;
-
-  if (aemCs && runtime.status !== 'passed') {
-    warnings.push({
-      code: 'runtime-validation-missing',
-      severity: 'error',
-      blocking: true,
-      layer: 'runtime',
-      message: 'Runtime launcher/oracle validation is missing for this AEM CS publish preparation.',
-    });
-  }
-  if (aemCs && sourceBuild.status !== 'passed') {
-    warnings.push({
-      code: 'aem-cs-source-builder-missing',
-      severity: 'warning',
-      blocking: false,
-      layer: 'sourceBuild',
-      message: 'AEM CS source-builder validation is missing or failed; publish preparation may continue only as a runtime-validated handoff.',
-    });
-  }
-  if (aemCs && asoRequired && asoLayer.status !== 'passed') {
-    warnings.push({
-      code: 'aso-validation-required-missing',
-      severity: 'error',
-      blocking: true,
-      layer: 'aso',
-      message: 'ASO validation is configured as required, but no passing ASO validation artifact is present.',
-    });
-  }
-  if (aemCs && !asoRequired && asoLayer.status !== 'passed') {
-    warnings.push({
-      code: 'aso-validation-advisory-missing',
-      severity: 'info',
-      blocking: false,
-      layer: 'aso',
-      message: 'ASO validation is advisory for this AEM CS publish preparation and has not passed.',
-    });
-  }
-  if (aemCs && deployment.status !== 'passed') {
-    warnings.push({
-      code: 'aem-deployment-revalidation-missing',
-      severity: 'info',
-      blocking: false,
-      layer: 'aemDeployment',
-      message: 'No AEM deployment/revalidation artifact is present; do not claim deployment or AEM revalidation in customer-facing language.',
-    });
-  }
-
-  return warnings;
-}
-
-function aemDeploymentPassed(summary) {
+function deploymentPassed(summary) {
   return !!(
     summary
     && summary.layers
-    && summary.layers.aemDeployment
-    && summary.layers.aemDeployment.status === 'passed'
+    && summary.layers.deployment
+    && summary.layers.deployment.status === 'passed'
   );
 }
 
-function containsAemDeploymentClaim(text) {
+function containsDeploymentClaim(text) {
   const value = String(text || '');
-  return /\bCloud Manager\b/i.test(value)
-    || /\bAEM\b[\s\S]{0,80}\b(?:deploy(?:ed|ment)?|revalidat(?:ed|ion)?)\b/i.test(value)
-    || /\b(?:deploy(?:ed|ment)?|revalidat(?:ed|ion)?)\b[\s\S]{0,80}\bAEM\b/i.test(value);
+  return /\b(?:deploy(?:ed|ment)?|revalidat(?:ed|ion)?|live in production|shipped to production)\b/i.test(value);
 }
 
-function assertNoAemDeploymentClaim(text, summary, context = 'validation layer check') {
-  if (!containsAemDeploymentClaim(text)) return;
-  if (aemDeploymentPassed(summary)) return;
+/**
+ * Throw when customer-facing text claims deployment/re-validation without a
+ * passing deployment layer. The guard that keeps handoff language honest.
+ */
+function assertNoDeploymentClaim(text, summary, context = 'validation layer check') {
+  if (!containsDeploymentClaim(text)) return;
+  if (deploymentPassed(summary)) return;
   throw new Error(
-    `${context}: customer-facing text claims AEM/Cloud Manager deployment or revalidation, `
-    + 'but no passing AEM deployment/revalidation artifact is present.',
+    `${context}: customer-facing text claims deployment or live re-validation, `
+    + 'but no passing deployment/re-measurement artifact is present.',
   );
 }
 
 export {
   buildValidationLayerSummary,
-  assertNoAemDeploymentClaim,
-  validationLayerWarnings,
+  assertNoDeploymentClaim,
 };

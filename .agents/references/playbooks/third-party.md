@@ -1,12 +1,11 @@
 ---
 issue_type: third-party
-applicable_flavors: [eds, cs, ams]
 risk_tier: medium
 
 required_validation:
   - script_classified_by_deferral_safety
   - not_launch_dtm_managed
-  - clientlib_or_inline_in_markup
+  - script_reference_in_markup
 
 forbidden_techniques:
   - pattern: '<script\s+[^>]*\b(?:async|defer)\b[^>]*src\s*=\s*"[^"]*(?:optimizely\.com|vwo\.com|cdn\.adobetarget|targetmaketing|abtasty)[^"]*"'
@@ -18,18 +17,11 @@ forbidden_techniques:
   # mode for consent managers (tracking firing before consent is established)
   # without false-positiving on legitimate deferred-with-gating setups.
 
-flavor_overrides:
-  cs:
-    extra_validation:
-      - not_launch_managed
-  ams:
-    extra_validation:
-      - not_launch_managed
 ---
 
 # Third-party scripts
 
-> **Risk tier:** medium · **Applies to:** EDS, CS, AMS · **CWV metric:** LCP, INP, TBT
+> **Risk tier:** medium · **CWV metric:** LCP, INP, TBT
 
 ## What this addresses
 
@@ -62,7 +54,7 @@ Third-party scripts (analytics, tag managers, A/B test, chat, fonts) compete wit
 ```html
 <!-- Good -->
 <script defer src="https://www.google-analytics.com/analytics.js"></script>
-<script defer src="/etc/clientlibs/analytics.js"></script>
+<script defer src="/scripts/analytics.js"></script>
 ```
 
 ### Async fully independent third-parties
@@ -114,7 +106,7 @@ A single tag container is the canonical "everything-or-nothing" anti-pattern: it
 ```html
 <!-- Good — conversion tracking only on cart/checkout pages -->
 {{#if isCheckoutFunnel}}
-  <script defer src="/etc/clientlibs/conversion-tracking.js"></script>
+  <script defer src="/scripts/conversion-tracking.js"></script>
 {{/if}}
 ```
 
@@ -176,15 +168,3 @@ If the script is injected at runtime by Adobe Launch (`launch-XXXXX.min.js`) or 
 ```
 
 **Why this is bad:** [Partytown](https://partytown.builder.io/) sandboxes third-party JS in a Web Worker, which sounds ideal for moving martech off the main thread. In practice it has serious limitations — many third-parties access browser APIs that Partytown's worker can't proxy efficiently (DOM events, cookies, `document.cookie` writes for consent), and the proxy round-trips themselves accumulate into TBT. It's worth evaluating per-script, but **don't propose it as a default fix** for third-party perf issues; the splitting + gating + delaying approaches above are more reliable.
-
-## Flavor-specific notes
-
-### EDS
-
-Third-parties typically live in the project's `head.html` or are loaded by individual blocks. Editing markup directly is the normal flow. No Launch/DTM concern unless the project explicitly opts in.
-
-**Default every third-party to `loadDelayed()` (~3s after `load`)** — analytics, tag managers, consent, chat, social pixels, and session replay all belong there, not in `loadEager`/`loadLazy`. The one exception is the **above-fold personalization SDKs**: Adobe Alloy / Web SDK and Adobe Target must load **synchronously in `<head>`** when they control above-fold content or collect above-fold beacons — deferring them paints the control content then swaps it (FOOC + CLS) and can skew analytics attribution. Async/defer for these is only safe when personalization is entirely below-fold; verify experiment scope first. (This is the EDS-phase expression of the "do NOT defer A/B test scripts" rule above.)
-
-### CS / AMS
-
-Many third-parties are managed through Adobe Launch (DTM successor). Check whether the script appears in the page source statically (editable) or is injected by `launch-*.js` at runtime (requires a Launch rule change instead). Touching Launch-managed scripts in the AEM repo is futile.

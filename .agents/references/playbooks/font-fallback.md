@@ -1,6 +1,5 @@
 ---
 issue_type: font-fallback
-applicable_flavors: [eds, cs, ams]
 risk_tier: low
 
 required_validation:
@@ -29,7 +28,7 @@ see_also:
 
 # Font fallback
 
-> **Risk tier:** low · **Applies to:** EDS, CS, AMS · **CWV metric:** CLS, LCP
+> **Risk tier:** low · **CWV metric:** CLS, LCP
 
 ## What this addresses
 
@@ -105,7 +104,7 @@ When font metric data is available — the web font's actual `ascent`, `descent`
 body { font-family: 'Brand', 'Brand-Fallback', Arial, sans-serif; }
 ```
 
-**Precondition:** font metric data is available — either from the [AEM Edge Delivery font-fallback generator](https://www.aem.live/developer/font-fallback), [meowni.ca/font-style-matcher](https://meowni.ca/font-style-matcher/), or by reading the webfont's metrics directly.
+**Precondition:** font metric data is available — either from a font-fallback generator, [meowni.ca/font-style-matcher](https://meowni.ca/font-style-matcher/), or by reading the webfont's metrics directly.
 **Risk:** medium if the metric values are wrong — the swap then *creates* a different CLS instead of eliminating one. Always use a generator; never hand-tune.
 
 This is the only conditional fix. Skip if metric data isn't available — fixes 1 and 2 alone still eliminate FOIT and stabilize the swap target across platforms.
@@ -160,20 +159,6 @@ body { font-family: 'Brand', sans-serif; }
 ```
 
 **Why this is bad:** `font-display` controls behavior while a remote font is loading. A `@font-face` whose `src` is `local()`-only never has a loading window — `font-display` has no effect. Don't waste a line on it; don't let it confuse readers into thinking the fallback uses `font-display`.
-
-## Flavor-specific notes
-
-### EDS
-
-`@font-face` declarations live in the project's `styles/` (typically `styles/styles.css` or a dedicated `styles/fonts.css`). Aggregate all `@font-face` blocks before emitting to ensure complete coverage — partial updates leave some pages still using `font-display: block`.
-
-### CS
-
-Clientlib CSS files contain the `@font-face` declarations. Verify all clientlib categories that include the font are updated consistently — partial coverage causes cross-template inconsistencies. Build a complete inventory of every category that declares each family before editing.
-
-### AMS
-
-Same as CS for clientlib-hosted fonts. For JSP-embedded `<style>` blocks, the fix may be in the JSP source rather than a separate CSS file — verify the rendered output, not just the obvious template file.
 
 ## Related playbooks
 

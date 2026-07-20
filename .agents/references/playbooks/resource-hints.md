@@ -1,6 +1,5 @@
 ---
 issue_type: resource-hints
-applicable_flavors: [eds, cs, ams]
 risk_tier: low
 
 required_validation:
@@ -29,7 +28,7 @@ see_also:
 
 # Resource hints (preconnect / dns-prefetch)
 
-> **Risk tier:** low · **Applies to:** EDS, CS, AMS · **CWV metric:** LCP, FCP
+> **Risk tier:** low · **CWV metric:** LCP, FCP
 
 ## What this addresses
 
@@ -45,7 +44,7 @@ The right rule: **preconnect only to domains in the LCP critical chain.** That's
 
 - **The LCP image** when it's hosted cross-origin (image CDN, DAM domain, etc.)
 - **Cross-origin render-blocking CSS or JS** discovered in the network waterfall before LCP
-- **A separate components / blocks library origin** — common in EDS multi-domain setups where blocks ship from one host and content from another; the components host is on the critical render path
+- **A separate component-library origin** — common in multi-domain setups where components ship from one host and content from another; the components host is on the critical render path
 - **A/B test / personalization SDKs** that must run synchronously before paint (Optimizely, VWO, Adobe Target, AB Tasty per [`third-party.md`](./third-party.md)) — these block the original render anyway, so warming their connection is a net win
 - **Font origins**, paired with [`font-preload.md`](./font-preload.md) when applicable, with `crossorigin` attribute included
 
@@ -79,7 +78,7 @@ The single highest-leverage preconnect: directly shortens the LCP critical chain
 ### Preconnect to a separate components / blocks library origin
 
 ```html
-<!-- Good — EDS multi-domain: blocks ship from a sibling subdomain -->
+<!-- Good — multi-domain: components ship from a sibling subdomain -->
 <link rel="preconnect" href="https://blocks.example.com">
 ```
 

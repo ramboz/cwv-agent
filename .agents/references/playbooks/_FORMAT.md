@@ -1,10 +1,8 @@
 # CWV Playbook Format
 
-This directory contains per-issue-type playbooks that the CWV code-fix agent in mystique consumes to constrain its output. Each playbook is a single Markdown file with a YAML front-matter header and a structured prose body.
+This directory contains per-issue-type playbooks that the CWV fix flow consumes to constrain its output. Each playbook is a single Markdown file with a YAML front-matter header and a structured prose body.
 
-The format is **single-file per issue type** (not per `type × flavor`). Generic guidance lives in the body; flavor-specific divergence is expressed via the `on_flavors` field on individual rules and the optional `## Flavor-specific notes` section.
-
-For background on why these exist and how they fit into the CWV autofix flow, see the hub doc at [`../e2e-flow.md`](../e2e-flow.md). For the source taxonomy of issue types and risk tiers, see the **CWV Issue Types** document.
+The format is **single-file per issue type**. Generic guidance lives in the body; stack-specific divergence (when a stack pack is installed) is expressed via the optional `applicable_stacks` / `on_stacks` keys.
 
 ---
 
@@ -19,8 +17,9 @@ For background on why these exist and how they fit into the CWV autofix flow, se
 ```yaml
 ---
 issue_type: <string>                    # REQUIRED. Matches the file name.
-applicable_flavors: [<flavor>, ...]     # REQUIRED. Subset of: eds, cs, ams, headless.
-risk_tier: <low|medium|high>            # REQUIRED. Mirrors the CWV Issue Types tier.
+risk_tier: <low|medium|high>            # REQUIRED. Fix-risk tier (see below).
+applicable_stacks: [<stack>, ...]       # OPTIONAL. Restrict to named stacks (from a stack pack).
+                                        #   Absent = the playbook applies everywhere.
 
 required_validation:                     # OPTIONAL. Pre-conditions to check before invoking the agent.
   - <validation_id>
@@ -29,20 +28,13 @@ required_validation:                     # OPTIONAL. Pre-conditions to check bef
 forbidden_techniques:                    # OPTIONAL. Regex post-validators on the agent's diff.
   - pattern: '<regex>'                  #   REQUIRED for each entry. Python re syntax.
     reason: "<short reason>"            #   REQUIRED. Surfaced to the agent on rejection.
-    on_flavors: [<flavor>, ...]         #   OPTIONAL. Default: applies to every flavor in applicable_flavors.
+    on_stacks: [<stack>, ...]           #   OPTIONAL. Restrict a rule to named stacks. Default: all.
 
 see_also:                                # OPTIONAL. Typed cross-references to other playbooks.
   - playbook: <issue_type>              #   REQUIRED. Target issue_type (kebab-case, matches a playbook filename without .md).
     edge: <routes_to|prefer_instead|complements|orthogonal>  # REQUIRED. Exactly one of the four edge types.
     reason: "<short reason>"            #   REQUIRED. Why the two playbooks relate.
 
-flavor_overrides:                        # OPTIONAL. Per-flavor extras (only when divergence exists).
-  <flavor>:
-    extra_validation:
-      - <validation_id>
-    extra_forbidden_techniques:
-      - pattern: '<regex>'
-        reason: "<short reason>"
 ---
 ```
 
@@ -51,24 +43,14 @@ flavor_overrides:                        # OPTIONAL. Per-flavor extras (only whe
 | Field | Required | Notes |
 |---|---|---|
 | `issue_type` | yes | String identifier; must match the filename (without `.md`). |
-| `applicable_flavors` | yes | List of AEM flavors the playbook applies to. Allowed values: `eds`, `cs`, `ams`, `headless`. Flavors not in the list mean "this issue type is N/A or recommend-only on that flavor" — the loader will not load this playbook for sites of that delivery type. |
-| `risk_tier` | yes | One of `low`, `medium`, `high`. Mirrors the CWV Issue Types tier classification. `low` = agent can auto-fix confidently; `medium` = needs validation; `high` = recommendation-only (the agent should NOT emit a code change). |
+| `risk_tier` | yes | One of `low`, `medium`, `high`. `low` = agent can auto-fix confidently; `medium` = needs validation; `high` = recommendation-only (the agent should NOT emit a code change). |
+| `applicable_stacks` | no | Restrict the playbook to named stacks (vocabulary comes from an installed stack pack — see `../stacks/`). Stacks not in the list mean "this issue type is N/A or platform-managed there". Absent = applies everywhere. |
 | `required_validation` | no | Identifiers of pre-conditions that must hold before the agent is invoked. Phase 2 will register handlers for each ID; Phase 1 is documentation only. |
-| `forbidden_techniques` | no | Regex patterns that the Phase 2 validator will match against the `+` lines of the agent's unified diff. A match → reject + re-prompt. |
+| `forbidden_techniques` | no | Regex patterns matched against the `+` lines of the agent's unified diff by `forbidden-technique-validator.js`. A match → reject + re-prompt. |
 | `see_also` | no | Typed cross-references to other playbooks. Each entry has `playbook` (target `issue_type`, kebab-case, matching a playbook filename without `.md`), `edge` (exactly one of `routes_to`, `prefer_instead`, `complements`, `orthogonal`), and `reason` (a short string). This is the **machine-readable mirror** of the prose body links (authoring guideline #5); a resolver walks these edges with per-edge policy (ADR-0015). Validated by `playbook-see-also-lint.js` — targets must exist and edges must be one of the four types. Cycles are permitted (the resolver is cycle-safe) and reported as warnings, not errors. |
-| `flavor_overrides` | no | Per-flavor additions that layer on top of the universal rules. Use sparingly — most rules should be universal. |
-
-### `applicable_flavors` flavor matrix
-
-The `applicable_flavors` list mirrors the CWV Issue Types risk matrix. Some types are deliberately omitted from a flavor:
-
-- **`eds` excluded** when the fix doesn't apply to EDS (e.g. `compression` is platform-managed; `ttfb` is CDN-only with no server-side rendering path; `font-preload` and `resource-preload` rely on a per-page preload that EDS's fixed `head.html` doesn't support).
-- **`ams` excluded** when the type is recommend-only on AMS legacy stacks (e.g. `inline-css` and `layout-shift` are too variable in JSP-driven AMS to auto-fix).
-- **`headless` excluded** for almost everything — headless renders client-side, so most page-level CWV fixes don't apply.
-
 ### `forbidden_techniques` patterns
 
-Patterns are Python `re` regex strings. The Phase 2 validator runs them against text extracted from the `+` lines of the agent's unified diff (additions only — pre-existing forbidden patterns in the customer's codebase are out of scope by construction).
+Patterns are regex strings. The forbidden-technique validator runs them against text extracted from the `+` lines of the agent's unified diff (additions only — pre-existing forbidden patterns in the site's codebase are out of scope by construction).
 
 Conventions:
 
@@ -85,8 +67,7 @@ forbidden_techniques:
   - pattern: 'Link:\s*<.*>;\s*rel=preload'
     reason: "HTTP Link header preload is not maintainable at site scale"
   - pattern: '<link\s+[^>]*rel\s*=\s*"preload"'
-    on_flavors: [eds]
-    reason: "EDS has a fixed head.html — per-page preload is not feasible"
+    reason: "per-page head preloads are not maintainable when the head template is shared"
 ```
 
 ### `see_also` typed cross-references
@@ -151,7 +132,7 @@ Every playbook MUST have these sections, in order:
 ```markdown
 # <Issue Type Name>
 
-> **Risk tier:** <tier> · **Applies to:** <flavors> · **CWV metric:** <metric>
+> **Risk tier:** <tier> · **CWV metric:** <metric>
 
 ## What this addresses
 
@@ -190,25 +171,7 @@ Every playbook MUST have these sections, in order:
 **Why this is bad:** <1–2 sentences explaining the failure mode>
 ```
 
-After the four required sections, OPTIONAL flavor-specific sections may follow. Only include them when there's actual divergence:
-
-```markdown
-## Flavor-specific notes
-
-### EDS
-
-<EDS-specific guidance, code paths, file locations>
-
-### CS
-
-<CS-specific guidance>
-
-### AMS
-
-<AMS-specific guidance>
-```
-
-The Phase 2 loader will strip flavor sections that don't match the site's `delivery_type` before passing the playbook to the agent.
+After the four required sections, OPTIONAL stack-specific sections may follow (when a stack pack is installed and the implementation surface genuinely differs). Title them `## Stack-specific notes` with one `### <stack>` subsection per stack.
 
 ---
 
@@ -216,18 +179,16 @@ The Phase 2 loader will strip flavor sections that don't match the site's `deliv
 
 1. **Concrete code examples beat abstract rules.** Every "Recommended" and "Anti-pattern" entry should include real HTML / CSS / JS / config snippets, not just descriptions.
 2. **Anti-patterns are the highest-leverage content.** Tell the agent what NOT to do and WHY. The "why" prevents the agent from rationalizing its way back into the bad pattern under edge cases.
-3. **Keep universal content universal.** If a recommendation works on all `applicable_flavors`, put it in the main body — not the flavor section. Only use `## Flavor-specific notes` when the implementation surface genuinely differs (e.g. EDS block JS vs. AEM clientlibs).
-4. **Use the PDF as the source of truth for `required_validation` IDs.** Each playbook's `required_validation` list should mirror the "Validation before emitting fix" bullets in the CWV Issue Types document. New validation IDs are introduced here first, then registered as handlers in Phase 2.
+3. **Keep universal content universal.** If a recommendation works everywhere, put it in the main body — not a stack section. Only use `## Stack-specific notes` when the implementation surface genuinely differs.
+4. **`required_validation` IDs are contracts.** Each playbook's `required_validation` list names the pre-conditions the mechanism gate checks before a fix is emitted. Introduce new IDs here first.
 5. **Cross-reference shared mechanisms.** If two playbooks (e.g. `image-sizing` and `layout-shift`) share a fix path, link from one to the other rather than duplicating content. Add a typed `see_also` front-matter entry alongside the prose link (see [`see_also` typed cross-references](#see_also-typed-cross-references)) — the body link is for humans, `see_also` is the machine source of truth.
 
 ---
 
-## Phase 1 vs Phase 2
+## Enforcement
 
-This directory ships in **Phase 1 — authoring only**. The playbooks are human-readable references right now and will be programmatically loaded once **Phase 2** delivers:
-
-- A loader that parses the YAML front matter and strips non-matching `## Flavor-specific notes` sections
-- A validator that runs `forbidden_techniques` regexes against the `+` lines of the agent's diff and rejects + re-prompts on match
-- Wiring into `app/agents/cwv/cwv_code_fix_flow.py` and `app/tasks/generate_cwv_code_fix_task.py`
-
-Until Phase 2 lands, the format is a contract for authors — not yet enforced by code.
+The front matter is parsed by `attribution.js` (`parsePlaybookFrontmatter`);
+`forbidden_techniques` regexes are enforced against fix diffs by
+`forbidden-technique-validator.js`; `required_validation` items feed
+`mechanism-gate.js`; the `see_also` graph is walked by `playbook-chain.js`
+and linted by `playbook-see-also-lint.js`.

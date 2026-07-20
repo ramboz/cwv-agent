@@ -38,14 +38,13 @@
  *                        is within noise. Also used when launcher outputs are
  *                        not comparable, such as mismatched or missing recorded
  *                        viewports.)
- *   8 = PRODUCER_REQUIRED (spec 016-05, ADR-0016 Class-3-HTL — a PRE-MEASUREMENT
- *                        refusal, NOT a sample-comparison outcome. A structural-
- *                        HTL fix alters the DOM shape the producer renders; the
- *                        workbench does NOT build a local htlengine/Sightly
- *                        renderer to measure it (0/10 in ASV's corpus), so this
- *                        verdict is minted directly at the classify→validate
- *                        boundary and published as guidance-only. evaluate() /
- *                        rollUp() NEVER return it.)
+ *   8 = MANUAL_REVIEW  (a PRE-MEASUREMENT refusal, NOT a sample-comparison
+ *                        outcome. A structural fix alters the DOM shape or
+ *                        execution order the server renders; a served-byte
+ *                        patch cannot faithfully emulate that, so this verdict
+ *                        is minted directly at the classify→validate boundary
+ *                        and shipped as guidance-only. evaluate() / rollUp()
+ *                        NEVER return it.)
  */
 
 import { pathToFileURL } from 'node:url';
@@ -493,67 +492,64 @@ const EXIT_CODES = {
   NO_OP: 5,
   NOT_MEASURED: 6,
   UNRELIABLE: 7,
-  // 8 = PRODUCER_REQUIRED (spec 016-05, ADR-0016 Class-3-HTL). A PRE-MEASUREMENT
-  // typed refusal for a structural-HTL fix (a DOM-shape change under
-  // /apps/**/*.html). It is NEVER produced by sample comparison — evaluate() /
-  // rollUp() cannot return it — because a structural render change is never run
-  // through the lab. It is minted directly by producerRequiredVerdict() at the
-  // classify→validate boundary (verdictForClassification) and published as
-  // guidance-only (no kpiDeltas). We deliberately DO NOT build a local
-  // htlengine/Sightly render engine to "measure" it — ASV's corpus proved that
-  // route is 0/10 (ADR-0016 §Class-3-HTL kill-criterion guard); an honest
-  // producer-required refusal beats a faked low-fidelity pass.
-  PRODUCER_REQUIRED: 8,
+  // 8 = MANUAL_REVIEW. A PRE-MEASUREMENT typed refusal for a structural fix (a
+  // DOM-shape / execution-order change). It is NEVER produced by sample
+  // comparison — evaluate() / rollUp() cannot return it — because a structural
+  // render change is never run through the lab. It is minted directly by
+  // manualReviewVerdict() at the classify→validate boundary
+  // (verdictForClassification) and shipped as guidance-only. We deliberately DO
+  // NOT fake a byte-patch emulation of a structural change — an honest
+  // manual-review refusal beats a faked low-fidelity pass.
+  MANUAL_REVIEW: 8,
 };
 
 /**
- * Mint a typed `producer-required` verdict (spec 016-05 / ADR-0016 Class-3-HTL).
+ * Mint a typed `manual-review` verdict.
  *
- * This is a PRE-MEASUREMENT refusal: a structural-HTL (or architecturally-
- * escalated) fix alters the DOM shape rendered by the producer, which the
- * workbench cannot reproduce without the heavy Sightly + aem-mock + Maven
- * substrate ASV externalises to Blackboard. Rather than build that renderer
- * (0/10 in ASV's corpus — see ADR-0016) or fake a low-fidelity pass, we return
- * a first-class, oracle-shaped verdict so callers treat it like any other
+ * This is a PRE-MEASUREMENT refusal: a structural fix alters the DOM shape or
+ * execution order the server renders, which a served-byte patch cannot
+ * faithfully reproduce (interception preserves fetch order, not the renderer's
+ * structural output). Rather than fake a low-fidelity pass, we return a
+ * first-class, oracle-shaped verdict so callers treat it like any other
  * verdict — but it is NEVER masked as VALIDATED / NO_OP / INCONCLUSIVE, and it
- * carries no per-metric entries because nothing was measured.
+ * carries no per-metric entries because nothing was measured. The fix ships as
+ * guidance: land it in source, then re-measure baseline-vs-live.
  *
  * @param {object} args
  * @param {string} [args.metric]  the target metric (recorded, not measured).
  * @param {string} [args.reason]  the classification rationale (threaded in).
- * @returns {{verdict:'producer-required', exitCode:number, metric:string|null,
- *            reason:string, metrics:[], producerRequired:true}}
+ * @returns {{verdict:'manual-review', exitCode:number, metric:string|null,
+ *            reason:string, metrics:[], manualReview:true}}
  */
-function producerRequiredVerdict({ metric = null, reason = '' } = {}) {
-  const base = 'producer-required: structural render change; needs a producer '
-    + '(Blackboard render substrate) for lab validation — not lab-proven here';
+function manualReviewVerdict({ metric = null, reason = '' } = {}) {
+  const base = 'manual-review: structural render change; a served-byte patch '
+    + 'cannot faithfully emulate it — land it in source and re-measure, not lab-proven here';
   const full = reason ? `${base}. ${reason}` : base;
   return {
-    verdict: 'producer-required',
-    exitCode: EXIT_CODES.PRODUCER_REQUIRED,
+    verdict: 'manual-review',
+    exitCode: EXIT_CODES.MANUAL_REVIEW,
     metric,
     reason: full,
     metrics: [], // never measured — no per-metric comparison entries
-    producerRequired: true,
+    manualReview: true,
   };
 }
 
 /**
- * Routing hook at the classify→validate boundary (spec 016-05). Given a 016-01
- * classification entry, return a `producer-required` verdict WITHOUT measuring
- * when the entry is on the `producer-required` route (a Class-3-htl restructure
- * or a 2b/2c/2d architectural escalation); return `null` for every other route
- * (mode-a / delta-splice / local-build-modeb) so those fixes go through the
+ * Routing hook at the classify→validate boundary. Given a classification
+ * entry, return a `manual-review` verdict WITHOUT measuring when the entry is
+ * on the `manual-review` route (a Class-3 structural change); return `null`
+ * for every other route (patch / source-edit) so those fixes go through the
  * normal measured validate path.
  *
  * @param {object|null} entry     a fix-classifier.js entry ({ route, rationale, ... }).
  * @param {object} [opts]
  * @param {string} [opts.metric]  the fix's target metric.
- * @returns {object|null} a producer-required verdict, or null.
+ * @returns {object|null} a manual-review verdict, or null.
  */
 function verdictForClassification(entry, { metric = null } = {}) {
-  if (!entry || entry.route !== 'producer-required') return null;
-  return producerRequiredVerdict({ metric, reason: entry.rationale || '' });
+  if (!entry || entry.route !== 'manual-review') return null;
+  return manualReviewVerdict({ metric, reason: entry.rationale || '' });
 }
 
 /**
@@ -863,6 +859,6 @@ export {
   viewportIncomparability,
   rollUp,
   evaluate,
-  producerRequiredVerdict,
+  manualReviewVerdict,
   verdictForClassification,
 };

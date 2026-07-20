@@ -5,10 +5,10 @@
 // own split between a pure result-builder and an impure CLI main() — this
 // module never calls process.exit; callers decide how to exit.
 //
-// Naming disambiguation (see spec 014 Overview): the "profile" this module
-// resolves/checks is the EXECUTION/PROVIDER profile (doctor.js's `local`,
-// `validate-aso`, `publish-spacecat`, ...) — NOT a caller's lab measurement
-// profile (launcher.js/oracle.js `--profile`, e.g. `mobile-slow4g-4xcpu`).
+// Naming disambiguation: the "profile" this module resolves/checks is the
+// EXECUTION/PROVIDER profile (doctor.js's `local`, `field-google`, ...) — NOT
+// a caller's lab measurement profile (launcher.js/oracle.js `--profile`,
+// e.g. `mobile-slow4g-4xcpu`).
 
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -17,12 +17,10 @@ import { EXECUTION_PROFILES, runDoctor, formatDoctorText } from './doctor.js';
 
 // ADR-0014 block/advise mapping. The gate must NOT key off doctor's rolled-up
 // `ok` — doctor.js's summarize() flips ok:false when any required check is
-// `fail`, `not-wired`, OR `unknown`, and several profiles carry a *permanently*
-// `unknown` required check a zero-write doctor cannot self-verify (e.g.
-// publish-spacecat's `manual:publish-spacecat-auth`, source-s3's
-// `manual:source-s3-site-resolution`). Keying off `ok` would permanently
-// refuse every publish-spacecat/source-s3/adobe-full run even for a fully
-// provisioned operator. Instead:
+// `fail`, `not-wired`, OR `unknown`, and a profile may carry a *permanently*
+// `unknown` required check a zero-write doctor cannot self-verify. Keying off
+// `ok` would permanently refuse such a run even for a fully provisioned
+// operator. Instead:
 //   - BLOCK (exit 1) on required `fail`/`not-wired` — doctor positively
 //     determined the prerequisite is absent or the provider is unwired.
 //   - ADVISE (exit 0 + visible warning) on required `unknown` — doctor could

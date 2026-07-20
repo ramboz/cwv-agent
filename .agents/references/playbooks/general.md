@@ -1,6 +1,5 @@
 ---
 issue_type: general
-applicable_flavors: [eds, cs, ams]
 risk_tier: high
 
 required_validation:
@@ -11,7 +10,7 @@ forbidden_techniques: []
 
 # General (catch-all)
 
-> **Risk tier:** high · **Applies to:** EDS, CS, AMS · **CWV metric:** any (unclassified)
+> **Risk tier:** high · **CWV metric:** any (unclassified)
 >
 > **⚠️ Recommendation-only.** The agent should NOT emit a code change for `general` issues. Emit a recommendation that surfaces the audit data and asks for manual triage.
 

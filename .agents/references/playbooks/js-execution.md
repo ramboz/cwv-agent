@@ -1,6 +1,5 @@
 ---
 issue_type: js-execution
-applicable_flavors: [eds, cs, ams]
 risk_tier: high
 
 required_validation:
@@ -23,18 +22,11 @@ see_also:
     edge: complements
     reason: "deferring a non-critical script uses the blocking-resource deferral-safety check"
 
-flavor_overrides:
-  cs:
-    extra_validation:
-      - server_side_profiling_available
-  ams:
-    extra_validation:
-      - server_side_profiling_available
 ---
 
 # JS execution
 
-> **Risk tier:** high (without runtime profiling) · **Applies to:** EDS, CS, AMS · **CWV metric:** TBT, INP
+> **Risk tier:** high (without runtime profiling) · **CWV metric:** TBT, INP
 
 ## What this addresses
 
@@ -176,15 +168,3 @@ requestAnimationFrame(doExpensiveWork);
 ```
 
 **Why this is bad:** `requestAnimationFrame` runs the callback on the next frame's render path. If the work is CPU-heavy, that frame drops. You've made the smoothness *worse*, not better. `rAF` is for animations that update DOM/canvas, not for "spread out" general work.
-
-## Flavor-specific notes
-
-### EDS
-
-Block JS files map cleanly to long-task URLs. Static analysis can narrow scope (which block file is hot), but the function-level fix still needs runtime profiling.
-
-**Never propose manually minifying EDS source** — the EDS CDN minifies CSS/JS automatically on delivery. Pre-minifying in source double-minifies, destroys debuggability, and gains nothing; ship readable source.
-
-### CS / AMS
-
-Identifying the specific hot path requires runtime profiling — static analysis cannot reliably locate the bottleneck inside a clientlib. Refactoring monolithic clientlibs involves XML changes, dependency graph analysis, and risk of site-wide regressions. **Recommend-only** without runtime data; do not auto-fix.

@@ -1,6 +1,5 @@
 ---
 issue_type: interaction
-applicable_flavors: [eds, cs, ams]
 risk_tier: high
 
 required_validation:
@@ -23,9 +22,9 @@ see_also:
 
 # Interaction (INP)
 
-> **Risk tier:** high · **Applies to:** EDS, CS, AMS · **CWV metric:** INP
+> **Risk tier:** high · **CWV metric:** INP
 >
-> **⚠️ Recommendation-only across all flavors.** The agent should NOT emit a code change for this issue type without runtime profiling integration. Emit a checklist recommendation surfacing the audit data.
+> **⚠️ Recommendation-only on all stacks.** The agent should NOT emit a code change for this issue type without runtime profiling integration. Emit a checklist recommendation surfacing the audit data.
 
 ## What this addresses
 
@@ -124,10 +123,3 @@ button.addEventListener('click', () => {
 ```
 
 **Why this is bad:** The 0ms timeout still queues a task that runs synchronously when fired. INP attribution still attributes the work to this interaction. Use `scheduler.postTask()` with `priority: 'background'` for genuinely deferrable work, or break the work into chunks.
-
-## Flavor-specific notes
-
-Do not auto-fix interaction issues without runtime profiling data on any flavor — the fix path is a recommendation, never a code change in v1 of this playbook system. Stack-specific places to point the human investigator:
-
-- **EDS:** INP is almost always expensive synchronous work inside a block's `decorate()` — a document-wide `querySelectorAll`, a sync `fetch` awaited during decoration, or a large DOM-construction loop. Recommend scoping `querySelectorAll` to the block root and yielding (`scheduler.yield()` or the project's yield helper) inside long decoration/click handlers.
-- **CS / AMS:** legacy jQuery `document.ready` handlers doing hundreds of DOM operations, plus third-party metrics handlers firing first. Recommend patching `dataLayer.push` (and global `load`/`click` listeners) to yield to the main thread before third-party handlers run, and breaking long handlers into chunks.

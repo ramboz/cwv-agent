@@ -1,6 +1,5 @@
 ---
 issue_type: font-preload
-applicable_flavors: [eds, cs, ams]
 risk_tier: medium
 
 required_validation:
@@ -26,7 +25,7 @@ see_also:
 
 # Font preload
 
-> **Risk tier:** medium · **Applies to:** EDS, CS, AMS · **CWV metric:** LCP, FCP
+> **Risk tier:** medium · **CWV metric:** LCP, FCP
 >
 > ⚠️ **For most sites, [`font-fallback.md`](./font-fallback.md) is the right fix, not this one.** Preload is the *narrow* follow-up technique for sites using `font-display: optional` (where it's strictly required) or — outside autofix scope — for human-flagged display / brand-critical fonts. See "When to apply" below.
 
@@ -148,20 +147,6 @@ The `crossorigin` value must match the `@font-face` declaration's `crossorigin` 
 ```
 
 **Why this is bad:** `font-display: swap` already eliminates FOIT (fallback renders immediately) and pairs cleanly with a size-adjusted `@font-face` to eliminate swap CLS. Adding preload to that setup costs bandwidth without removing user-visible delay — the fallback was already covering the gap. The deterministic precondition for font preload is `font-display: optional`, *not* `font-display: swap`.
-
-## Flavor-specific notes
-
-### EDS
-
-Inject in the project's `head.html`. EDS's fixed-head model is actually well-suited to font preloads because fonts don't vary per page — the same body font is critical site-wide. Verify the font URL doesn't include a build hash (EDS typically serves static fonts from the codebase or DA without hashing).
-
-### CS
-
-Inject in `customheaderlibs.html` or the global page head HTL. Verify the file is not overridden per page template — if it is, the preload only fires on templates that inherit the override.
-
-### AMS
-
-Inject in the global header HTL or the equivalent JSP page template. Same per-template-override caveat as CS.
 
 ## Related playbooks
 

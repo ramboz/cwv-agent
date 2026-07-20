@@ -1,12 +1,11 @@
 ---
 issue_type: blocking-resource
-applicable_flavors: [eds, cs, ams]
 risk_tier: medium
 
 required_validation:
   - no_synchronous_dependents
   - no_above_fold_selectors_in_css
-  - clientlib_dependency_graph_clear
+  - bundle_dependency_graph_clear
 
 forbidden_techniques:
   - pattern: '<link\s+[^>]*rel\s*=\s*"stylesheet"\s+[^>]*media\s*=\s*"print"\s+[^>]*onload\s*=\s*"this\.media'
@@ -14,18 +13,11 @@ forbidden_techniques:
   - pattern: '<script\s+[^>]*async[^>]*src\s*=\s*"[^"]*"></script>\s*<script[^>]*>\s*\w+\.\w+\('
     reason: "Don't async a script when an inline script later calls into it — async runs out of order with inline scripts"
 
-flavor_overrides:
-  cs:
-    extra_validation:
-      - clientlib_no_embedded_dependents
-  ams:
-    extra_validation:
-      - clientlib_no_embedded_dependents
 ---
 
 # Blocking resources
 
-> **Risk tier:** medium · **Applies to:** EDS, CS, AMS · **CWV metric:** LCP, FCP
+> **Risk tier:** medium · **CWV metric:** LCP, FCP
 
 ## What this addresses
 
@@ -36,12 +28,12 @@ Render-blocking CSS and synchronous JS in the document head delay first paint. T
 **Apply when:**
 - A `<script>` in `<head>` has no `defer` / `async` and no later inline script depends on it synchronously
 - A stylesheet is large but has no above-the-fold selectors (Lighthouse coverage data confirms)
-- (CS/AMS) The clientlib dependency graph confirms no other clientlib `embeds` or depends on this one
+- For build-time bundles, the dependency graph confirms no other bundle embeds or depends on this one
 
 **Skip when:**
 - An inline `<script>` later in the document calls a function from the scripted resource (deferring breaks it)
 - The CSS contains above-the-fold selectors (deferring causes flash of unstyled content)
-- (CS/AMS) The clientlib is `embed`ded by other clientlibs (deferring breaks dependents silently)
+- The script is embedded by / a dependency of other bundles (deferring breaks dependents silently)
 
 ## Recommended approaches
 
@@ -97,24 +89,4 @@ Render-blocking CSS and synchronous JS in the document head delay first paint. T
 
 ### Defer on a script that other scripts call synchronously
 
-In CS/AMS clientlibs, deferring `clientlib-foo.js` when `clientlib-bar` lists `foo` in its `dependencies` (or `embed`s it) silently breaks `bar` — `bar` initializes before `foo` is loaded. **Always trace the clientlib dependency graph before adding `defer`.**
-
-## Flavor-specific notes
-
-### EDS
-
-Block scripts and CSS are self-contained modules. A static dependency trace (which inline scripts call into the deferred external script?) is statically parseable. Lower blast radius than clientlib edits.
-
-**The render-blocking budget is governed by `scripts/scripts.js`'s three loading phases** — knowing which phase a resource lives in is the most important fact for EDS render-blocking work:
-
-| Phase | When | What belongs here |
-|---|---|---|
-| `loadEager()` | before DOMContentLoaded, sync | LCP block decoration, critical CSS, hero priority hints — **critical path, keep minimal** |
-| `loadLazy()` | at DOMContentLoaded | non-critical block decoration, below-fold images, `lazy-styles.css` |
-| `loadDelayed()` | ~3s after `load` | analytics, martech, chat — everything non-UI |
-
-Anything in `loadEager` is on the critical path to LCP; the default move when something render-blocking shows up is **"does this belong in `loadEager`, or can it move to `loadLazy`?"** CSS is split by file, not by an extraction pass: `styles/styles.css` is render-blocking in `<head>` (keep under ~10KB — above-fold-critical rules only); `styles/lazy-styles.css` loads in `loadLazy()` (fine to be large). Block CSS (`/blocks/<name>/<name>.css`) loads with its block's decoration phase.
-
-### CS / AMS
-
-Parse all clientlib `.content.xml` files to build the `categories` × `dependencies` × `embed` graph. Safe deferral candidates are categories with no synchronous dependents AND no `embedded-by` relationships. **Deferring an embedded clientlib silently breaks the embedder.**
+When bundles carry build-time dependencies, deferring `foo.js` when `bar.js` depends on it (or embeds it) silently breaks `bar` — `bar` initializes before `foo` is loaded. **Always trace the bundle dependency graph before adding `defer`.**

@@ -42,23 +42,16 @@ import {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const VENDORED_DIR = path.resolve(__dirname, '..', 'references', 'playbooks');
 
-/** The documented mystique default source (README provenance). */
-export function defaultMystiqueSource() {
-  const home = process.env.HOME || process.env.USERPROFILE || '';
-  return home
-    ? path.join(home, 'Projects', 'spacecat', 'mystique', 'docs', 'opportunities', 'cwv', 'playbooks')
-    : null;
-}
-
 /**
- * Resolve the source playbooks directory from CLI flag → env → mystique default.
+ * Resolve the source playbooks directory from CLI flag → env. The playbook set
+ * is owned in-repo; syncing from an external curated set is optional.
  * @param {string|null} sourceFlag
  * @returns {string|null}
  */
 export function resolveSourceDir(sourceFlag) {
   if (sourceFlag) return path.resolve(sourceFlag);
   if (process.env.CWV_PLAYBOOKS_DIR) return path.resolve(process.env.CWV_PLAYBOOKS_DIR);
-  return defaultMystiqueSource();
+  return null;
 }
 
 /**
@@ -113,7 +106,7 @@ function usage() {
     'Usage: node .agents/scripts/playbook-sync.js [--check] [--source <dir>] [--source-ref <ref>]',
     '',
     'Refresh the vendored CWV playbooks and rewrite PROVENANCE.json.',
-    'Source dir resolves from --source, then CWV_PLAYBOOKS_DIR, then the mystique default.',
+    'Source dir resolves from --source, then CWV_PLAYBOOKS_DIR.',
     '',
     '  --check        Dry run: report drift vs the source, write nothing. Exit 3 if out of sync.',
     '  --source <d>   Source playbooks directory (overrides CWV_PLAYBOOKS_DIR).',
@@ -159,7 +152,7 @@ function main(argv = process.argv.slice(2)) {
   if (!sourceDir || !fs.existsSync(sourceDir) || playbookFiles(sourceDir).length === 0) {
     process.stderr.write(
       `source playbooks directory not found or empty: ${sourceDir || '(unset)'}\n`
-      + 'Point --source or CWV_PLAYBOOKS_DIR at a mystique cwv/playbooks checkout.\n',
+      + 'Point --source or CWV_PLAYBOOKS_DIR at a playbooks directory.\n',
     );
     return 4;
   }

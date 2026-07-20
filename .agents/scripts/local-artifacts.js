@@ -6,8 +6,8 @@
  * The default `local` execution profile ends in files under progress/{slug}/
  * plus optional source diffs/branch plans. This module indexes those files,
  * validates every emitted Finding envelope, and writes a single manifest that
- * can be handed to an engineer without requiring SpaceCat persistence. The
- * manifest also records which optional provider profiles fed the run.
+ * can be handed to an engineer as a complete local handoff. The manifest also
+ * records which optional provider profiles fed the run.
  */
 
 import fs from 'node:fs';
@@ -252,11 +252,6 @@ function normalizeProviderSlot(explicit, fallback = {}) {
     slot.notes = notes.length > 0 ? notes : fallbackNotes;
   }
 
-  const calls = Array.isArray(raw.spaceCatApiCalls)
-    ? raw.spaceCatApiCalls
-    : (Array.isArray(fallback.spaceCatApiCalls) ? fallback.spaceCatApiCalls : null);
-  if (calls) slot.spaceCatApiCalls = calls;
-
   return slot;
 }
 
@@ -285,12 +280,10 @@ function sourceManifestRecord(progressDir, sourceRepo) {
 
 function inferFieldProviderSlot(validFindings) {
   const profileBySource = {
-    rum: 'field-aem-rum',
     crux: 'field-google',
     psi: 'field-google',
   };
   const providerBySource = {
-    rum: 'rum-fetch',
     crux: 'crux',
     psi: 'pagespeed-insights',
   };
@@ -317,23 +310,6 @@ function inferSourceProviderSlot({ progressDir, sourceRepo }) {
   const sourceManifest = sourceManifestRecord(progressDir, sourceRepo);
   if (sourceManifest) {
     const tool = sourceManifest.manifest && sourceManifest.manifest.tool;
-    if (tool === 'source-fetch') {
-      return {
-        status: 'used',
-        profiles: ['source-s3'],
-        providers: ['source-fetch'],
-        artifacts: [sourceManifest.path],
-      };
-    }
-    if (tool === 'eds-source-fetch') {
-      return {
-        status: 'used',
-        profiles: ['local'],
-        providers: ['eds-source-fetch'],
-        artifacts: [sourceManifest.path],
-        notes: ['prod-reconstruction'],
-      };
-    }
     return {
       status: 'used',
       profiles: [],
@@ -370,33 +346,28 @@ function inferValidationProviderSlot({ findingValidations, artifacts }) {
     .filter((validation) => /(?:^|\/)validate-findings\.json$/.test(validation.file))
     .map((validation) => validation.file);
   const verdictArtifacts = (artifacts.verdicts || []).map((record) => record.path);
-  const asoArtifacts = (artifacts.asoValidation || []).map((record) => record.path);
   const localUsed = validationArtifacts.length > 0 || verdictArtifacts.length > 0;
-  const asoUsed = asoArtifacts.length > 0;
-  const used = localUsed || asoUsed;
   return {
-    status: used ? 'used' : 'not-used',
-    profiles: normalizeStringList([
-      localUsed ? 'local' : null,
-      asoUsed ? 'validate-aso' : null,
-    ]),
+    status: localUsed ? 'used' : 'not-used',
+    profiles: normalizeStringList([localUsed ? 'local' : null]),
     providers: normalizeStringList([
       validationArtifacts.length > 0 ? 'cwv-validate' : null,
       verdictArtifacts.length > 0 ? 'oracle' : null,
-      asoUsed ? 'aso-shallow-validator' : null,
     ]),
-    artifacts: normalizeStringList([...validationArtifacts, ...verdictArtifacts, ...asoArtifacts]),
+    artifacts: normalizeStringList([...validationArtifacts, ...verdictArtifacts]),
   };
 }
 
-function inferPublishingProviderSlot(artifacts) {
-  const publishPlanArtifacts = (artifacts.publishPlans || []).map((record) => record.path);
+function inferReportingProviderSlot(artifacts) {
+  const reportArtifacts = [
+    ...(artifacts.diagnoseReports || []),
+    ...(artifacts.summaries || []),
+  ].map((record) => record.path);
   return {
-    status: publishPlanArtifacts.length > 0 ? 'planned' : 'not-used',
-    profiles: ['publish-spacecat'],
-    providers: ['cwv-publish'],
-    artifacts: publishPlanArtifacts,
-    spaceCatApiCalls: [],
+    status: reportArtifacts.length > 0 ? 'used' : 'not-used',
+    profiles: reportArtifacts.length > 0 ? ['local'] : [],
+    providers: reportArtifacts.length > 0 ? ['cwv-report'] : [],
+    artifacts: normalizeStringList(reportArtifacts),
   };
 }
 
@@ -431,64 +402,6 @@ function shortJsonSummary(value) {
   return Object.keys(out).length > 0 ? out : null;
 }
 
-function summarizeBuilderResult(result) {
-  if (!result || typeof result !== 'object') return null;
-  const steps = Array.isArray(result.steps) ? result.steps : [];
-  const failedSteps = steps.filter((step) => step && step.exitCode !== 0);
-  const zeroExitSteps = steps.length > 0 && failedSteps.length === 0;
-  const success = result.success === true || zeroExitSteps;
-  return {
-    status: success ? 'passed' : (result.success === false || failedSteps.length > 0 ? 'failed' : 'unknown'),
-    success,
-    stepCount: steps.length,
-    failedStepCount: failedSteps.length,
-    stderrLogCount: steps.filter((step) => step && step.stderrLogFile).length,
-    logsDir: result.logsDir || null,
-    distDir: result.distDir || null,
-  };
-}
-
-function summarizeAsoArtifact(record, data) {
-  if (!data) return null;
-  const base = path.posix.basename(record.path);
-  if (base === 'poll-trail.json' && Array.isArray(data)) {
-    const last = data[data.length - 1] || null;
-    return {
-      status: data.length > 0 ? 'recorded' : 'empty',
-      pollCount: data.length,
-      lastStatus: last && (last.status || last.verdict || last.state) || null,
-    };
-  }
-  if (base === 'final-verdict.json' || base === 'summary.json') {
-    const verdict = String(data.verdict || data.status || '').toUpperCase();
-    return {
-      status: ['PASS', 'PASSED', 'VALIDATED'].includes(verdict)
-        ? 'passed'
-        : (verdict ? 'failed' : 'unknown'),
-      ...shortJsonSummary(data),
-    };
-  }
-  return {
-    status: 'recorded',
-    ...shortJsonSummary(data),
-  };
-}
-
-function summarizePublishArtifact(data) {
-  if (!data || typeof data !== 'object') return null;
-  return {
-    status: data.mutatesBackend === false ? 'draft' : (data.publishState || data.status || 'recorded'),
-    kind: data.kind || null,
-    metric: data.metric || null,
-    selectedUrl: data.selectedUrl || data.url || null,
-    confirmBeforeWriteRequired: data.confirmBeforeWriteRequired,
-    mutatesBackend: data.mutatesBackend,
-    siteId: data.siteId || null,
-    action: data.suggestion && data.suggestion.action || null,
-    targetSuggestionId: data.suggestion && data.suggestion.targetSuggestionId || null,
-  };
-}
-
 function summarizeDeploymentArtifact(data) {
   if (!data || typeof data !== 'object') return null;
   return {
@@ -502,12 +415,7 @@ function summarizeDeploymentArtifact(data) {
 function summarizeArtifactJson(progressDir, record) {
   const data = readArtifactJson(progressDir, record);
   if (!data) return null;
-  if (record.kind === 'aem-clientlib-build-result') return summarizeBuilderResult(data);
-  if (record.kind === 'aso-validation') return summarizeAsoArtifact(record, data);
-  if (['diagnose-spacecat-draft', 'remediation-payload', 'publish-plan'].includes(record.kind)) {
-    return summarizePublishArtifact(data);
-  }
-  if (record.kind === 'aem-deployment-revalidation') return summarizeDeploymentArtifact(data);
+  if (record.kind === 'deployment-remeasurement') return summarizeDeploymentArtifact(data);
   if (record.kind === 'oracle-verdict') return shortJsonSummary(data);
   return shortJsonSummary(data);
 }
@@ -519,30 +427,6 @@ function progressRelativeFromPath(progressDir, rawPath) {
   const resolved = path.isAbsolute(raw) ? path.resolve(raw) : path.resolve(progressRoot, raw);
   if (resolved !== progressRoot && !resolved.startsWith(`${progressRoot}${path.sep}`)) return null;
   return toPosix(path.relative(progressRoot, resolved));
-}
-
-function addBuilderDirectoryRecords(progressDir, artifacts, seen) {
-  const candidates = [
-    { bucket: 'sourceBuildLogs', kind: 'aem-clientlib-builder-logs', path: 'aem-clientlib-builder-logs' },
-    { bucket: 'sourceBuildDists', kind: 'aem-clientlib-builder-dist', path: 'aem-clientlib-builder-dist' },
-  ];
-
-  for (const record of artifacts.sourceBuilds || []) {
-    const data = readArtifactJson(progressDir, record);
-    if (!data || typeof data !== 'object') continue;
-    const logsDir = progressRelativeFromPath(progressDir, data.logsDir);
-    const distDir = progressRelativeFromPath(progressDir, data.distDir);
-    if (logsDir) candidates.push({ bucket: 'sourceBuildLogs', kind: 'aem-clientlib-builder-logs', path: logsDir });
-    if (distDir) candidates.push({ bucket: 'sourceBuildDists', kind: 'aem-clientlib-builder-dist', path: distDir });
-  }
-
-  for (const candidate of candidates) {
-    addUniqueRecord(
-      artifacts[candidate.bucket],
-      seen[candidate.bucket],
-      artifactRecord(progressDir, candidate.path, candidate.kind),
-    );
-  }
 }
 
 function buildValidationArtifactIndex({
@@ -618,82 +502,13 @@ function buildValidationArtifactIndex({
   for (const record of artifacts.sourcePatches || []) {
     add(record, { provider: 'local-artifacts', validationLayer: 'sourcePatch' });
   }
-  for (const record of artifacts.sourceBuilds || []) {
-    add(record, { provider: 'aem-clientlib-builder', validationLayer: 'sourceBuild', required: true });
+  for (const record of artifacts.deployment || []) {
+    add(record, { provider: 'operator', validationLayer: 'deployment' });
   }
-  for (const record of artifacts.sourceBuildLogs || []) {
-    add(record, { provider: 'aem-clientlib-builder', validationLayer: 'sourceBuild' });
-  }
-  for (const record of artifacts.sourceBuildDists || []) {
-    add(record, { provider: 'aem-clientlib-builder', validationLayer: 'sourceBuild' });
-  }
-  if ((artifacts.sourceBuilds || []).length === 0) {
-    addMissing('aem-clientlib-build-result.json', 'aem-clientlib-build-result', {
-      provider: 'aem-clientlib-builder',
-      validationLayer: 'sourceBuild',
-      status: 'missing',
-      required: true,
-    });
-  }
-  if ((artifacts.sourceBuildLogs || []).length === 0) {
-    addMissing('aem-clientlib-builder-logs', 'aem-clientlib-builder-logs', {
-      provider: 'aem-clientlib-builder',
-      validationLayer: 'sourceBuild',
-      status: 'missing',
-      required: true,
-    });
-  }
-  if ((artifacts.sourceBuildDists || []).length === 0) {
-    addMissing('aem-clientlib-builder-dist', 'aem-clientlib-builder-dist', {
-      provider: 'aem-clientlib-builder',
-      validationLayer: 'sourceBuild',
-      status: 'missing',
-      required: true,
-    });
-  }
-
-  const asoExpected = [
-    'request.json',
-    'submit-response.json',
-    'poll-trail.json',
-    'final-verdict.json',
-    'summary.json',
-  ];
-  for (const record of artifacts.asoValidation || []) {
-    add(record, { provider: 'aso-shallow-validator', validationLayer: 'aso' });
-  }
-  for (const name of asoExpected) {
-    if (!(artifacts.asoValidation || []).some((record) => record.path === `aso-validation/${name}`)) {
-      addMissing(`aso-validation/${name}`, 'aso-validation', {
-        provider: 'aso-shallow-validator',
-        validationLayer: 'aso',
-        status: 'skipped',
-      });
-    }
-  }
-
-  for (const record of [
-    ...(artifacts.diagnoseDrafts || []),
-    ...(artifacts.remediationPayloads || []),
-    ...(artifacts.publishPlans || []),
-  ]) {
-    add(record, { provider: 'cwv-publish', validationLayer: 'publishing' });
-  }
-  if ((artifacts.publishPlans || []).length === 0) {
-    addMissing('publish-plan.json', 'publish-plan', {
-      provider: 'cwv-publish',
-      validationLayer: 'publishing',
-      status: 'skipped',
-    });
-  }
-
-  for (const record of artifacts.aemDeployment || []) {
-    add(record, { provider: 'aem', validationLayer: 'aemDeployment' });
-  }
-  if ((artifacts.aemDeployment || []).length === 0) {
-    addMissing('aem-deployment-revalidation.json', 'aem-deployment-revalidation', {
-      provider: 'aem',
-      validationLayer: 'aemDeployment',
+  if ((artifacts.deployment || []).length === 0) {
+    addMissing('deployment-remeasurement.json', 'deployment-remeasurement', {
+      provider: 'operator',
+      validationLayer: 'deployment',
       status: 'skipped',
     });
   }
@@ -731,23 +546,10 @@ function buildManifestValidationLayers({ progressDir, artifacts, validatedFindin
     ...validatedFindings.map((finding) => finding._findingFile),
     ...(artifacts.verdicts || []).map((record) => record.path),
   ]);
-  const sourceBuildResults = (artifacts.sourceBuilds || [])
-    .map((record) => readArtifactJson(progressDir, record))
-    .filter(Boolean);
-  const asoVerdicts = (artifacts.asoValidation || [])
-    .map((record) => readArtifactJson(progressDir, record))
-    .filter(Boolean)
-    .map((artifact) => artifact.verdict)
-    .filter(Boolean);
-
   return buildValidationLayerSummary({
     runtimeArtifacts,
     runtimeResults,
-    sourceBuildArtifacts: (artifacts.sourceBuilds || []).map((record) => record.path),
-    sourceBuildResults,
-    asoArtifacts: (artifacts.asoValidation || []).map((record) => record.path),
-    asoVerdicts,
-    aemDeploymentArtifacts: (artifacts.aemDeployment || []).map((record) => record.path),
+    deploymentArtifacts: (artifacts.deployment || []).map((record) => record.path),
   });
 }
 
@@ -779,9 +581,9 @@ function buildIntegrationProviders({
       explicit.validation,
       inferValidationProviderSlot({ findingValidations, artifacts }),
     ),
-    publishing: normalizeProviderSlot(
-      explicit.publishing,
-      inferPublishingProviderSlot(artifacts),
+    reporting: normalizeProviderSlot(
+      explicit.reporting,
+      inferReportingProviderSlot(artifacts),
     ),
   };
 }
@@ -811,7 +613,7 @@ function mergeStructuralGateResults(...gates) {
     gate && gate.sourceFiles ? gate.sourceFiles : []
   )));
   return {
-    name: 'eds-structural-contract',
+    name: 'structural-contract',
     result: result || 'not-run',
     sourceFindingIds,
     sourceFiles,
@@ -1280,19 +1082,11 @@ function buildManifest({
     baselineFiles: [],
     findingFiles: [],
     diagnoseFindings: [],
-    diagnoseDrafts: [],
     diagnoseReports: [],
-    remediationPayloads: [],
-    remediationReports: [],
-    publishPlans: [],
     patchCandidates: [],
     treatmentMeasurements: [],
     verdicts: [],
-    sourceBuilds: [],
-    sourceBuildLogs: [],
-    sourceBuildDists: [],
-    asoValidation: [],
-    aemDeployment: [],
+    deployment: [],
     validatedFindings: [],
     screenshots: [],
     sourceEdits: [],
@@ -1306,11 +1100,8 @@ function buildManifest({
     ['baseline.json', 'baseline', 'baselineFiles'],
     ['baseline-2.json', 'baseline', 'baselineFiles'],
     ['session.json', 'session', 'sessionFiles'],
-    ['diagnose-spacecat-draft.json', 'diagnose-spacecat-draft', 'diagnoseDrafts'],
     ['diagnose-report.md', 'diagnose-report', 'diagnoseReports'],
-    ['remediation-payload.json', 'remediation-payload', 'remediationPayloads'],
-    ['remediation-report.md', 'remediation-report', 'remediationReports'],
-    ['publish-plan.json', 'publish-plan', 'publishPlans'],
+    ['report.md', 'report', 'diagnoseReports'],
     ['cumulative.json', 'patch-bundle', 'patchCandidates'],
     ['ranked_patches.json', 'patch-candidates', 'patchCandidates'],
     ['patches.json', 'patch-bundle', 'patchCandidates'],
@@ -1341,21 +1132,16 @@ function buildManifest({
       addUniqueRecord(artifacts.treatmentMeasurements, seen.treatmentMeasurements, fileRecord(resolvedProgress, normalized, 'treatment-measurement'));
     } else if (/^experiments\/[^/]+\/verdict\.json$/.test(normalized)) {
       addUniqueRecord(artifacts.verdicts, seen.verdicts, fileRecord(resolvedProgress, normalized, 'oracle-verdict'));
-    } else if (normalized.endsWith('aem-clientlib-build-result.json')) {
-      addUniqueRecord(artifacts.sourceBuilds, seen.sourceBuilds, fileRecord(resolvedProgress, normalized, 'aem-clientlib-build-result'));
     } else if (/^source-patches\/.+\.(?:diff|patch)$/.test(normalized)) {
       addUniqueRecord(artifacts.sourcePatches, seen.sourcePatches, fileRecord(resolvedProgress, normalized, 'source-patch'));
-    } else if (/^aso-validation\/(?:request|submit-response|poll-trail|final-verdict|summary)\.json$/.test(normalized)) {
-      addUniqueRecord(artifacts.asoValidation, seen.asoValidation, fileRecord(resolvedProgress, normalized, 'aso-validation'));
-    } else if (/^(?:aem-deployment|aem-revalidation|aem-deployment-revalidation)\.json$/.test(normalized)) {
-      addUniqueRecord(artifacts.aemDeployment, seen.aemDeployment, fileRecord(resolvedProgress, normalized, 'aem-deployment-revalidation'));
+    } else if (/^(?:deployment-remeasurement|deployment)\.json$/.test(normalized)) {
+      addUniqueRecord(artifacts.deployment, seen.deployment, fileRecord(resolvedProgress, normalized, 'deployment-remeasurement'));
     } else if (IMAGE_FILE_RE.test(normalized)) {
       addUniqueRecord(artifacts.screenshots, seen.screenshots, fileRecord(resolvedProgress, normalized, 'screenshot'));
     } else if (/source-edits.*\.json$/.test(base)) {
       addUniqueRecord(artifacts.sourceEdits, seen.sourceEdits, fileRecord(resolvedProgress, normalized, 'source-edits'));
     }
   }
-  addBuilderDirectoryRecords(resolvedProgress, artifacts, seen);
 
   const findingValidations = artifacts.findingFiles.map((record) => validateFindingFile(resolvedProgress, record));
   const validFindings = findingValidations
@@ -1433,8 +1219,6 @@ function buildManifest({
   if (!branchPatchGenerationPassed) blockedReasons.push('branch-patch-generation-failed');
   const completion = {
     status: blockedReasons.length === 0 ? 'complete' : 'blocked',
-    publishRequired: false,
-    spaceCatApiCalls: [],
     findingValidationPassed: validationPassed,
     invalidFindingFiles: findingValidations
       .filter((validation) => !validation.valid)

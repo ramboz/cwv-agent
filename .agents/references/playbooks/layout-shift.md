@@ -1,6 +1,5 @@
 ---
 issue_type: layout-shift
-applicable_flavors: [eds, cs]
 risk_tier: medium
 
 required_validation:
@@ -27,7 +26,7 @@ see_also:
 
 # Layout shift (general)
 
-> **Risk tier:** medium · **Applies to:** EDS, CS (recommend-only on AMS — root cause too variable in legacy JSP stacks) · **CWV metric:** CLS
+> **Risk tier:** medium · **CWV metric:** CLS
 
 ## What this addresses
 
@@ -40,10 +39,10 @@ CLS is caused by elements that change size or position after first render. This 
 | Web font swap (FOIT/FOUT) | [`font-fallback.md`](./font-fallback.md) |
 | Ad/embed slot | Fixed `aspect-ratio` or `min-height` placeholder |
 | Sticky header/nav that detaches on scroll | Reserve the collapsing wrapper's height (below) |
-| (EDS) Lazy section grows on load — section gating removed / `loadEager` awaits an empty section | Fix the **loading sequence**, not a per-element shim (below; EDS only) |
+| Lazily-hydrated section grows from scaffold on load | Fix the **loading sequence**, not a per-element shim (below) |
 | Hydrated tab/accordion default state differs from static layout | Render the hydrated default panel/slot at final geometry before first paint |
 | Async 3rd-party embed/widget (reviews, social, e.g. Elfsight) injected into an unsized container | Reserve the embed container's height (`min-height`) — see below |
-| Full-bleed `::before` section background "amplifying" a shift (AEM `full-width-background-extend`) | The `::before` is the **amplifier, not the cause** — reserve the late content *above* it; see below |
+| Full-bleed `::before` section background "amplifying" a shift | The `::before` is the **amplifier, not the cause** — reserve the late content *above* it; see below |
 | Hydrated/default-state mismatch (tab/panel starts `0px`/hidden, hydration opens it) | Align SSR/static CSS with the hydrated default and reserve the active panel before first paint |
 
 If the element type can't be classified from Lighthouse output, **do not auto-fix** — recommend manual investigation.
@@ -57,7 +56,7 @@ If the element type can't be classified from Lighthouse output, **do not auto-fi
 **Skip when:**
 - No element attribution (CLS score known but no element identified — common pre–PSI v11)
 - Root cause is "complex layout reflow" without a single offending element
-- (AMS) Legacy JSP stack with multiple includes — too variable, recommend manual investigation
+- Legacy multi-include template stacks — too variable, recommend manual investigation
 
 ## Recommended approaches
 
@@ -89,10 +88,10 @@ widget. The target div is usually present in the authored markup (e.g. Elfsight'
 .cmp-embed [class*="elfsight-app"] { min-height: 376px; } /* ~rendered height; tune per breakpoint */
 ```
 
-### Full-bleed `::before` background amplifiers (AEM `full-width-background-extend`)
+### Full-bleed `::before` background amplifiers
 
 **Diagnostic trap:** when `cls.shiftSources` blames a `::before` on a full-bleed
-section background (the AEM `full-width-background-extend` pattern — an
+section background (a common "full-width background" pattern — a
 `position:absolute; width:4000px` pseudo-element that extends a centered
 section's background edge-to-edge), that element is almost never the *cause*. It
 is an **amplifier**: because it is enormous, any vertical movement of its
@@ -100,35 +99,32 @@ container — caused by late content **above** it (a lazy image without dims, an
 async embed, a tabbed panel initialising) — scores a huge layout-shift area. Do
 NOT try to pin the `::before`. Find what pushes its container (use the box-metric
 diff + the per-source `cls-variance` judgment) and reserve *that* upstream space;
-the `::before` then stops moving. (Canonical case: mauriceblackburn.com.au
-homepage — an Elfsight embed pushed two `full-width-background-extend` sections,
-contributing ~0.66 of a 0.92 CLS; reserving the embed zeroed the `::before` source.)
+the `::before` then stops moving. (Canonical case: a third-party embed pushing two
+full-width background sections, contributing ~0.66 of a 0.92 CLS; reserving the
+embed zeroed the `::before` source.)
 
-### (EDS) Lazy-section grow-in-place — fix the loading sequence, not the element
+### Lazy-section grow-in-place — fix the loading sequence, not the element
 
-EDS-only. When the shifting elements are whole `.section`s that **grow from scaffold
-height after `body.appear`** (diagnostic signature: at reveal they are still
-`data-section-status="initialized"`/`"loading"` and `display:block`), the cause is a
-**broken section-reveal gating contract**, not any single element — so a `min-height`
-shim on one container is causally inert (verified on zepbound.lilly.com `/savings`).
+When the shifting elements are whole page **sections that grow from scaffold
+height after first paint** (diagnostic signature: at reveal they are still in a
+loading/initializing state and `display:block`), the cause is a **broken
+section-reveal gating contract**, not any single element — so a `min-height`
+shim on one container is causally inert.
 
-Two compounding faults, both in the shared EDS frontend (`scripts/scripts.js`,
-`scripts/aem.js`, `styles/styles.css`):
+Two compounding faults, both in the shared frontend loading code:
 
-1. The per-section `display:none`-until-`data-section-status="loaded"` gate (and/or
-   `body:not(.appear){display:none}`) was **removed** — often swapped for an *opacity*
-   transition "to prevent FOUC", which does **not** remove layout — so lazy sections
-   sit in flow and grow as they decorate.
-2. `loadEager` **awaits an empty first section** (a spacer / `css-block`), so the real
-   ATF — including the LCP element — decorates lazily.
+1. The per-section hide-until-loaded gate was **removed** — often swapped for an
+   *opacity* transition "to prevent FOUC", which does **not** remove layout — so
+   lazy sections sit in flow and grow as they hydrate.
+2. The eager phase **awaits an empty first section** (a spacer), so the real
+   above-the-fold content — including the LCP element — hydrates lazily.
 
 These **entangle CLS and LCP**: gating the lazy sections to fix CLS hides the
-lazily-decorated LCP element (LCP regresses); not gating lets it shift. **Do not ship
-a CSS-only gate.** The fix is the loading sequence — see
-[`stacks/aem-eds.md`](../stacks/aem-eds.md) → "Section reveal gating": `loadEager`
-awaits the real ATF/LCP section and reveals after it; below-fold sections stay gated
-until `loaded`. This is an architecture fix on the shared frontend (lands site-wide),
-not a runtime patch — publish it as `cwv-publish` guidance (no `patchContent`).
+lazily-hydrated LCP element (LCP regresses); not gating lets it shift. **Do not
+ship a CSS-only gate.** The fix is the loading sequence: the eager phase awaits
+the real above-the-fold/LCP section and reveals after it; below-fold sections
+stay gated until loaded. This is an architecture fix on the shared frontend
+(lands site-wide), not a runtime patch — ship it as manual-review guidance.
 
 ### Hydrated tab / accordion default-state mismatch
 
@@ -364,27 +360,3 @@ reserving the wrapper height took scroll-phase CLS from **0.190 → 0.000**.
 }
 .menu.open { transform: translateY(0); }
 ```
-
-## Flavor-specific notes
-
-### EDS
-
-EDS layout shift is usually a **loading-sequence / reveal-gating** problem, not a
-per-element shim — see "(EDS) Lazy-section grow-in-place — fix the loading
-sequence, not the element" and "Hydrated tab / accordion default-state mismatch"
-above. The fix lands on the shared frontend (`scripts/scripts.js`,
-`scripts/aem.js`, `styles/styles.css`) and ships site-wide, so **recommend it —
-don't emit a per-page CSS gate.**
-
-### CS
-
-A CLS/layout fix on AEM CS gives you a runtime selector, but it has to land in the right layer —
-and that is rarely obvious. The decision that matters most: **is the styling CSS actually in the
-repo?** Many CS sites ship component CSS as **vendor-built content packages** (a compiled
-`ui.frontend` or built `.all` packages), so that CSS is **not in Cloud Manager git** — a
-source-faithful edit against the import is impossible. In that case the deliverable is an
-**override clientlib in the customer's own `apps/`**, with its category embedded in the page
-`<head>` *after* the vendor styles so `!important` wins — not an edit to HTL or to a clientlib
-that doesn't contain the rule. Only when the rule is committed in the repo should you recommend a
-direct edit. (Authored position/size flowing through a Sling model from a `_cq_dialog` is a
-zero-code content change, but it repositions only — it won't fix an entrance/reflow shift.)

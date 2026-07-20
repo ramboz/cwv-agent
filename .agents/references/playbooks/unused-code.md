@@ -1,6 +1,5 @@
 ---
 issue_type: unused-code
-applicable_flavors: [eds, cs, ams]
 risk_tier: medium
 
 required_validation:
@@ -13,18 +12,11 @@ forbidden_techniques:
   - pattern: 'core-js|@babel/polyfill|regenerator-runtime'
     reason: "Polyfills appear unused at runtime if the browser already has the feature — never remove polyfill imports based on coverage data alone"
 
-flavor_overrides:
-  cs:
-    extra_validation:
-      - clientlib_used_by_other_templates_checked
-  ams:
-    extra_validation:
-      - clientlib_used_by_other_templates_checked
 ---
 
 # Unused code
 
-> **Risk tier:** medium · **Applies to:** EDS, CS, AMS · **CWV metric:** LCP, TBT
+> **Risk tier:** medium · **CWV metric:** LCP, TBT
 
 ## What this addresses
 
@@ -36,7 +28,7 @@ Lighthouse coverage reports that some bytes of CSS/JS are downloaded but never e
 - Lighthouse coverage data confirms the bytes are genuinely unused (not just uncovered by this page's flow)
 - The code is not a polyfill (polyfills appear unused at runtime in modern browsers but are still required for older ones)
 - The code is not gated behind a user action (modal handler, accordion toggle) that just didn't fire during the audit
-- (CS/AMS) Cross-template usage is verified — a clientlib unused on this page may be used on the homepage
+- Cross-template usage is verified — a bundle unused on this page may be used on the homepage
 
 **Skip when:**
 - The audited page is one of many; coverage data from a single URL is insufficient to confirm "globally unused"
@@ -104,13 +96,3 @@ Doesn't remove the code globally, but removes it from the critical-path bundle.
 ```
 
 **Why this is bad:** `.product-grid__item` may be used on `/products` but not on `/home`. Coverage from a single URL is insufficient. Confirm the selector matches no element across the site (or sample multiple page templates) before removing.
-
-## Flavor-specific notes
-
-### EDS
-
-Coverage data maps cleanly to specific block JS/CSS files. EDS is also more granular — each block's CSS/JS only loads when the block is on the page, so "unused on this page" is more often actually unused. Still verify polyfills and feature-gated paths.
-
-### CS / AMS
-
-A clientlib may appear unused on the audited URL but be actively used on a different page template. Parse the `jcr_root` content to map clientlib categories → templates that include them. Per-template-type coverage assessment makes the "genuinely unused" determination reliable.

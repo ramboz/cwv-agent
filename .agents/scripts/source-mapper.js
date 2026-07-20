@@ -8,9 +8,12 @@
  * permanent edit in the target repo.
  *
  * Supported stacks (fingerprinted automatically, or forced via --stack):
- *   - `generic`    — plain static HTML templates.
- *   - `aem-eds`    — AEM Edge Delivery Services (scripts/scripts.js + head.html + blocks/).
- *   - `aem-cs`     — AEM as a Cloud Service (clientlibs + HTL under apps/).
+ *   - `generic`    — plain static HTML templates (the built-in strategy).
+ *
+ * Stack detection is a pluggable seam: `detectStack` records fingerprint
+ * signals, and per-stack edit strategies branch on the resolved name. V3 ships
+ * the `generic` strategy; a stack pack adds its fingerprints + strategies here
+ * and documents itself under `.agents/references/stacks/` (see _FORMAT.md).
  *
  * Supported patch types:
  *   - `preloads`         — <link rel=preload> insertion.
@@ -25,8 +28,8 @@
  *   - Preview mode never writes to disk.
  *   - --apply mode always creates a `.bak` copy next to any edited file, and
  *     prints the backup paths before touching originals.
- *   - CDN header patches and anything under `apps/` in an AEM CS repo are NEVER
- *     auto-applied — they are emitted to the "Manual review needed" section.
+ *   - CDN header patches are NEVER auto-applied — they are emitted to the
+ *     "Manual review needed" section.
  *
  * CLI:
  *   node source-mapper.js --patches <path> --repo <root> [--apply] [--stack <name>]
@@ -45,151 +48,22 @@ import path from 'node:path';
 // --------------------------------------------------------------------------
 
 /**
- * Read the SpaceCat importer manifest (`.cwv-source-manifest.json`, written by
- * source-fetch.js) if present. Returns the parsed object, or null when absent
- * or unparseable.
- * @param {string} repoRoot
- * @returns {object|null}
- */
-function readManifest(repoRoot) {
-  try {
-    return JSON.parse(fs.readFileSync(path.join(repoRoot, '.cwv-source-manifest.json'), 'utf8'));
-  } catch { return null; }
-}
-
-/**
- * Map an importer manifest to a stack, honoring the code *channel* first.
- *
- * The `aemy` channel (GitHub-via-AEMY) is always an EDS frontend repo — the CWV
- * fix surface for both document-based EDS and XWalk (AEM-authored EDS). It is
- * authoritative over `deliveryType`, which on a XWalk site reflects the *author*
- * stack (often `aem_cs`), not the published EDS frontend we actually edit. The
- * `cm` / unknown channel falls back to deliveryType: aem_cs / aem_ams share the
- * Maven/HTL layout for source edits → 'aem-cs'; aem_edge → 'aem-eds'. Returns
- * null when the manifest carries no usable signal.
- * @param {object|null} manifest
- * @returns {'aem-cs'|'aem-eds'|null}
- */
-function stackFromManifest(manifest) {
-  if (!manifest) return null;
-  if (manifest.channel === 'aemy') return 'aem-eds';
-  const map = { aem_cs: 'aem-cs', aem_ams: 'aem-cs', aem_edge: 'aem-eds' };
-  return map[manifest.deliveryType] || null;
-}
-
-/**
  * Fingerprint a repo to pick the right mapping strategy. Uses file-tree
- * signals (never executes repo code). Returns one of: 'aem-eds', 'aem-cs',
- * 'generic'. If no signals match, defaults to 'generic'.
- *
- * Precedence: the importer manifest is consulted first — the `aemy` channel
- * pins aem-eds (a XWalk frontend tagged `aem_cs` still resolves to EDS), and a
- * deliveryType sidesteps the depth-limited walk — EXCEPT an unmistakably-EDS
- * file tree overrides a CS deliveryType, because the pulled repo's structure is
- * ground truth.
- *
- * Heuristics (mirrors .agents/references/topics/stack-detection.md):
- *   - aem-eds: scripts/scripts.js OR scripts/aem.js OR blocks/* OR head.html
- *   - aem-cs:  apps/**\/clientlibs OR etc.clientlibs OR ui.apps dir OR *.html
- *              under apps/**\/components
- *   - generic: anything else that has at least one .html file
+ * signals (never executes repo code). V3 ships one built-in strategy —
+ * `generic` (plain HTML templates) — and this function is the seam a stack
+ * pack extends with its own fingerprints (return its stack name + signals).
  *
  * @param {string} repoRoot
- * @returns {{stack: 'aem-eds'|'aem-cs'|'generic', signals: string[]}}
+ * @returns {{stack: 'generic', signals: string[]}}
  */
 function detectStack(repoRoot) {
   const signals = [];
   const exists = (rel) => {
     try { return fs.existsSync(path.join(repoRoot, rel)); } catch { return false; }
   };
-  const hasDir = (rel) => {
-    try { return fs.statSync(path.join(repoRoot, rel)).isDirectory(); } catch { return false; }
-  };
-
-  // EDS signals — computed first so a clearly-EDS file tree can override a
-  // mis-tagged manifest (e.g. a XWalk frontend whose deliveryType is aem_cs and
-  // whose channel is missing from a hand-authored manifest).
-  if (exists('scripts/scripts.js')) signals.push('eds:scripts/scripts.js');
-  if (exists('scripts/aem.js')) signals.push('eds:scripts/aem.js');
-  if (exists('head.html')) signals.push('eds:head.html');
-  if (hasDir('blocks')) signals.push('eds:blocks/');
-  if (exists('fstab.yaml') || exists('fstab.yml')) signals.push('eds:fstab');
-  if (exists('helix-query.yaml')) signals.push('eds:helix-query');
-  const edsScore = signals.filter((s) => s.startsWith('eds:')).length;
-  const strongEds = edsScore >= 1
-    && (exists('scripts/scripts.js') || exists('head.html') || hasDir('blocks'));
-
-  // Most authoritative when present: the importer manifest. This also sidesteps
-  // the file-tree heuristics' depth-limited walk, which otherwise mis-reads the
-  // deeply-nested importer layout (portais/<site>/apps/.../jcr_root/apps/<proj>/
-  // clientlibs, ~10 levels deep) as 'generic'.
-  const manifest = readManifest(repoRoot);
-  const fromManifest = stackFromManifest(manifest);
-  if (fromManifest === 'aem-eds') {
-    const via = manifest.channel === 'aemy' ? 'channel:aemy' : 'deliveryType:aem_edge';
-    return { stack: 'aem-eds', signals: [`manifest:${via}`, ...signals] };
-  }
-  if (fromManifest === 'aem-cs') {
-    // A strong EDS file tree beats a CS deliveryType (XWalk frontend, no channel).
-    if (strongEds) {
-      return { stack: 'aem-eds', signals: ['manifest:aem-cs(overridden by EDS file tree)', ...signals] };
-    }
-    return { stack: 'aem-cs', signals: ['manifest:aem-cs'] };
-  }
-
-  // No usable manifest signal — fall through to file-tree heuristics.
-  if (strongEds) return { stack: 'aem-eds', signals };
-
-  // AEM CS signals.
-  if (hasDir('ui.apps')) signals.push('cs:ui.apps');
-  if (hasDir('ui.frontend')) signals.push('cs:ui.frontend');
-  if (hasDir('apps')) signals.push('cs:apps/');
-  // any clientlibs subdir anywhere under apps/?
-  const hasClientlibs = hasAnyPath(repoRoot, /\/clientlibs\//);
-  if (hasClientlibs) signals.push('cs:clientlibs');
-  const hasHtl = hasAnyPath(repoRoot, /\/apps\/.+\.html$/);
-  if (hasHtl) signals.push('cs:htl');
-  // `jcr_root/apps/` is the unmistakable AEM content-package marker — present in
-  // the nested importer layout even when the top-level dirs are not ui.apps/apps.
-  const hasJcrRoot = hasAnyPath(repoRoot, /\/jcr_root\/apps\//);
-  if (hasJcrRoot) signals.push('cs:jcr_root');
-
-  const csScore = signals.filter((s) => s.startsWith('cs:')).length;
-  if (csScore >= 2) return { stack: 'aem-cs', signals };
-
+  if (exists('index.html')) signals.push('generic:index.html');
+  if (exists('package.json')) signals.push('generic:package.json');
   return { stack: 'generic', signals };
-}
-
-/**
- * Walk repoRoot (depth-limited) and return true if any relative path matches `re`.
- * Skips node_modules, .git, common build output.
- * @param {string} repoRoot
- * @param {RegExp} re
- * @returns {boolean}
- */
-function hasAnyPath(repoRoot, re) {
-  const SKIP = new Set(['node_modules', '.git', 'dist', 'build', 'out', '.next', '.nuxt', 'coverage']);
-  // Deep enough for the importer's nested layout (clientlibs sit ~10 levels under
-  // portais/<site>/apps/src/main/content/jcr_root/apps/<proj>/). Early-exits on
-  // first match, so this only costs more on signal-free (generic) trees.
-  const MAX_DEPTH = 16;
-  const MAX_FILES = 5000;
-  let count = 0;
-  function walk(dir, depth) {
-    if (depth > MAX_DEPTH) return false;
-    let entries;
-    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return false; }
-    for (const e of entries) {
-      if (count++ > MAX_FILES) return false;
-      if (SKIP.has(e.name)) continue;
-      const full = path.join(dir, e.name);
-      const rel = path.relative(repoRoot, full).split(path.sep).join('/');
-      if (re.test('/' + rel)) return true;
-      if (e.isDirectory() && walk(full, depth + 1)) return true;
-    }
-    return false;
-  }
-  return walk(repoRoot, 0);
 }
 
 /**
@@ -276,61 +150,6 @@ function buildPreloadEdits(preloads, stack, repoRoot, warnings, rationale) {
   if (!Array.isArray(preloads) || preloads.length === 0) return [];
   const edits = [];
 
-  if (stack === 'aem-eds') {
-    // Prefer head.html if present — simpler and explicit.
-    const headHtml = path.join(repoRoot, 'head.html');
-    if (fs.existsSync(headHtml)) {
-      const src = fs.readFileSync(headHtml, 'utf8');
-      const lines = src.split(/\r?\n/);
-      const existingTags = new Set();
-      for (const ln of lines) {
-        const m = ln.match(/rel=["']?preload["']?[^>]*href=["']([^"']+)["']/i);
-        if (m) existingTags.add(m[1]);
-      }
-      for (const p of preloads) {
-        if (existingTags.has(p.href)) continue;
-        const tag = buildPreloadLinkTag(p);
-        // Insert near the end of head.html (which IS the head fragment).
-        const insertLine = lines.length + 1;
-        edits.push({
-          file: headHtml,
-          line: insertLine,
-          before: lines[lines.length - 1] || '',
-          after: (lines[lines.length - 1] || '') + '\n' + tag,
-          rationale: rationale + ' (EDS: edit head.html)',
-          autoApplicable: true,
-          patchType: 'preloads',
-          insertion: { mode: 'append', text: tag + '\n' },
-        });
-      }
-      return edits;
-    }
-    // No head.html — recommend programmatic preload in loadEager.
-    const scripts = path.join(repoRoot, 'scripts', 'scripts.js');
-    if (fs.existsSync(scripts)) {
-      for (const p of preloads) {
-        warnings.push({
-          kind: 'manual-review',
-          reason: 'EDS repo has no head.html — preload must be added programmatically in loadEager()',
-          file: scripts,
-          recommendation: `Inside loadEager(), add:\n  const link = document.createElement('link');\n  link.rel = 'preload'; link.href = '${p.href}'; link.as = '${p.as}';${p.fetchpriority ? ` link.fetchPriority = '${p.fetchpriority}';` : ''}\n  document.head.appendChild(link);\nNOTE: EDS already emits Link: rel=preload headers for fetchpriority="high" images — prefer editing the <img> tag over manual preload when possible.`,
-        });
-      }
-      return edits;
-    }
-  }
-
-  if (stack === 'aem-cs') {
-    for (const p of preloads) {
-      warnings.push({
-        kind: 'manual-review',
-        reason: 'AEM CS preloads must be added to the page template HTL — do not auto-edit',
-        recommendation: `Add <link rel="preload" href="${p.href}" as="${p.as}"${p.fetchpriority ? ` fetchpriority="${p.fetchpriority}"` : ''}> to the page template HTL (typically under apps/<project>/components/structure/page/customheaderlibs.html) or emit via a custom clientlib category included in <head>.`,
-      });
-    }
-    return edits;
-  }
-
   // Generic HTML.
   const tpl = pickGenericHtmlTemplate(repoRoot);
   if (!tpl) {
@@ -394,70 +213,6 @@ async function buildMarkupEdits(mutations, stack, repoRoot, warnings, rationale)
     const sel = parseSimpleSelector(m.selector || '');
     if (!sel) {
       warnings.push({ kind: 'manual-review', reason: `Selector "${m.selector}" is too complex for simple mapping`, recommendation: 'Apply attrs in the relevant template/block manually.' });
-      continue;
-    }
-
-    if (stack === 'aem-eds') {
-      // EDS: templates are authored elsewhere (Google Docs); the canonical
-      // place to set attributes on rendered elements is inside the block
-      // decorator in blocks/<name>/<name>.js.
-      const blockName = inferEdsBlockFromSelector(sel);
-      let blockJs = null;
-      if (blockName) {
-        const candidate = path.join(repoRoot, 'blocks', blockName, `${blockName}.js`);
-        if (fs.existsSync(candidate)) blockJs = candidate;
-      }
-      if (!blockJs) {
-        // Fall back to generic block match under blocks/* that uses this selector pattern.
-        const blockFiles = findFilesByExt(path.join(repoRoot, 'blocks'), ['.js'], 200);
-        if (blockFiles.length > 0) blockJs = blockFiles[0];
-      }
-      if (!blockJs) {
-        warnings.push({ kind: 'manual-review', reason: `No EDS block found matching selector ${m.selector}`, recommendation: `Add a decorate-time attribute setter in the block that renders <${sel.tag || '*'}${sel.classes.map((c) => '.' + c).join('')}>.` });
-        continue;
-      }
-      const snippet = buildEdsDecorateSnippet(m.selector, m.attrs);
-      edits.push({
-        file: blockJs,
-        line: null, // append to decorate()
-        before: '// inside decorate(block):',
-        after: snippet,
-        rationale: rationale + ' (EDS: edit block decorator)',
-        autoApplicable: false, // decorator shape varies — recommend, do not auto-patch
-        patchType: 'markup',
-      });
-      continue;
-    }
-
-    if (stack === 'aem-cs') {
-      // Enrich the manual-review note by resolving the selector to its owning
-      // component via selector-resolver (G4) — turns "likely under apps/…" into
-      // the actual HTL path + delivery recommendation. Best-effort; falls back to
-      // the generic pointer if the source tree can't resolve it. Lazy require
-      // avoids the source-mapper ↔ selector-resolver dependency cycle.
-      let resolution = null;
-      try {
-        const { resolveSelector } = await import('./selector-resolver.js');
-        resolution = await resolveSelector({ selector: m.selector, sourceRoot: repoRoot, stack: 'aem-cs' });
-      } catch { /* resolver is enrichment only */ }
-
-      if (resolution && resolution.component) {
-        const c = resolution.component;
-        warnings.push({
-          kind: 'manual-review',
-          reason: `AEM CS markup edit for ${m.selector} → component ${c.name} (confidence ${resolution.confidence})`,
-          file: c.htl || c.dir,
-          recommendation: [
-            `Component: ${c.name} (${c.resourceType})`,
-            c.htl ? `HTL: ${c.htl}` : `Dir: ${c.dir}`,
-            `Add attrs ${JSON.stringify(m.attrs)} to the matching element in the HTL (HTL is never auto-edited).`,
-            `For a CSS/layout fix on this element, recommended delivery is "${resolution.delivery.recommended}" — see selector-resolver for the full styling trace + scaffold.`,
-          ].join('\n'),
-          resolution,
-        });
-      } else {
-        warnings.push({ kind: 'manual-review', reason: `AEM CS markup edit for ${m.selector} — HTL cannot be auto-edited safely`, recommendation: `Locate the HTL template for the component rendering <${sel.tag || '*'}${sel.classes.map((c) => '.' + c).join('')}> (likely under apps/<project>/components/) and add attrs: ${JSON.stringify(m.attrs)}.` });
-      }
       continue;
     }
 
@@ -586,28 +341,6 @@ function applyAttrsToLine(line, sel, attrs) {
 function escapeRegex(s) { return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 
 /**
- * Heuristic: if a selector looks like `.hero` or `.teaser`, treat as an EDS block name.
- * @param {{tag:string|null,classes:string[]}} sel
- * @returns {string|null}
- */
-function inferEdsBlockFromSelector(sel) {
-  if (sel.classes.length > 0) return sel.classes[0];
-  return null;
-}
-
-function buildEdsDecorateSnippet(selector, attrs) {
-  const attrsJson = JSON.stringify(attrs || {});
-  return `// Add inside decorate(block):
-block.querySelectorAll('${selector}').forEach((el) => {
-  const attrs = ${attrsJson};
-  for (const [k, v] of Object.entries(attrs)) {
-    if (v === null) el.removeAttribute(k);
-    else el.setAttribute(k, String(v));
-  }
-});`;
-}
-
-/**
  * Build edits for `block` patches (URL patterns to block).
  * @param {string[]} patterns
  * @param {string} stack
@@ -619,49 +352,6 @@ block.querySelectorAll('${selector}').forEach((el) => {
 function buildBlockEdits(patterns, stack, repoRoot, warnings, rationale) {
   if (!Array.isArray(patterns) || patterns.length === 0) return [];
   const edits = [];
-
-  if (stack === 'aem-eds') {
-    const scriptsJs = path.join(repoRoot, 'scripts', 'scripts.js');
-    if (!fs.existsSync(scriptsJs)) {
-      warnings.push({ kind: 'manual-review', reason: 'No scripts/scripts.js in EDS repo', recommendation: 'Move third-party loaders into loadDelayed() manually.' });
-      return edits;
-    }
-    const src = fs.readFileSync(scriptsJs, 'utf8');
-    const lines = src.split(/\r?\n/);
-    // For each blocked pattern, try to find a matching script import/url in scripts.js.
-    for (const pat of patterns) {
-      const simple = pat.replace(/\*/g, '');
-      let hitIdx = -1;
-      for (let i = 0; i < lines.length; i++) {
-        if (lines[i].includes(simple)) { hitIdx = i; break; }
-      }
-      if (hitIdx === -1) {
-        warnings.push({ kind: 'manual-review', reason: `Pattern ${pat} not found in scripts/scripts.js`, recommendation: `Locate where this URL is loaded and move the call into loadDelayed().` });
-        continue;
-      }
-      edits.push({
-        file: scriptsJs,
-        line: hitIdx + 1,
-        before: lines[hitIdx],
-        after: `// TODO: move into loadDelayed()\n// ${lines[hitIdx]}`,
-        rationale: rationale + ' (EDS: move into loadDelayed)',
-        autoApplicable: false,
-        patchType: 'block',
-      });
-    }
-    return edits;
-  }
-
-  if (stack === 'aem-cs') {
-    // Emit Dispatcher rewrite rule text as a warning-level recommendation.
-    const rules = patterns.map((p) => `  # block: ${p}\n  RewriteRule "${globToRegexString(p)}" - [F]`).join('\n');
-    warnings.push({
-      kind: 'manual-review',
-      reason: 'AEM CS: block patterns should be applied at the Dispatcher / CDN layer, not in clientlibs',
-      recommendation: `Add to Dispatcher vhost (or Fastly VCL equivalent):\n${rules}`,
-    });
-    return edits;
-  }
 
   // Generic: find <script src="..."> tags in templates that match pattern.
   const htmls = findFilesByExt(repoRoot, ['.html'], 1000);
@@ -705,7 +395,7 @@ function globToRegexString(pattern) {
  */
 function buildHeaderRuleWarnings(rules, stage, stack, warnings) {
   if (!Array.isArray(rules) || rules.length === 0) return;
-  // Default CDN target: Fastly VCL (most common with EDS sites).
+  // Default CDN target: Fastly VCL (adapt for other CDNs as needed).
   const vclSnippets = rules.map((r) => renderFastlyVcl(r, stage)).join('\n\n');
   warnings.push({
     kind: 'cdn-config',
@@ -920,7 +610,6 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
 export {
   mapToSource,
   detectStack,
-  stackFromManifest,
   renderPreview,
   buildPreloadLinkTag,
   parseSimpleSelector,

@@ -1,6 +1,5 @@
 ---
 issue_type: inline-css
-applicable_flavors: [eds, cs]
 risk_tier: low
 
 required_validation:
@@ -32,7 +31,7 @@ see_also:
 
 # Inline CSS
 
-> **Risk tier:** low · **Applies to:** EDS, CS (recommend-only on AMS — broken critical-CSS pipeline is too variable to auto-fix) · **CWV metric:** LCP, FCP
+> **Risk tier:** low · **CWV metric:** LCP, FCP
 
 ## What this addresses
 
@@ -53,12 +52,12 @@ When the audit signal is "render-blocking CSS too large", the right fix path is 
 **Apply when:**
 - An inline `<style>` block or `style="…"` attribute exists in the markup
 - The rules in it are already covered (or trivially could be) by an existing stylesheet — i.e., removal is a clean swap
-- The markup source is in this repo (HTL / JSP / project JS that emits `<style>` blocks)
+- The markup source is in this repo (templates / project JS that emits `<style>` blocks)
 
 **Skip when:**
 - The audit signal is actually "render-blocking CSS too large" — the fix path is [`bundling.md`](./bundling.md) (split the bundle) and [`unused-code.md`](./unused-code.md) (drop unused rules), not critical-CSS inlining
 - The inline rules are unique to this page / component and don't (and shouldn't) belong in a global stylesheet — leave them alone
-- (AMS) Inline-CSS bloat is a symptom of a broken critical-CSS pipeline upstream — investigate the build, don't auto-fix the symptom
+- Inline-CSS bloat is a symptom of a broken critical-CSS pipeline upstream — investigate the build, don't auto-fix the symptom
 
 ## Recommended approaches
 
@@ -149,13 +148,3 @@ When the inline block duplicates rules already in a stylesheet, delete the block
 - [`bundling.md`](./bundling.md) — **the actually-correct fix** when the audit complains about render-blocking CSS volume. Splits route-specific CSS off the global bundle.
 - [`unused-code.md`](./unused-code.md) — drops CSS rules nothing on the page uses. Pair with `bundling.md` for cumulative savings.
 - [`blocking-resource.md`](./blocking-resource.md) — broader render-blocking fix (covers JS as well as CSS); shares the `media="print"` ban.
-
-## Flavor-specific notes
-
-### EDS
-
-Inline `<style>` blocks in EDS typically appear in block JS (a block constructs and appends a `<style>` element). The "remove redundant" fix is straightforward: confirm the rules are in the project's stylesheet (`styles/styles.css` or block-specific), then delete the JS that injects the block-scope `<style>`.
-
-### CS
-
-HTL templates can include inline `<style>` blocks; clientlib CSS files are the canonical home for shared rules. The fix is moving the rules into the appropriate clientlib category and deleting the HTL inline block.

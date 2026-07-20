@@ -1,81 +1,65 @@
 ---
 issue_type: compression
-applicable_flavors: [cs, ams]
 risk_tier: low
 
 required_validation:
   - cdn_yaml_present
-  - dispatcher_writable_for_ams
+  - server_config_writable
 
 forbidden_techniques:
   - pattern: 'gzip:\s*off|brotli:\s*off|compress:\s*off'
     reason: "Don't disable compression — that's the inverse of the fix"
   - pattern: 'AddOutputFilterByType\s+(?!DEFLATE)'
-    reason: "AMS Apache: use AddOutputFilterByType DEFLATE — anything else doesn't enable compression"
+    reason: "Apache: use AddOutputFilterByType DEFLATE — anything else doesn't enable compression"
 
-flavor_overrides:
-  cs:
-    extra_validation:
-      - cdn_yaml_under_dispatcher_src
-  ams:
-    extra_validation:
-      - apache_conf_writable
-      - mod_deflate_loaded
 ---
 
 # Compression
 
-> **Risk tier:** low · **Applies to:** CS, AMS (EDS = N/A: platform-managed) · **CWV metric:** LCP, FCP
+> **Risk tier:** low · **CWV metric:** LCP, FCP
 
 ## What this addresses
 
 Text resources (HTML, CSS, JS, JSON) compress at 70-90% with gzip/brotli. Without compression, every byte ships uncompressed across the wire — directly increasing transfer time for LCP-blocking CSS/JS.
 
-This is a **CDN/dispatcher configuration** concern, not an application-code change. The agent emits a config file edit, not a markup or stylesheet edit.
+This is a **CDN/server configuration** concern, not an application-code change. The agent emits a config file edit, not a markup or stylesheet edit.
 
 ## When to apply / when to skip
 
 **Apply when:**
-- (CS) `cdn.yaml` exists under `dispatcher/src/` and is editable — emit a 2-3 line YAML config change
-- (AMS) Apache `mod_deflate` is loaded and `AddOutputFilterByType DEFLATE` directives are missing for text MIME types
+- The CDN/server config is in this repo and editable (e.g. an `nginx.conf`, Apache conf, or CDN config file) — emit a small config change
 
 **Skip when:**
-- (CS) `cdn.yaml` is absent — flag as "Cloud Manager UI / infra change required" and **do not emit a code fix**
-- (AMS) Compression is handled at a CDN tier above the dispatcher — flag for the ops team
-- EDS — never; compression is platform-managed end-to-end
+- The config is not in this repo — flag as "infra change required" and **do not emit a code fix**
+- Compression is handled at a managed CDN tier above the origin — flag for the ops team; managed platforms often handle compression end-to-end
 
 ## Recommended approaches
 
-### CS: cdn.yaml compression block
+### Nginx gzip/brotli config
 
-```yaml
-# Good — under dispatcher/src/cdn.yaml
-kind: CDN
-version: "1"
-data:
-  ...
-  compression:
-    enabled: true
-    types:
-      - text/html
-      - text/css
-      - application/javascript
-      - application/json
-      - image/svg+xml
+```nginx
+# Good — in the server or http block
+gzip on;
+gzip_types text/html text/css text/plain application/javascript
+           application/json application/xml image/svg+xml;
+gzip_min_length 1024;
+# brotli (if the module is available)
+brotli on;
+brotli_types text/html text/css application/javascript application/json image/svg+xml;
 ```
 
-A small YAML edit; the platform handles encoding negotiation and the `Vary: Accept-Encoding` header.
-
-### AMS: Apache mod_deflate config
+### Apache mod_deflate config
 
 ```apache
-# Good — in dispatcher conf.d/
+# Good — in the vhost or conf.d/
 <IfModule mod_deflate.c>
   AddOutputFilterByType DEFLATE text/html text/css text/plain text/xml \
                                 application/javascript application/json \
                                 application/xml image/svg+xml
 </IfModule>
 ```
+
+The server handles encoding negotiation and the `Vary: Accept-Encoding` header.
 
 ## Anti-patterns
 
@@ -104,15 +88,3 @@ compression:
 ### Mixing `Content-Encoding: gzip` headers manually with mod_deflate
 
 Setting `Header set Content-Encoding gzip` while `mod_deflate` is also active causes double-encoding — clients receive `Content-Encoding: gzip` but the body is gzipped twice. Use one mechanism, not both.
-
-## Flavor-specific notes
-
-### CS
-
-Look for `cdn.yaml` under `dispatcher/src/`. If present, the fix is a 2-3 line YAML change shipping with the dispatcher artifact. If absent, compression is configured in Cloud Manager UI — not a code fix.
-
-### AMS
-
-Verify `mod_deflate` is loaded (`LoadModule deflate_module modules/mod_deflate.so` in the Apache config). The `<IfModule>` guard handles the case where it's not — the directive becomes a no-op rather than an error.
-
-`mod_deflate` (gzip) is normally available, but **Brotli requires `mod_brotli`, which customers cannot self-install on AMS** — adding it is an Adobe support ticket, not a config commit. Default to enabling gzip via `mod_deflate` in-repo; recommend Brotli as a separate Adobe-ticket request where the extra savings justify it.

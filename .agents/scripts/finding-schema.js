@@ -28,12 +28,12 @@ const SOURCE_AVAILABILITY_STATUSES = [
   'mapping_failed',
 ];
 
-// Platform-vs-customer attribution (ROADMAP G5). Optional `owner` tag (+ an
-// optional `ownership` detail block) answering "is it AEM or the customer?".
-// Derived by .agents/scripts/attribution.js from playbook applicable_flavors +
-// stack docs + response headers. Both fields are optional — findings emitted
+// Ownership attribution. Optional `owner` tag (+ an optional `ownership`
+// detail block) answering "is it the platform, your code, or a third party?".
+// Derived by .agents/scripts/attribution.js from playbook applicability +
+// response headers + evidence. Both fields are optional — findings emitted
 // before attribution simply omit them.
-const OWNERS = ['platform-default', 'dispatcher-cdn', 'customer-code', 'customer-content', 'third-party'];
+const OWNERS = ['platform-default', 'cdn-edge', 'customer-code', 'customer-content', 'third-party'];
 
 const EVIDENCE_KINDS = [
   'cwv-attribution',

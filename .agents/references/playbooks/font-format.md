@@ -1,6 +1,5 @@
 ---
 issue_type: font-format
-applicable_flavors: [eds, cs, ams]
 risk_tier: medium
 
 required_validation:
@@ -25,7 +24,7 @@ see_also:
 
 # Font format
 
-> **Risk tier:** medium · **Applies to:** EDS, CS, AMS · **CWV metric:** LCP, FCP
+> **Risk tier:** medium · **CWV metric:** LCP, FCP
 
 ## What this addresses
 
@@ -121,14 +120,4 @@ When WOFF2 *does* later become available in the codebase, re-run the playbook �
 
 ### Partial updates across stylesheets
 
-If `clientlib-base/fonts.css` is updated to WOFF2 but `clientlib-product/fonts.css` still uses TTF for the same family, pages including both clientlibs will load the family twice. Aggregate **all** `@font-face` blocks for the same family across the codebase before emitting the fix.
-
-## Flavor-specific notes
-
-### EDS
-
-Fonts typically live in the project's `styles/` or under `fonts/`. Aggregate all `@font-face` declarations across stylesheets and update them together — partial coverage means some pages still ship the legacy format.
-
-### CS / AMS
-
-Clientlibs may split `@font-face` across multiple categories (`clientlib-base`, `clientlib-fonts`, etc.). Build a complete inventory of every category that declares the family before editing. Verify the WOFF2 file is also packaged in the clientlib output (not just referenced).
+If `base/fonts.css` is updated to WOFF2 but another stylesheet still declares TTF for the same family, pages including both will load the family twice. Aggregate **all** `@font-face` blocks for the same family across the codebase before emitting the fix.

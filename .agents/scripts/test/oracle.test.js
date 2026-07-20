@@ -20,7 +20,7 @@ import {
   compareMetric,
   rollUp,
   evaluate,
-  producerRequiredVerdict,
+  manualReviewVerdict,
   verdictForClassification,
 } from '../oracle.js';
 
@@ -860,88 +860,78 @@ test('evaluate: deviceScaleFactor mismatch is flagged when both viewports carry 
 });
 
 // ---------------------------------------------------------------------------
-// producer-required (spec 016-05, ADR-0016 Class-3-HTL) — a PRE-MEASUREMENT
-// typed refusal. A structural-HTL fix is never measured; the verdict is minted
-// directly, never derived from sample comparison.
+// manual-review — a PRE-MEASUREMENT typed refusal. A structural fix is never
+// measured; the verdict is minted directly, never derived from sample
+// comparison.
 // ---------------------------------------------------------------------------
 
-test('producerRequiredVerdict: typed verdict + exit code 8, oracle-shaped, empty metrics (AC1)', () => {
-  const v = producerRequiredVerdict({ metric: 'CLS', reason: 'restructures the template DOM shape' });
-  assert(v.verdict === 'producer-required', `got ${v.verdict}`);
-  assert(v.exitCode === EXIT_CODES.PRODUCER_REQUIRED, `got exit ${v.exitCode}`);
-  assert(v.exitCode === 8, `PRODUCER_REQUIRED must be 8, got ${v.exitCode}`);
-  assert(v.producerRequired === true, 'carries producerRequired flag');
+test('manualReviewVerdict: typed verdict + exit code 8, oracle-shaped, empty metrics', () => {
+  const v = manualReviewVerdict({ metric: 'CLS', reason: 'restructures the template DOM shape' });
+  assert(v.verdict === 'manual-review', `got ${v.verdict}`);
+  assert(v.exitCode === EXIT_CODES.MANUAL_REVIEW, `got exit ${v.exitCode}`);
+  assert(v.exitCode === 8, `MANUAL_REVIEW must be 8, got ${v.exitCode}`);
+  assert(v.manualReview === true, 'carries manualReview flag');
   assert(Array.isArray(v.metrics) && v.metrics.length === 0, 'no per-metric entries — never measured');
   assert(v.metric === 'CLS', `metric carried through, got ${v.metric}`);
-  // AC1: never masked as a measurement outcome.
+  // never masked as a measurement outcome.
   assert(v.verdict !== 'VALIDATED' && v.verdict !== 'NO_OP' && v.verdict !== 'INCONCLUSIVE',
     'must not masquerade as a sample-comparison verdict');
 });
 
-test('producerRequiredVerdict: reason names a producer / Blackboard render substrate (AC3)', () => {
-  const v = producerRequiredVerdict({ metric: 'CLS', reason: 'structural HTL' });
-  assert(/producer/i.test(v.reason), `reason must mention a producer, got: ${v.reason}`);
-  assert(/blackboard/i.test(v.reason), `reason must name the Blackboard render substrate, got: ${v.reason}`);
+test('manualReviewVerdict: reason says land-in-source and re-measure', () => {
+  const v = manualReviewVerdict({ metric: 'CLS', reason: 'structural template change' });
+  assert(/source/i.test(v.reason), `reason must point at a source change, got: ${v.reason}`);
+  assert(/re-measure/i.test(v.reason), `reason must instruct to re-measure, got: ${v.reason}`);
 });
 
-test('verdictForClassification: route producer-required (htl) → producer-required verdict, without measuring', () => {
-  const entry = { class: 3, subclass: 'htl', route: 'producer-required',
-    rationale: 'structural DOM-shape change under /apps/**/*.html' };
+test('verdictForClassification: route manual-review → manual-review verdict, without measuring', () => {
+  const entry = { class: 3, subclass: 'structural', route: 'manual-review',
+    rationale: 'structural DOM-shape change' };
   const v = verdictForClassification(entry, { metric: 'CLS' });
-  assert(v && v.verdict === 'producer-required', `got ${v && v.verdict}`);
+  assert(v && v.verdict === 'manual-review', `got ${v && v.verdict}`);
   assert(v.exitCode === 8, `got exit ${v.exitCode}`);
   assert(v.metric === 'CLS', `metric carried, got ${v.metric}`);
   // the entry's own rationale is threaded into the reason so the operator sees WHY.
   assert(v.reason.includes(entry.rationale), 'reason includes the classification rationale');
 });
 
-test('verdictForClassification: route producer-required (architectural escalation) also refuses', () => {
-  const entry = { class: 3, subclass: 'architectural', route: 'producer-required',
-    rationale: 'order-dependent/architecturally-entangled symptom' };
-  const v = verdictForClassification(entry, { metric: 'LCP' });
-  assert(v && v.verdict === 'producer-required', `got ${v && v.verdict}`);
-});
-
-test('verdictForClassification: non-producer-required routes return null (go through normal validate)', () => {
-  for (const route of ['mode-a', 'delta-splice', 'local-build-modeb']) {
+test('verdictForClassification: non-manual-review routes return null (go through normal validate)', () => {
+  for (const route of ['patch', 'source-edit']) {
     assert(verdictForClassification({ route }, { metric: 'CLS' }) === null,
-      `route ${route} must NOT short-circuit to producer-required`);
+      `route ${route} must NOT short-circuit to manual-review`);
   }
   assert(verdictForClassification(null, { metric: 'CLS' }) === null, 'null entry → null');
   assert(verdictForClassification({}, {}) === null, 'no route → null');
 });
 
-test('evaluate / rollUp NEVER emit producer-required from sample comparison (structural HTL never reaches measurement)', () => {
+test('evaluate / rollUp NEVER emit manual-review from sample comparison (structural fixes never reach measurement)', () => {
   // A perfectly good A/B measurement must roll up to a measurement verdict, not
-  // the pre-measurement refusal — producer-required lives entirely outside the
+  // the pre-measurement refusal — manual-review lives entirely outside the
   // sample-comparison path.
   const base = mkLauncher('https://x.test/', [4000, 4100, 4200, 4300]);
   const treat = mkLauncher('https://x.test/', [2500, 2600, 2700, 2800]);
   const v = evaluate({ baseline: base, treatment: treat, metrics: ['LCP'], warmup: 0 });
-  assert(v.verdict !== 'producer-required', 'evaluate must never mint producer-required');
+  assert(v.verdict !== 'manual-review', 'evaluate must never mint manual-review');
   // and rollUp over any mix of measured verdicts never yields it either.
   const rolled = rollUp([
     { metric: 'LCP', verdict: 'VALIDATED' },
     { metric: 'CLS', verdict: 'NO_OP' },
   ], ['LCP', 'CLS']);
-  assert(rolled !== 'producer-required', 'rollUp must never yield producer-required');
+  assert(rolled !== 'manual-review', 'rollUp must never yield manual-review');
 });
 
 // ---------------------------------------------------------------------------
-// AC4 kill-criterion guard: the producer-required path introduces NO local HTL/
-// Sightly render engine. Assert oracle.js neither imports nor names a renderer,
-// and documents the deliberate refusal.
+// Kill-criterion guard: the manual-review path introduces NO server-side
+// render emulation. Assert oracle.js documents the deliberate refusal.
 // ---------------------------------------------------------------------------
 
-test('AC4: oracle.js introduces no HTL/Sightly render engine (kill-criterion guard)', async () => {
+test('oracle.js documents the manual-review refusal (no faked structural emulation)', async () => {
   const { readFileSync } = await import('node:fs');
   const { fileURLToPath } = await import('node:url');
   const { dirname, join } = await import('node:path');
   const here = dirname(fileURLToPath(import.meta.url));
   const src = readFileSync(join(here, '..', 'oracle.js'), 'utf8');
-  assert(!/import[^;]*\b(htlengine|sightly|@adobe\/htlengine)\b/i.test(src),
-    'oracle.js must not import an HTL/Sightly render engine');
-  assert(/producer-required/i.test(src), 'oracle.js documents the producer-required refusal');
+  assert(/manual-review/i.test(src), 'oracle.js documents the manual-review refusal');
 });
 
 // ---------------------------------------------------------------------------

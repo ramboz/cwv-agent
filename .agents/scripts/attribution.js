@@ -1,20 +1,20 @@
 #!/usr/bin/env node
 
 /**
- * Platform-vs-customer attribution + playbook-guided diagnosis (ROADMAP G5).
+ * Ownership attribution + playbook-guided diagnosis.
  *
- * Answers the literal customer question — "is it AEM or the customer?" — by
+ * Answers the question "is it the platform, your code, or a third party?" by
  * tagging every Finding with an `owner`:
  *
- *   platform-default · dispatcher-cdn · customer-code · customer-content · third-party
+ *   platform-default · cdn-edge · customer-code · customer-content · third-party
  *
  * The classification is derived from three sources, in this order of strength:
- *   1. The mystique CWV playbook for the finding's issue type — its
- *      `applicable_flavors` front-matter is a platform-vs-customer signal: a
- *      type whose playbook EXCLUDES the detected stack is platform-managed / N/A
- *      on that stack (e.g. `compression`/`ttfb`/`font-preload` exclude `eds`).
- *   2. The stack docs (.agents/references/stacks/aem-{eds,cs,ams}.md) — who owns
- *      each layer (Fastly/Dispatcher/CDN vs clientlib/HTL/block JS).
+ *   1. The CWV playbook for the finding's issue type — its optional
+ *      `applicable_stacks` front-matter is a platform-vs-site signal: a type
+ *      whose playbook EXCLUDES the detected stack is platform-managed / N/A
+ *      on that stack. (Absent front matter = applies everywhere.)
+ *   2. The stack docs (.agents/references/stacks/, when a stack pack is
+ *      installed) — who owns each layer (CDN/edge vs application code).
  *   3. Response headers + the finding's own evidence (third-party resource
  *      domains, cache HIT/MISS, the shifting selector).
  *
@@ -27,12 +27,12 @@
  *
  * Usage (module):
  *   import * as a from './attribution.js';
- *   const out = a.attributeFinding(finding, { flavor: 'cs' });
+ *   const out = a.attributeFinding(finding, { flavor: 'generic' });
  *   // out.owner === 'customer-code'
  *
  * CLI:
- *   node attribution.js findings.json --flavor cs [--headers h.json] [--output o.json]
- *   node attribution.js --explain CLS --flavor eds   # which playbooks apply
+ *   node attribution.js findings.json [--headers h.json] [--output o.json]
+ *   node attribution.js --explain CLS   # which playbooks apply
  */
 
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -46,21 +46,11 @@ import path from 'node:path';
 
 const OWNERS = [
   'platform-default',   // the hosting platform's own behaviour/defaults (operator-managed)
-  'dispatcher-cdn',     // caching / edge layer (Dispatcher, CDN, response headers)
-  'customer-code',      // the customer's own code: clientlibs, HTL, Sling models, block JS/CSS
-  'customer-content',   // authored values: DAM assets, dialog config, content positioning
+  'cdn-edge',           // caching / edge layer (CDN config, response headers)
+  'customer-code',      // the site's own application code: templates, CSS, JS
+  'customer-content',   // authored values: assets, CMS config, content positioning
   'third-party',        // external vendor scripts: analytics, tag managers, A/B, chat, CMP, ads
 ];
-
-const FLAVORS = ['eds', 'cs', 'ams', 'headless'];
-
-// Where customer-authored code lives on each stack (for the rationale).
-const CUSTOMER_CODE_LOCUS = {
-  eds: 'EDS block JS/CSS (/blocks/*), scripts.js loading phases, or the project head.html — all customer-authored',
-  cs: 'AEM CS customer clientlibs / HTL templates / Sling models — customer-authored, not the AEM platform',
-  ams: 'AEM AMS customer clientlibs / HTL (or legacy JSP) — customer-authored; code-level fixes ship in a normal sprint',
-  headless: 'the headless client application code — customer-authored',
-};
 
 // Candidate playbook issue_types per CWV metric, most-likely first.
 const METRIC_ISSUE_TYPES = {
@@ -161,72 +151,39 @@ const THIRD_PARTY_DOMAIN_PATTERNS = [
   /(^|\.)use\.fontawesome\.com$/i,
 ];
 
-// Adobe Launch / DTM markers — third-party but the fix is "change the Launch
+// Tag-manager markers — third-party but the fix is "change the tag-manager
 // rule", not "edit markup" (per third-party.md). Surfaced as a deliveryConstraint.
-const LAUNCH_DTM_PATTERNS = [
+const TAG_MANAGER_PATTERNS = [
+  /(^|\.)googletagmanager\.com$/i,
   /(^|\.)adobedtm\.com$/i,
   /(^|\.)assets\.adobedtm\.com$/i,
 ];
-const LAUNCH_DTM_URL_RE = /launch-[a-z0-9]+(\.min)?\.js/i;
+const TAG_MANAGER_URL_RE = /(?:gtm\.js|launch-[a-z0-9]+(?:\.min)?\.js)/i;
 
 // ---------------------------------------------------------------------------
-// Flavor normalization — SpaceCat deliveryType / stack-doc names → playbook flavor
+// Stack normalization — pluggable stack names, `generic` built in
 // ---------------------------------------------------------------------------
 
 /**
- * Normalize a stack/delivery-type label to a playbook flavor (eds|cs|ams|headless).
- * Accepts SpaceCat deliveryType values (aem_cs, aem_edge, aem_ams), stack-doc
- * names (aem-eds, aem-cs, aem-ams), and bare flavors.
+ * Normalize a stack label. Any non-empty name passes through lower-cased so a
+ * stack pack can introduce its own vocabulary; empty/absent input is null.
  * @param {string} raw
  * @returns {string|null}
  */
 function normalizeFlavor(raw) {
   if (!raw || typeof raw !== 'string') return null;
   const s = raw.trim().toLowerCase();
-  if (/head\s*less/.test(s)) return 'headless';
-  if (/\b(eds|edge|franklin|helix)\b/.test(s) || /aem[_-]?(edge|eds)/.test(s)) return 'eds';
-  if (/\bams\b/.test(s) || /aem[_-]?ams/.test(s) || /managed[_-]?service/.test(s)) return 'ams';
-  if (/\bcs\b/.test(s) || /aem[_-]?cs/.test(s) || /aemcs/.test(s) || /cloud[_-]?service/.test(s) || /aem[_-]?cloud/.test(s)) return 'cs';
-  return null;
+  return s || null;
 }
 
 /**
- * Derive a playbook flavor from the SpaceCat importer manifest in a pulled
- * source tree (`.cwv-source-manifest.json`, written by source-fetch.js). The
- * `aemy` channel (GitHub = the EDS frontend) is the CWV fix surface and is
- * always EDS — authoritative over a `deliveryType` that reflects the site's
- * *author* stack (XWalk authors in CS but publishes via EDS). `cm` / unknown
- * channel falls back to the deliveryType mapping. Returns null when there's no
- * manifest or no usable signal.
- * @param {string|null} sourceDir
- * @returns {'eds'|'cs'|'ams'|null}
- */
-function flavorFromManifest(sourceDir) {
-  if (!sourceDir) return null;
-  let manifest;
-  try {
-    manifest = JSON.parse(fs.readFileSync(path.join(sourceDir, '.cwv-source-manifest.json'), 'utf8'));
-  } catch { return null; }
-  if (manifest && manifest.channel === 'aemy') return 'eds';
-  return normalizeFlavor(manifest && manifest.deliveryType);
-}
-
-/**
- * Resolve the effective playbook flavor for a run. Precedence:
- *   1. an explicit bare flavor (eds|cs|ams|headless) — trust the human;
- *   2. the pulled source's manifest — channel-aware (aemy ⇒ eds), so a XWalk
- *      frontend resolves to EDS even when the skill passed the site's `aem_cs`
- *      deliveryType;
- *   3. a raw deliveryType label via --flavor/--delivery-type (back-compat).
- * @param {{flavor?: string|null, source?: string|null}} args
- * @returns {'eds'|'cs'|'ams'|'headless'|null}
+ * Resolve the effective stack for a run: an explicit label wins; otherwise
+ * null (playbook applicability filters no-op on null).
+ * @param {{flavor?: string|null}} args
+ * @returns {string|null}
  */
 function resolveFlavor(args = {}) {
-  if (args.flavor && FLAVORS.includes(args.flavor)) return args.flavor;
-  const fromSource = flavorFromManifest(args.source);
-  if (fromSource) return fromSource;
-  if (args.flavor) return normalizeFlavor(args.flavor);
-  return null;
+  return normalizeFlavor(args.flavor);
 }
 
 // ---------------------------------------------------------------------------
@@ -375,7 +332,7 @@ function parsePlaybookFrontmatter(text) {
   const asArray = (v) => (Array.isArray(v) ? v : (v == null ? [] : [v]));
   return {
     issueType: raw.issue_type || null,
-    applicableFlavors: asArray(raw.applicable_flavors),
+    applicableFlavors: asArray(raw.applicable_stacks !== undefined ? raw.applicable_stacks : raw.applicable_flavors),
     riskTier: raw.risk_tier || null,
     requiredValidation: asArray(raw.required_validation),
     forbiddenTechniques: asArray(raw.forbidden_techniques),
@@ -497,9 +454,9 @@ function isThirdPartyResource(domain) {
   return THIRD_PARTY_DOMAIN_PATTERNS.some((re) => re.test(domain));
 }
 
-function isLaunchDtm(domain, url) {
-  if (domain && LAUNCH_DTM_PATTERNS.some((re) => re.test(domain))) return true;
-  if (url && LAUNCH_DTM_URL_RE.test(url)) return true;
+function isTagManager(domain, url) {
+  if (domain && TAG_MANAGER_PATTERNS.some((re) => re.test(domain))) return true;
+  if (url && TAG_MANAGER_URL_RE.test(url)) return true;
   return false;
 }
 
@@ -546,7 +503,7 @@ function classifyFindingIssueType(finding) {
     if (sig.has('fetchpriority') || sig.has('preload') || isImgTarget) return 'lcp-image';
     if (/preconnect|dns-?prefetch/.test(cause)) return 'resource-hints';
     if (sig.has('defer') || sig.has('async') || /render-?blocking|blocking (script|stylesheet|css)/.test(cause)) return 'blocking-resource';
-    if (/\bttfb\b|dispatcher|cache (miss|hit)|server-?timing/.test(cause)) return 'ttfb';
+    if (/\bttfb\b|cache (miss|hit)|server-?timing/.test(cause)) return 'ttfb';
     return 'lcp-image';
   }
   if (metric === 'INP' || metric === 'TBT') {
@@ -581,7 +538,7 @@ function result(owner, confidence, issueType, flavor, signals, rationale, delive
  * Classify the owner of a finding.
  * @param {object} finding - a Finding (see finding-schema.md)
  * @param {object} [ctx]
- * @param {string} [ctx.flavor] - eds|cs|ams|headless (normalized) OR a raw delivery-type
+ * @param {string} [ctx.flavor] - stack name (e.g. generic, or a stack-pack name)
  * @param {object|Array} [ctx.responseHeaders] - response headers (map or [{name,value}])
  * @param {string} [ctx.issueType] - override the inferred issue type
  * @param {object} [ctx.playbook] - preloaded playbook frontmatter (skips disk load)
@@ -589,7 +546,7 @@ function result(owner, confidence, issueType, flavor, signals, rationale, delive
  * @returns {{owner, confidence, issueType, flavor, signals, rationale, deliveryConstraint}}
  */
 function classifyOwner(finding, ctx = {}) {
-  const flavor = FLAVORS.includes(ctx.flavor) ? ctx.flavor : normalizeFlavor(ctx.flavor);
+  const flavor = normalizeFlavor(ctx.flavor);
   const issueType = ctx.issueType || classifyFindingIssueType(finding);
   const pbDir = ctx.playbooksDir;
   const playbook = ctx.playbook
@@ -597,8 +554,8 @@ function classifyOwner(finding, ctx = {}) {
     || null;
 
   const signals = [];
-  if (playbook && Array.isArray(playbook.applicableFlavors)) {
-    signals.push(`consulted playbook "${issueType}" (risk_tier=${playbook.riskTier || '?'}, applicable_flavors=[${playbook.applicableFlavors.join(', ')}])`);
+  if (playbook) {
+    signals.push(`consulted playbook "${issueType}" (risk_tier=${playbook.riskTier || '?'}${playbook.applicableFlavors && playbook.applicableFlavors.length ? `, applicable_stacks=[${playbook.applicableFlavors.join(', ')}]` : ''})`);
   } else {
     signals.push(`issue type "${issueType}" (no playbook loaded)`);
   }
@@ -616,78 +573,50 @@ function classifyOwner(finding, ctx = {}) {
   // result records `third-party` as the consulted playbook.
   const tp = refs.find((r) => isThirdPartyResource(r.domain));
   if (tp) {
-    const launch = isLaunchDtm(tp.domain, tp.url);
+    const viaTagManager = isTagManager(tp.domain, tp.url);
     signals.push(`evidence cites third-party resource on ${tp.domain} → governed by the third-party playbook`);
-    const rationale = launch
-      ? `Owned by a third party (${tp.domain}) and injected via Adobe Launch/DTM — the fix is a Launch rule change, not a markup edit.`
-      : `Owned by a third party (${tp.domain}). The customer embedded it, but the bytes/behaviour are the vendor's; defer/async/gate it safely (see the third-party playbook).`;
-    return result('third-party', launch ? 0.8 : 0.85, 'third-party', flavor, signals, rationale,
-      launch ? 'requires-launch-rule' : null);
+    const rationale = viaTagManager
+      ? `Owned by a third party (${tp.domain}) and injected via a tag manager — the fix is a tag-manager rule change, not a markup edit.`
+      : `Owned by a third party (${tp.domain}). The site embedded it, but the bytes/behaviour are the vendor's; defer/async/gate it safely (see the third-party playbook).`;
+    return result('third-party', viaTagManager ? 0.8 : 0.85, 'third-party', flavor, signals, rationale,
+      viaTagManager ? 'requires-tag-manager-rule' : null);
   }
 
-  // ---- S2: dispatcher / CDN — TTFB-class or explicit cache signal. --------
+  // ---- S2: cdn-edge — TTFB-class or explicit cache signal. ----------------
   const xCache = headers['x-cache'] || '';
-  const cacheMiss = /miss/i.test(xCache) || headers.age === '0' || 'x-dispatcher' in headers;
-  if ((metric === 'TTFB' || issueType === 'ttfb' || issueType === 'compression' || cacheMiss)
-      && (flavor === 'cs' || flavor === 'ams' || cacheMiss)) {
-    if (cacheMiss) signals.push(`response headers show a caching-layer signal (${xCache || (('x-dispatcher' in headers) ? 'X-Dispatcher present' : 'Age:0')})`);
-    if (flavor === 'eds') {
-      // handled below as platform-default; fall through.
-    } else {
-      const constraint = flavor === 'ams' ? 'requires-operator' : 'cloud-manager-config';
-      const where = flavor === 'ams'
-        ? 'On AMS, Dispatcher (`dispatcher.any`) and CDN headers require an Adobe support ticket.'
-        : 'On AEM CS, this is the Dispatcher / CDN (cdn.yaml) layer, configurable via Cloud Manager.';
-      signals.push('TTFB/compression/cache issue — caching & edge layer, not page code');
-      return result('dispatcher-cdn', 0.8, issueType, flavor, signals,
-        `Owned by the caching/edge layer (Dispatcher + CDN). ${where}`, constraint);
-    }
+  const cacheMiss = /miss/i.test(xCache) || headers.age === '0';
+  if (metric === 'TTFB' || issueType === 'ttfb' || issueType === 'compression' || cacheMiss) {
+    if (cacheMiss) signals.push(`response headers show a caching-layer signal (${xCache || 'Age:0'})`);
+    signals.push('TTFB/compression/cache issue — caching & edge layer, not page code');
+    return result('cdn-edge', 0.8, issueType, flavor, signals,
+      'Owned by the caching/edge layer (CDN / server config) — fix via cache rules, compression config, or origin tuning, not page code.', null);
   }
 
   // ---- S3: platform-default. ----------------------------------------------
-  // (a) The playbook EXCLUDES this flavor → the type is platform-managed / N/A here.
+  // The playbook EXCLUDES this stack → the type is platform-managed / N/A here.
   if (flavor && playbook && Array.isArray(playbook.applicableFlavors)
       && playbook.applicableFlavors.length > 0 && !playbook.applicableFlavors.includes(flavor)) {
-    signals.push(`playbook "${issueType}" does not list flavor "${flavor}" → platform-managed / N/A on this stack`);
-    const why = flavor === 'eds'
-      ? 'On EDS this layer is platform-managed (Fastly/CDN, fixed head.html) — customer changes are blocked at the platform level.'
-      : 'This issue type is not customer-fixable on this stack per the playbook applicability matrix.';
+    signals.push(`playbook "${issueType}" does not list stack "${flavor}" → platform-managed / N/A on this stack`);
     return result('platform-default', 0.8, issueType, flavor, signals,
-      `Owned by the AEM platform. ${why}`, 'requires-operator');
-  }
-  // (b) EDS platform mechanisms named in the finding.
-  if (flavor === 'eds'
-      && /fastly|\bvcl\b|head\.html|cdn (auto|automatically|emits|minif)|link:?\s*<[^>]*>;\s*rel=?preload|automatic(ally)? (preload|minif)|edge delivery (manages|emits)/.test(text)) {
-    signals.push('finding names an EDS platform-managed mechanism (Fastly/VCL/head.html/auto Link:preload/CDN minify)');
-    return result('platform-default', 0.78, issueType, flavor, signals,
-      'Owned by the AEM EDS platform — Fastly VCL, the fixed head.html, and CDN minify/preload-header emission are operator-managed; customer changes are blocked at the platform level.',
-      'requires-operator');
-  }
-  // (c) TTFB / compression on EDS — no customer server-side render path.
-  if (flavor === 'eds' && (metric === 'TTFB' || issueType === 'ttfb' || issueType === 'compression')) {
-    signals.push('TTFB/compression on EDS is CDN/edge-managed — no customer server-side render path');
-    return result('platform-default', 0.78, issueType, flavor, signals,
-      'Owned by the AEM EDS platform — TTFB and compression are CDN/edge concerns with no customer server-side rendering path on EDS.',
+      'Owned by the hosting platform — this issue type is not site-fixable on this stack per the playbook applicability matrix.',
       'requires-operator');
   }
 
   // ---- S4: customer-content — authored assets / dialog / content. ---------
-  const damAsset = refs.find((r) => /\/content\/dam\//i.test(r.url || ''));
   if (issueType === 'image-sizing'
-      && (damAsset || /authored|dialog|content image|aspect-ratio|width.*height|set explicit (width|height)/.test(text))) {
-    signals.push(damAsset ? 'targets an authored DAM asset (/content/dam/)' : 'image dimensions are an authoring / component-dialog concern');
+      && /authored|dialog|content image|aspect-ratio|width.*height|set explicit (width|height)/.test(text)) {
+    signals.push('image dimensions are an authoring / CMS-configuration concern');
     return result('customer-content', 0.7, issueType, flavor, signals,
-      'Owned by the customer as content/authoring — image dimensions come from the authored asset or the component dialog, fixable without a code deploy (or in the component template).',
+      'Owned as content/authoring — image dimensions come from the authored asset or the CMS configuration, fixable without a code deploy (or in the template).',
       null);
   }
 
-  // ---- S5: customer-code — the default for AEM customer implementation. ----
-  const locus = CUSTOMER_CODE_LOCUS[flavor] || 'the customer-authored application code';
+  // ---- S5: customer-code — the default for site implementation. -----------
   if (target) signals.push(`shifting/target element "${target}" is a first-party selector (no third-party resource in evidence)`);
   if (flavor && playbook && Array.isArray(playbook.applicableFlavors) && playbook.applicableFlavors.includes(flavor)) {
-    signals.push(`playbook "${issueType}" applies to "${flavor}" → a customer-fixable issue type on this stack`);
+    signals.push(`playbook "${issueType}" applies to "${flavor}" → a site-fixable issue type on this stack`);
   }
-  const rationale = `Owned by the customer's own implementation: ${locus}. The shift/cost originates in customer code, not the AEM platform — fix per the ${issueType} playbook.`;
+  const rationale = `Owned by the site's own implementation (templates, CSS, JS). The shift/cost originates in site code, not the platform — fix per the ${issueType} playbook.`;
   return result('customer-code', flavor ? 0.72 : 0.6, issueType, flavor, signals, rationale, null);
 }
 
@@ -736,10 +665,8 @@ const _internals = { tokenizeYaml, parseMap, parseSeq, isThirdPartyResource, res
 
 export {
   OWNERS,
-  FLAVORS,
   METRIC_ISSUE_TYPES,
   normalizeFlavor,
-  flavorFromManifest,
   resolveFlavor,
   parsePlaybookFrontmatter,
   loadPlaybook,
@@ -756,13 +683,12 @@ export {
 // ---------------------------------------------------------------------------
 
 function parseArgs(argv) {
-  const args = { input: null, flavor: null, source: null, headers: null, playbooksDir: null, output: null, explain: null, help: false };
+  const args = { input: null, flavor: null, headers: null, playbooksDir: null, output: null, explain: null, help: false };
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
     switch (a) {
       case '--flavor':
-      case '--delivery-type': args.flavor = argv[++i]; break;
-      case '--source': args.source = argv[++i]; break;
+      case '--stack': args.flavor = argv[++i]; break;
       case '--headers': args.headers = argv[++i]; break;
       case '--playbooks-dir': args.playbooksDir = argv[++i]; break;
       case '--output': args.output = argv[++i]; break;
@@ -779,21 +705,18 @@ function parseArgs(argv) {
 
 function printHelp() {
   process.stdout.write(`
-attribution.js — platform-vs-customer attribution + playbook-guided diagnosis (G5).
+attribution.js — ownership attribution + playbook-guided diagnosis.
 
-Tag each finding's owner (platform-default | dispatcher-cdn | customer-code |
-customer-content | third-party) from playbook applicable_flavors + stack docs +
-response headers.
+Tag each finding's owner (platform-default | cdn-edge | customer-code |
+customer-content | third-party) from playbook applicability + response headers
++ evidence.
 
 Usage:
-  node .agents/scripts/attribution.js <findings.json> --flavor <eds|cs|ams|headless> [flags]
-  node .agents/scripts/attribution.js --explain <CLS|LCP|INP|TTFB|...> [--flavor cs]
+  node .agents/scripts/attribution.js <findings.json> [flags]
+  node .agents/scripts/attribution.js --explain <CLS|LCP|INP|TTFB|...>
 
 Flags:
-  --flavor / --delivery-type <t>  Stack flavor or SpaceCat deliveryType (aem_cs, aem_edge, ...).
-  --source <dir>                  Pulled source tree (progress/<slug>/source). Its importer
-                                  manifest makes flavor channel-aware: an aemy (EDS frontend)
-                                  repo resolves to eds even if --delivery-type says aem_cs (XWalk).
+  --flavor / --stack <name>       Stack name (from a stack pack; default: none).
   --headers <path>                Response headers JSON ({name:value} or [{name,value}]).
   --playbooks-dir <dir>           Override the playbooks directory (default: vendored).
   --output <path>                 Write the attributed envelope (default: stdout).
