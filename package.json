@@ -19,7 +19,6 @@
     "globals": "^15.0.0"
   },
   "scripts": {
-    "postinstall": "node .agents/scripts/postinstall-web-vitals.js",
     "artifacts": "node .agents/scripts/local-artifacts.js",
     "doctor": "node .agents/scripts/doctor.js",
     "lint": "eslint .",
@@ -27,6 +26,8 @@
     "measure": "node .agents/scripts/launcher.js",
     "playbooks:check": "node .agents/scripts/playbook-sync.js --check",
     "playbooks:sync": "node .agents/scripts/playbook-sync.js",
+    "plugin:sync": "node .agents/scripts/plugin-sync.js",
+    "postinstall": "node .agents/scripts/postinstall-web-vitals.js",
     "preflight": "node .agents/scripts/preflight.js",
     "setup": "node .agents/scripts/setup.js",
     "test": "node --test .agents/scripts/test/*.test.js .agents/scripts/analyzers/test/*.test.js .agents/scripts/patches/test/*.test.js"

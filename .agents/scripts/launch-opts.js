@@ -4,13 +4,21 @@
  * The default path is intentionally the plain headless Chromium launch used by
  * the original local profile. `stealth` is an explicit opt-in for authorized
  * measurement on Cloudflare/anti-bot managed-challenge sites.
+ *
+ * `CWV_CHROME_ARGS` (space-separated) appends extra Chromium flags in every
+ * mode — the portability seam for sandboxed/CI environments that need e.g.
+ * `--proxy-server=…` to reach the network. It never replaces the defaults.
  */
+
+function extraChromeArgs(env = process.env) {
+  return String(env.CWV_CHROME_ARGS || '').split(/\s+/).filter(Boolean);
+}
 
 function buildLaunchOptions(stealth = false) {
   if (!stealth) {
     return {
       headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      args: ['--no-sandbox', '--disable-setuid-sandbox', ...extraChromeArgs()],
     };
   }
 
@@ -21,6 +29,7 @@ function buildLaunchOptions(stealth = false) {
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-blink-features=AutomationControlled',
+      ...extraChromeArgs(),
     ],
     ignoreDefaultArgs: ['--enable-automation'],
   };
