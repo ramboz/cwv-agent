@@ -622,7 +622,18 @@ async function main() {
 
   try {
     const result = await analyzeImages({ url: args.url, profile: args.profile, stealth: args.stealth });
-    const json = JSON.stringify(result, null, 2);
+    // Emit a schema-valid finding envelope (finding-schema.js validateEnvelope),
+    // matching coverage.js / html-parse.js so the diagnose flow can consume it directly.
+    const envelope = {
+      schemaVersion: SCHEMA_VERSION,
+      skill: 'cwv-diagnose',
+      url: args.url,
+      timestamp: new Date().toISOString(),
+      summary: result.summary,
+      findings: result.findings,
+      raw: result.raw,
+    };
+    const json = JSON.stringify(envelope, null, 2);
     if (args.output) {
       fs.mkdirSync(path.dirname(path.resolve(args.output)), { recursive: true });
       fs.writeFileSync(args.output, json);

@@ -292,6 +292,50 @@ function makeH1Fixture({ heroStart, fcp, lcp, rbCssBytes, hasUrl = true }) {
   }
 }
 
+// Case 4: render-bound / JS-injected LCP image (the petplace case 2026-07-23) —
+// hero discovered at 13435ms, long after FCP (570ms) and ~86% of a 15690ms LCP.
+// Guard (d): downgrade to a rejected hypothesis, no preload, zero impact.
+{
+  const out = analyzeWaterfall(makeH1Fixture({
+    heroStart: 13435, fcp: 570, lcp: 15690, rbCssBytes: 10 * 1024,
+  }));
+  const h1 = out.findings.filter((f) => f.id.includes('-h1-'));
+  report('H1 render-bound: emits exactly one H1 finding', h1.length === 1, `got ${h1.length}`);
+  const f = h1[0];
+  if (f) {
+    report('H1 render-bound: status=rejected (JS-injected LCP image)', f.status === 'rejected', `status=${f.status}`);
+    report('H1 render-bound: rootCause=false', f.rootCause === false, `rootCause=${f.rootCause}`);
+    report('H1 render-bound: impact valueMs=0', f.impactReduction && f.impactReduction.valueMs === 0,
+      `valueMs=${f.impactReduction && f.impactReduction.valueMs}`);
+    report('H1 render-bound: no preload recommendation issued',
+      !(f.patches && f.patches.preloads && f.patches.preloads.length > 0));
+    report('H1 render-bound: cause explains JS-injection / render-bound',
+      /inject|JS|render-bound|preload scanner/i.test(f.cause || ''), f.cause ? f.cause.slice(0, 120) : 'no cause');
+    report('H1 render-bound: recommendation routes to unused-code / bundling',
+      /unused-code|bundling|render-critical/i.test(f.recommendation || ''));
+  }
+}
+
+// Case 5: physical cap — a preload can never save more than (LCP − FCP).
+// A network-late (not JS-injected) image: discovery is within FCP+2000ms so
+// Guard (d) stays off, but the raw (startTime−100) ceiling (3300ms) exceeds
+// LCP−FCP (2500ms), so the physical cap must clamp savings to 2500ms.
+{
+  const heroStart = 3400; const fcp = 1500; const lcp = 4000;
+  const out = analyzeWaterfall(makeH1Fixture({
+    heroStart, fcp, lcp, rbCssBytes: 1 * 1024,
+  }));
+  const h1 = out.findings.filter((f) => f.id.includes('-h1-'));
+  const f = h1[0];
+  report('H1 physical cap: fires as a normal proposed preload (Guard d off)',
+    !!(f && f.status === 'proposed'), f ? `status=${f.status}` : 'no finding');
+  if (f && f.status === 'proposed') {
+    report('H1 physical cap: savedMs clamped to LCP−FCP',
+      f.impactReduction.valueMs <= (lcp - fcp) && f.impactReduction.valueMs < (heroStart - 100),
+      `valueMs=${f.impactReduction.valueMs}, cap=${lcp - fcp}, uncapped≈${heroStart - 100}`);
+  }
+}
+
 process.stdout.write('\n' + summary + '\n');
 process.stdout.write(`\n${failed === 0 ? 'ALL TESTS PASS' : failed + ' TEST(S) FAILED'}\n`);
 process.exit(failed === 0 ? 0 : 1);

@@ -107,6 +107,17 @@ const CHAIN_DEPTH_FLAG = 3;            // H3 threshold
 const RTT_MS_PER_HOP = 150;            // H3 per-hop cost (slow-4G baseline)
 const LATE_DISCOVERY_MS = 500;         // H1: "started >500ms in" = late
 const HEAVY_RB_THRESHOLD_BYTES = 50 * 1024;  // H1 bandwidth guard — see ROADMAP item 10
+// H1 Guard (d): a render-bound / JS-injected LCP image. An <img> present in the
+// initial HTML is found by the preload scanner near t≈0; an LCP image whose
+// discovery (startTime) lands well after FCP was injected by JS (framework
+// render), so a <head> preload front-loads the bytes but cannot advance the
+// JS-gated element insertion — LCP stays put (or regresses as the preload steals
+// priority from the render-critical JS). See the petplace case 2026-07-23:
+// preload drove resourceLoadDelay 13015→5ms yet LCP +231ms (elementRenderDelay
+// 1→13215ms). Both conditions must hold to avoid flagging a network-late but
+// HTML-discoverable image (which a preload *would* help).
+const RENDER_BOUND_DISCOVERY_MARGIN_MS = 2000; // discovery must be >2s past FCP
+const RENDER_BOUND_LCP_FRACTION = 0.5;         // …and account for ≥50% of LCP
 const LCP_METRIC = 'LCP';
 
 // ---------------------------------------------------------------------------
@@ -281,6 +292,44 @@ function h1ShiftLeft(run, ctx) {
       continue;
     }
 
+    // Guard (d): render-bound / JS-injected LCP image. When the LCP image is
+    // discovered well after FCP AND that discovery is the majority of LCP, the
+    // element is inserted by JS (framework render), not present in the initial
+    // HTML — a <head> preload cannot advance the JS-gated insertion, so it saves
+    // ~nothing and can regress LCP by preempting the render-critical JS. Emit a
+    // rejected hypothesis (rootCause:false, no preload) that routes to the
+    // unused-code / bundling fix path, mirroring Guard (a)'s lifecycle handling.
+    if (
+      isLcpImage
+      && fcpValue !== null
+      && r.startTime > fcpValue + RENDER_BOUND_DISCOVERY_MARGIN_MS
+      && r.startTime >= RENDER_BOUND_LCP_FRACTION * lcp.value
+    ) {
+      const rejected = {
+        schemaVersion: '1.0',
+        id: `${ctx.shortName}-lcp-h1-${ctx.seq++}`,
+        timestamp: isoNow(),
+        url: ctx.url,
+        skill: ctx.skill,
+        source: ctx.source,
+        metric: [LCP_METRIC],
+        type: 'opportunity',
+        severity: 'low',
+        rootCause: false,
+        cause: `LCP image "${r.url}" is discovered at ${round(r.startTime)}ms — ${round(r.startTime - fcpValue)}ms after FCP (${round(fcpValue)}ms) and ${Math.round((r.startTime / lcp.value) * 100)}% of the ${round(lcp.value)}ms LCP. An image in the initial HTML is found by the preload scanner near t≈0; this one is injected late by JS (framework render), so a <head> preload front-loads the bytes but cannot advance the JS-gated element insertion — LCP is render-bound, not load-bound (the petplace case 2026-07-23: preload drove resourceLoadDelay 13015→5ms yet LCP regressed +231ms).`,
+        evidence: [
+          buildEvidenceLcpAttribution(run),
+          buildEvidenceResourceTiming(r),
+        ],
+        recommendation: `Do not add a preload hint — the LCP element is inserted by JS, so its paint is gated on script execution, not the network. Reduce the render-critical JS/CSS that delays the framework render (route to the unused-code / bundling playbooks) so the element mounts earlier.`,
+        confidence: capConfidence(ctx.source, 0.70),
+        impactReduction: { metric: LCP_METRIC, valueMs: 0 },
+        status: 'rejected',
+      };
+      if (validateFinding(rejected).valid) findings.push(rejected);
+      continue;
+    }
+
     // Raw savings ceiling: we could shave up to (startTime - 100) if preloaded very early.
     let savedMs = Math.max(0, round(r.startTime - 100));
 
@@ -295,6 +344,13 @@ function h1ShiftLeft(run, ctx) {
         savedMs = bwCap;
         bwCapApplied = true;
       }
+    }
+
+    // Physical cap: a preload can never pull LCP below FCP (the LCP element
+    // cannot paint before first contentful paint), so savings ≤ (LCP − FCP).
+    // Prevents any estimate that exceeds the achievable LCP improvement.
+    if (fcpValue !== null) {
+      savedMs = Math.min(savedMs, Math.max(0, round(lcp.value - fcpValue)));
     }
 
     // Guard (c): de-rate confidence when pre-LCP render-blocking payload is heavy.
@@ -675,14 +731,60 @@ export { analyzeWaterfall };
 // CLI
 // ---------------------------------------------------------------------------
 
+const HELP = `
+waterfall-shift — shift-left / preload-candidate analysis from a launcher measurement.
+
+Usage: node waterfall-shift.js <launcher-output.json> [flags]
+
+Args:
+  <launcher-output.json>  Path to a launcher.js measurement JSON (required)
+
+Flags:
+  --output <path>         Write the finding envelope to a file (default: stdout)
+  --help                  Print this help and exit 0
+`;
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const file = process.argv[2];
+  const argv = process.argv.slice(2);
+  if (argv.includes('--help') || argv.includes('-h')) {
+    process.stdout.write(HELP);
+    process.exit(0);
+  }
+  let file = null;
+  let output = null;
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === '--output' || a === '-o') {
+      output = argv[++i];
+    } else if (a && a.startsWith('--')) {
+      process.stderr.write(`Unknown flag: ${a}\n` + HELP);
+      process.exit(2);
+    } else if (!file) {
+      file = a;
+    }
+  }
   if (!file) {
-    process.stderr.write('usage: node waterfall-shift.js <launcher-output.json>\n');
+    process.stderr.write('usage: node waterfall-shift.js <launcher-output.json> [--output <path>]\n');
     process.exit(2);
   }
   const abs = path.resolve(process.cwd(), file);
   const data = JSON.parse(fs.readFileSync(abs, 'utf8'));
   const out = analyzeWaterfall(data);
-  process.stdout.write(JSON.stringify(out, null, 2) + '\n');
+  // Emit a schema-valid finding envelope (finding-schema.js validateEnvelope),
+  // matching coverage.js / html-parse.js so the diagnose flow can consume it directly.
+  const envelope = {
+    schemaVersion: '1.0',
+    skill: 'cwv-diagnose',
+    url: data.url || '',
+    timestamp: new Date().toISOString(),
+    summary: out.summary,
+    findings: out.findings,
+  };
+  const json = JSON.stringify(envelope, null, 2);
+  if (output) {
+    fs.mkdirSync(path.dirname(path.resolve(output)), { recursive: true });
+    fs.writeFileSync(output, json);
+  } else {
+    process.stdout.write(json + '\n');
+  }
 }
