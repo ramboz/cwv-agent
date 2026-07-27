@@ -1,0 +1,31 @@
+{
+  "schemaVersion": "1.0",
+  "skill": "cwv-triage",
+  "url": "https://pets.example.com/",
+  "timestamp": "2026-04-17T12:00:00.000Z",
+  "status": "passing",
+  "recommendedFormFactor": "PHONE",
+  "recommendedProfile": "mobile-slow4g-4xcpu",
+  "passing": {
+    "reason": "field-already-good",
+    "checked": ["LCP", "CLS", "INP"],
+    "byFormFactor": {
+      "PHONE": {
+        "LCP": 1393,
+        "CLS": 0.02,
+        "INP": 106,
+        "source": "crux",
+        "maxPressure": 0.5572
+      },
+      "DESKTOP": {
+        "LCP": 1120,
+        "CLS": 0.01,
+        "INP": 88,
+        "source": "crux",
+        "maxPressure": 0.448
+      }
+    },
+    "thresholds": { "LCP": 2500, "CLS": 0.1, "INP": 200 }
+  },
+  "findings": []
+}

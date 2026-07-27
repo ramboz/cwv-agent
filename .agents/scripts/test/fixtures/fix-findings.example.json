@@ -1,0 +1,99 @@
+{
+  "schemaVersion": "1.0",
+  "skill": "cwv-validate",
+  "url": "https://www.parcelpro.com/us/en/home.html",
+  "timestamp": "2026-06-11T18:00:00.000Z",
+  "profile": "desktop-cable-1xcpu",
+  "formFactor": "DESKTOP",
+  "findings": [
+    {
+      "schemaVersion": "1.0",
+      "id": "validate-cls-1",
+      "timestamp": "2026-06-11T18:00:00.000Z",
+      "url": "https://www.parcelpro.com/us/en/home.html",
+      "skill": "cwv-validate",
+      "source": "perf_observer",
+      "metric": [
+        "CLS"
+      ],
+      "type": "opportunity",
+      "severity": "high",
+      "rootCause": true,
+      "cause": "The sticky nav header is laid out as `position: fixed` and a late header.js paddingTop spacer is added on scroll, so the header reserves no space and main content shifts down when the spacer applies (measured CLS contribution 0.119).",
+      "evidence": [
+        {
+          "kind": "cwv-attribution",
+          "metric": "CLS",
+          "data": {
+            "score": 0.144,
+            "startTime": 410,
+            "target": "header.nav",
+            "movedTarget": "main#main",
+            "loadState": "complete"
+          }
+        },
+        {
+          "kind": "measurement-delta",
+          "data": {
+            "metric": "CLS",
+            "baseline": 0.144,
+            "treatment": 0.025,
+            "deltaScore": -0.119,
+            "runs": 15,
+            "baselineIQR": [
+              0.13,
+              0.158
+            ],
+            "treatmentIQR": [
+              0.018,
+              0.032
+            ],
+            "iqrOverlap": false
+          }
+        },
+        {
+          "kind": "screenshot",
+          "data": {
+            "path": "screenshots/attempt-1.png",
+            "phase": "attempt-1"
+          }
+        }
+      ],
+      "recommendation": "Make the sticky header `position: sticky` so it reserves its own space, and drop the header.js paddingTop spacer toggle.",
+      "patches": {
+        "markup": [
+          {
+            "selector": "header.nav",
+            "attrs": {
+              "style": "position:sticky;top:0"
+            }
+          }
+        ]
+      },
+      "sourceEdits": [
+        {
+          "file": "styles/header.css",
+          "line": 42,
+          "before": "  position: fixed;\n  top: 0;",
+          "after": "  position: sticky;\n  top: 0;"
+        },
+        {
+          "file": "scripts/header.js",
+          "line": 18,
+          "before": "  document.body.style.paddingTop = header.offsetHeight + 'px';",
+          "after": "  // paddingTop spacer no longer needed: header is position:sticky"
+        }
+      ],
+      "confidence": 0.85,
+      "impactReduction": {
+        "metric": "CLS",
+        "score": 0.119
+      },
+      "status": "validated",
+      "relatedFindingIds": [
+        "diagnose-cls-1"
+      ],
+      "owner": "customer-code"
+    }
+  ]
+}

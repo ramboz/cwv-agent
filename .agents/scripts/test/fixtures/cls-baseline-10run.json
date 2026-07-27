@@ -1,0 +1,818 @@
+{
+  "_note": "Real news.example.com no-patch runs (baseline.json + baseline-2.json, 5+5) pooled, from progress/the news-site case-com-br/loop-2026-06-10/runs. clsShare rounded to 4dp. Self-contained acceptance fixture for cls-variance (ROADMAP V4). Untracked source artifacts not committed; this is the faithful committed reproduction.",
+  "url": "https://news.example.com",
+  "profile": "mobile-slow4g-4xcpu",
+  "cohort": "first-visit",
+  "runs": [
+    {
+      "cwv": {
+        "cls": {
+          "value": 0.2684,
+          "shiftSources": [
+            {
+              "node": "div.template-container > div.has-desktop-width > div > section.cmp-template-grid.cmp-template-grid__container__column-4x4x4 > article",
+              "clsShare": 0.1074,
+              "shifts": 2,
+              "grewEvents": 2
+            },
+            {
+              "node": "div#container-32e9778d0f > div.aem-Grid.aem-Grid--12 > div.t004-cookie.aem-GridColumn > section.cookies__container.font-lato",
+              "clsShare": 0.0725,
+              "shifts": 6,
+              "grewEvents": 6
+            },
+            {
+              "node": "div.tab__content > div.tab__content--wrapper > div.tab__content--box > div.articles__content > ul.list__container.list__container--scroll",
+              "clsShare": 0.0537,
+              "shifts": 1,
+              "grewEvents": 1
+            },
+            {
+              "node": "div.articles__content > ul.list__container.list__container--scroll > li.list__wrapper > a.list__link.list__img--left > span.list__img--box",
+              "clsShare": 0.0537,
+              "shifts": 1,
+              "grewEvents": 1
+            },
+            {
+              "node": "div#container-e87494c30d > div.cp005-canais",
+              "clsShare": 0.0537,
+              "shifts": 1,
+              "grewEvents": 0
+            },
+            {
+              "node": "div.t004-cookie.aem-GridColumn > section.cookies__container.font-lato > div.cookies__wrapper > div.cookies__head > button.cookies__button--close.icons__close",
+              "clsShare": 0.0501,
+              "shifts": 5,
+              "grewEvents": 0
+            },
+            {
+              "node": "div#container-e87494c30d > div.template-container",
+              "clsShare": 0.0134,
+              "shifts": 1,
+              "grewEvents": 0
+            },
+            {
+              "node": "div#container-5fa379d63d > div.aem-Grid.aem-Grid--12 > div.t001-header.aem-GridColumn > header.header__container.font-lato",
+              "clsShare": 0.013,
+              "shifts": 14,
+              "grewEvents": 14
+            },
+            {
+              "node": "section.cookies__container.font-lato > div.cookies__wrapper > div.cookies__head > p.cookies__title.font-inter > span.icons__flag",
+              "clsShare": 0.0114,
+              "shifts": 1,
+              "grewEvents": 0
+            },
+            {
+              "node": "div.cookies__wrapper > div.cookies__head > p.cookies__title.font-inter > span.icons__flag > ::before",
+              "clsShare": 0.0114,
+              "shifts": 1,
+              "grewEvents": 1
+            },
+            {
+              "node": "div#container-e9f5f640c2 > div.aem-Grid.aem-Grid--12 > div.container.responsivegrid",
+              "clsShare": 0.005,
+              "shifts": 1,
+              "grewEvents": 0
+            },
+            {
+              "node": "div#lottery-carousel-drag > ul.lottery-carousel__list > li.lottery-carousel__item",
+              "clsShare": 0.0045,
+              "shifts": 3,
+              "grewEvents": 0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "cwv": {
+        "cls": {
+          "value": 0.1769,
+          "shiftSources": [
+            {
+              "node": "div#container-32e9778d0f > div.aem-Grid.aem-Grid--12 > div.t004-cookie.aem-GridColumn > section.cookies__container.font-lato",
+              "clsShare": 0.069,
+              "shifts": 7,
+              "grewEvents": 7
+            },
+            {
+              "node": "div.t004-cookie.aem-GridColumn > section.cookies__container.font-lato > div.cookies__wrapper > div.cookies__head > button.cookies__button--close.icons__close",
+              "clsShare": 0.0524,
+              "shifts": 5,
+              "grewEvents": 0
+            },
+            {
+              "node": "div#container-e87494c30d > div.template-container",
+              "clsShare": 0.0131,
+              "shifts": 1,
+              "grewEvents": 0
+            },
+            {
+              "node": "div.tab__content > div.tab__content--wrapper > div.tab__content--box > div.articles__content > ul.list__container.list__container--scroll",
+              "clsShare": 0.0124,
+              "shifts": 1,
+              "grewEvents": 1
+            },
+            {
+              "node": "div.tab__content--wrapper > div.tab__content--box > div.articles__content > ul.list__container.list__container--scroll > li.list__wrapper",
+              "clsShare": 0.0124,
+              "shifts": 1,
+              "grewEvents": 1
+            },
+            {
+              "node": "div#container-5fa379d63d > div.aem-Grid.aem-Grid--12 > div.t001-header.aem-GridColumn > header.header__container.font-lato",
+              "clsShare": 0.0124,
+              "shifts": 12,
+              "grewEvents": 12
+            },
+            {
+              "node": "div.aem-Grid.aem-Grid--12 > div.t004-cookie.aem-GridColumn > section.cookies__container.font-lato > div.cookies__wrapper > div.cookies__foot",
+              "clsShare": 0.0115,
+              "shifts": 1,
+              "grewEvents": 1
+            },
+            {
+              "node": "div#container-e9f5f640c2 > div.aem-Grid.aem-Grid--12 > div.container.responsivegrid",
+              "clsShare": 0.005,
+              "shifts": 1,
+              "grewEvents": 0
+            },
+            {
+              "node": "section.cookies__container.font-lato > div.cookies__wrapper > div.cookies__head > p.cookies__title.font-inter > span.icons__flag",
+              "clsShare": 0.0046,
+              "shifts": 1,
+              "grewEvents": 0
+            },
+            {
+              "node": "div.cookies__wrapper > div.cookies__head > p.cookies__title.font-inter > span.icons__flag > ::before",
+              "clsShare": 0.0046,
+              "shifts": 1,
+              "grewEvents": 1
+            },
+            {
+              "node": "div#lottery-carousel-drag > ul.lottery-carousel__list > li.lottery-carousel__item",
+              "clsShare": 0.0045,
+              "shifts": 3,
+              "grewEvents": 0
+            },
+            {
+              "node": "div#capa_topo_header_1",
+              "clsShare": 0.0043,
+              "shifts": 2,
+              "grewEvents": 0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "cwv": {
+        "cls": {
+          "value": 0.2277,
+          "shiftSources": [
+            {
+              "node": "div.tab__content--wrapper > div.tab__content--box > div.articles__content > ul.list__container.list__container--scroll > li.list__wrapper",
+              "clsShare": 0.1366,
+              "shifts": 3,
+              "grewEvents": 2
+            },
+            {
+              "node": "div.template-container > div.has-desktop-width > div > section.cmp-template-grid.cmp-template-grid__container__column-4x4x4 > article",
+              "clsShare": 0.0911,
+              "shifts": 2,
+              "grewEvents": 2
+            },
+            {
+              "node": "div#container-32e9778d0f > div.aem-Grid.aem-Grid--12 > div.t004-cookie.aem-GridColumn > section.cookies__container.font-lato",
+              "clsShare": 0.0673,
+              "shifts": 7,
+              "grewEvents": 7
+            },
+            {
+              "node": "div.t004-cookie.aem-GridColumn > section.cookies__container.font-lato > div.cookies__wrapper > div.cookies__head > button.cookies__button--close.icons__close",
+              "clsShare": 0.0587,
+              "shifts": 5,
+              "grewEvents": 0
+            },
+            {
+              "node": "div#container-e87494c30d > div.template-container",
+              "clsShare": 0.0141,
+              "shifts": 1,
+              "grewEvents": 0
+            },
+            {
+              "node": "div#container-5fa379d63d > div.aem-Grid.aem-Grid--12 > div.t001-header.aem-GridColumn > header.header__container.font-lato",
+              "clsShare": 0.0134,
+              "shifts": 10,
+              "grewEvents": 10
+            },
+            {
+              "node": "div.aem-Grid.aem-Grid--12 > div.t004-cookie.aem-GridColumn > section.cookies__container.font-lato > div.cookies__wrapper > div.cookies__foot",
+              "clsShare": 0.0132,
+              "shifts": 1,
+              "grewEvents": 1
+            },
+            {
+              "node": "div#capa_topo_header_1",
+              "clsShare": 0.0069,
+              "shifts": 3,
+              "grewEvents": 0
+            },
+            {
+              "node": "div#container-e9f5f640c2 > div.aem-Grid.aem-Grid--12 > div.container.responsivegrid",
+              "clsShare": 0.005,
+              "shifts": 1,
+              "grewEvents": 0
+            },
+            {
+              "node": "section.cookies__container.font-lato > div.cookies__wrapper > div.cookies__head > p.cookies__title.font-inter > span.icons__flag",
+              "clsShare": 0.0049,
+              "shifts": 1,
+              "grewEvents": 0
+            },
+            {
+              "node": "div.cookies__wrapper > div.cookies__head > p.cookies__title.font-inter > span.icons__flag > ::before",
+              "clsShare": 0.0049,
+              "shifts": 1,
+              "grewEvents": 1
+            },
+            {
+              "node": "div#lottery-carousel-drag > ul.lottery-carousel__list > li.lottery-carousel__item",
+              "clsShare": 0.0045,
+              "shifts": 3,
+              "grewEvents": 0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "cwv": {
+        "cls": {
+          "value": 0.2684,
+          "shiftSources": [
+            {
+              "node": "div.template-container > div.has-desktop-width > div > section.cmp-template-grid.cmp-template-grid__container__column-4x4x4 > article",
+              "clsShare": 0.1074,
+              "shifts": 2,
+              "grewEvents": 2
+            },
+            {
+              "node": "div#container-32e9778d0f > div.aem-Grid.aem-Grid--12 > div.t004-cookie.aem-GridColumn > section.cookies__container.font-lato",
+              "clsShare": 0.0789,
+              "shifts": 5,
+              "grewEvents": 5
+            },
+            {
+              "node": "div.t004-cookie.aem-GridColumn > section.cookies__container.font-lato > div.cookies__wrapper > div.cookies__head > button.cookies__button--close.icons__close",
+              "clsShare": 0.0628,
+              "shifts": 4,
+              "grewEvents": 0
+            },
+            {
+              "node": "div.tab__content > div.tab__content--wrapper > div.tab__content--box > div.articles__content > ul.list__container.list__container--scroll",
+              "clsShare": 0.0537,
+              "shifts": 1,
+              "grewEvents": 1
+            },
+            {
+              "node": "div.articles__content > ul.list__container.list__container--scroll > li.list__wrapper > a.list__link.list__img--left > span.list__img--box",
+              "clsShare": 0.0537,
+              "shifts": 1,
+              "grewEvents": 1
+            },
+            {
+              "node": "div#container-e87494c30d > div.cp005-canais",
+              "clsShare": 0.0537,
+              "shifts": 1,
+              "grewEvents": 0
+            },
+            {
+              "node": "div#container-e87494c30d > div.template-container",
+              "clsShare": 0.0138,
+              "shifts": 1,
+              "grewEvents": 0
+            },
+            {
+              "node": "div#container-5fa379d63d > div.aem-Grid.aem-Grid--12 > div.t001-header.aem-GridColumn > header.header__container.font-lato",
+              "clsShare": 0.0119,
+              "shifts": 13,
+              "grewEvents": 13
+            },
+            {
+              "node": "section.cookies__container.font-lato > div.cookies__wrapper > div.cookies__head > p.cookies__title.font-inter > span.icons__flag",
+              "clsShare": 0.007,
+              "shifts": 1,
+              "grewEvents": 0
+            },
+            {
+              "node": "div.cookies__wrapper > div.cookies__head > p.cookies__title.font-inter > span.icons__flag > ::before",
+              "clsShare": 0.007,
+              "shifts": 1,
+              "grewEvents": 1
+            },
+            {
+              "node": "div#container-e9f5f640c2 > div.aem-Grid.aem-Grid--12 > div.container.responsivegrid",
+              "clsShare": 0.005,
+              "shifts": 1,
+              "grewEvents": 0
+            },
+            {
+              "node": "div#lottery-carousel-drag > ul.lottery-carousel__list > li.lottery-carousel__item",
+              "clsShare": 0.0045,
+              "shifts": 3,
+              "grewEvents": 0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "cwv": {
+        "cls": {
+          "value": 0.371,
+          "shiftSources": [
+            {
+              "node": "div.tab__content--wrapper > div.tab__content--box > div.articles__content > ul.list__container.list__container--scroll > li.list__wrapper",
+              "clsShare": 0.2226,
+              "shifts": 3,
+              "grewEvents": 1
+            },
+            {
+              "node": "div.template-container > div.has-desktop-width > div > section.cmp-template-grid.cmp-template-grid__container__column-4x4x4 > article",
+              "clsShare": 0.1484,
+              "shifts": 2,
+              "grewEvents": 0
+            },
+            {
+              "node": "div#container-32e9778d0f > div.aem-Grid.aem-Grid--12 > div.t004-cookie.aem-GridColumn > section.cookies__container.font-lato",
+              "clsShare": 0.0801,
+              "shifts": 7,
+              "grewEvents": 7
+            },
+            {
+              "node": "div.t004-cookie.aem-GridColumn > section.cookies__container.font-lato > div.cookies__wrapper > div.cookies__head > button.cookies__button--close.icons__close",
+              "clsShare": 0.0521,
+              "shifts": 4,
+              "grewEvents": 0
+            },
+            {
+              "node": "div#container-5fa379d63d > div.aem-Grid.aem-Grid--12 > div.t001-header.aem-GridColumn > header.header__container.font-lato",
+              "clsShare": 0.0155,
+              "shifts": 12,
+              "grewEvents": 12
+            },
+            {
+              "node": "div#container-e87494c30d > div.template-container",
+              "clsShare": 0.0131,
+              "shifts": 1,
+              "grewEvents": 0
+            },
+            {
+              "node": "div#capa_topo_header_1",
+              "clsShare": 0.0073,
+              "shifts": 3,
+              "grewEvents": 0
+            },
+            {
+              "node": "section.cookies__container.font-lato > div.cookies__wrapper > div.cookies__head > p.cookies__title.font-inter > span.icons__flag",
+              "clsShare": 0.0056,
+              "shifts": 1,
+              "grewEvents": 0
+            },
+            {
+              "node": "div.cookies__wrapper > div.cookies__head > p.cookies__title.font-inter > span.icons__flag > ::before",
+              "clsShare": 0.0056,
+              "shifts": 1,
+              "grewEvents": 1
+            },
+            {
+              "node": "div#container-e9f5f640c2 > div.aem-Grid.aem-Grid--12 > div.container.responsivegrid",
+              "clsShare": 0.005,
+              "shifts": 1,
+              "grewEvents": 0
+            },
+            {
+              "node": "div#lottery-carousel-drag > ul.lottery-carousel__list > li.lottery-carousel__item",
+              "clsShare": 0.0046,
+              "shifts": 6,
+              "grewEvents": 0
+            },
+            {
+              "node": "div#container-32e9778d0f > div.aem-Grid.aem-Grid--12 > div.popup-notificacao.aem-GridColumn > div.notification-modal.font-inter > p.notification-modal__description",
+              "clsShare": 0.0015,
+              "shifts": 1,
+              "grewEvents": 0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "cwv": {
+        "cls": {
+          "value": 0.2234,
+          "shiftSources": [
+            {
+              "node": "div.tab__content--wrapper > div.tab__content--box > div.articles__content > ul.list__container.list__container--scroll > li.list__wrapper",
+              "clsShare": 0.134,
+              "shifts": 3,
+              "grewEvents": 2
+            },
+            {
+              "node": "div.template-container > div.has-desktop-width > div > section.cmp-template-grid.cmp-template-grid__container__column-4x4x4 > article",
+              "clsShare": 0.0894,
+              "shifts": 2,
+              "grewEvents": 0
+            },
+            {
+              "node": "div#container-32e9778d0f > div.aem-Grid.aem-Grid--12 > div.t004-cookie.aem-GridColumn > section.cookies__container.font-lato",
+              "clsShare": 0.0673,
+              "shifts": 7,
+              "grewEvents": 7
+            },
+            {
+              "node": "div.t004-cookie.aem-GridColumn > section.cookies__container.font-lato > div.cookies__wrapper > div.cookies__head > button.cookies__button--close.icons__close",
+              "clsShare": 0.0535,
+              "shifts": 5,
+              "grewEvents": 0
+            },
+            {
+              "node": "div#container-e87494c30d > div.template-container",
+              "clsShare": 0.0131,
+              "shifts": 1,
+              "grewEvents": 0
+            },
+            {
+              "node": "div#container-5fa379d63d > div.aem-Grid.aem-Grid--12 > div.t001-header.aem-GridColumn > header.header__container.font-lato",
+              "clsShare": 0.0121,
+              "shifts": 15,
+              "grewEvents": 15
+            },
+            {
+              "node": "div.aem-Grid.aem-Grid--12 > div.t004-cookie.aem-GridColumn > section.cookies__container.font-lato > div.cookies__wrapper > div.cookies__foot",
+              "clsShare": 0.0115,
+              "shifts": 1,
+              "grewEvents": 1
+            },
+            {
+              "node": "div#container-e9f5f640c2 > div.aem-Grid.aem-Grid--12 > div.container.responsivegrid",
+              "clsShare": 0.005,
+              "shifts": 1,
+              "grewEvents": 0
+            },
+            {
+              "node": "section.cookies__container.font-lato > div.cookies__wrapper > div.cookies__head > p.cookies__title.font-inter > span.icons__flag",
+              "clsShare": 0.0049,
+              "shifts": 1,
+              "grewEvents": 0
+            },
+            {
+              "node": "div.cookies__wrapper > div.cookies__head > p.cookies__title.font-inter > span.icons__flag > ::before",
+              "clsShare": 0.0049,
+              "shifts": 1,
+              "grewEvents": 1
+            },
+            {
+              "node": "div#lottery-carousel-drag > ul.lottery-carousel__list > li.lottery-carousel__item",
+              "clsShare": 0.0039,
+              "shifts": 6,
+              "grewEvents": 0
+            },
+            {
+              "node": "div#capa_topo_header_1",
+              "clsShare": 0.0025,
+              "shifts": 1,
+              "grewEvents": 0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "cwv": {
+        "cls": {
+          "value": 0.1762,
+          "shiftSources": [
+            {
+              "node": "div#container-32e9778d0f > div.aem-Grid.aem-Grid--12 > div.t004-cookie.aem-GridColumn > section.cookies__container.font-lato",
+              "clsShare": 0.0722,
+              "shifts": 8,
+              "grewEvents": 8
+            },
+            {
+              "node": "div.t004-cookie.aem-GridColumn > section.cookies__container.font-lato > div.cookies__wrapper > div.cookies__head > button.cookies__button--close.icons__close",
+              "clsShare": 0.0557,
+              "shifts": 5,
+              "grewEvents": 0
+            },
+            {
+              "node": "div#container-e87494c30d > div.template-container",
+              "clsShare": 0.0141,
+              "shifts": 1,
+              "grewEvents": 0
+            },
+            {
+              "node": "div#container-5fa379d63d > div.aem-Grid.aem-Grid--12 > div.t001-header.aem-GridColumn > header.header__container.font-lato",
+              "clsShare": 0.0123,
+              "shifts": 14,
+              "grewEvents": 14
+            },
+            {
+              "node": "div.aem-Grid.aem-Grid--12 > div.t004-cookie.aem-GridColumn > section.cookies__container.font-lato > div.cookies__wrapper > div.cookies__foot",
+              "clsShare": 0.0089,
+              "shifts": 1,
+              "grewEvents": 1
+            },
+            {
+              "node": "div.cookies__wrapper > div.cookies__head > p.cookies__title.font-inter > span.icons__flag > ::before",
+              "clsShare": 0.0056,
+              "shifts": 1,
+              "grewEvents": 1
+            },
+            {
+              "node": "div#container-e9f5f640c2 > div.aem-Grid.aem-Grid--12 > div.container.responsivegrid",
+              "clsShare": 0.005,
+              "shifts": 1,
+              "grewEvents": 0
+            },
+            {
+              "node": "div#lottery-carousel-drag > ul.lottery-carousel__list > li.lottery-carousel__item",
+              "clsShare": 0.0045,
+              "shifts": 3,
+              "grewEvents": 0
+            },
+            {
+              "node": "div#capa_topo_header_1",
+              "clsShare": 0.0024,
+              "shifts": 1,
+              "grewEvents": 0
+            },
+            {
+              "node": "div#container-32e9778d0f > div.aem-Grid.aem-Grid--12 > div.popup-notificacao.aem-GridColumn > div.notification-modal.font-inter > div.notification-modal__wrapper",
+              "clsShare": 0.0016,
+              "shifts": 1,
+              "grewEvents": 0
+            },
+            {
+              "node": "div#container-32e9778d0f > div.aem-Grid.aem-Grid--12 > div.popup-notificacao.aem-GridColumn > div.notification-modal.font-inter > p.notification-modal__description",
+              "clsShare": 0.0016,
+              "shifts": 1,
+              "grewEvents": 0
+            },
+            {
+              "node": "div#container-32e9778d0f > div.aem-Grid.aem-Grid--12 > div.popup-notificacao.aem-GridColumn > div.notification-modal.font-inter > div.notification-modal__actions",
+              "clsShare": 0.0016,
+              "shifts": 1,
+              "grewEvents": 0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "cwv": {
+        "cls": {
+          "value": 0.1729,
+          "shiftSources": [
+            {
+              "node": "div.tab__content--wrapper > div.tab__content--box > div.articles__content > ul.list__container.list__container--scroll > li.list__wrapper",
+              "clsShare": 0.0962,
+              "shifts": 3,
+              "grewEvents": 2
+            },
+            {
+              "node": "div#container-32e9778d0f > div.aem-Grid.aem-Grid--12 > div.t004-cookie.aem-GridColumn > section.cookies__container.font-lato",
+              "clsShare": 0.0702,
+              "shifts": 8,
+              "grewEvents": 8
+            },
+            {
+              "node": "div.template-container > div.has-desktop-width > div > section.cmp-template-grid.cmp-template-grid__container__column-4x4x4 > article",
+              "clsShare": 0.0641,
+              "shifts": 2,
+              "grewEvents": 0
+            },
+            {
+              "node": "div.t004-cookie.aem-GridColumn > section.cookies__container.font-lato > div.cookies__wrapper > div.cookies__head > button.cookies__button--close.icons__close",
+              "clsShare": 0.0505,
+              "shifts": 6,
+              "grewEvents": 0
+            },
+            {
+              "node": "div#container-e87494c30d > div.template-container",
+              "clsShare": 0.0135,
+              "shifts": 1,
+              "grewEvents": 0
+            },
+            {
+              "node": "div#container-5fa379d63d > div.aem-Grid.aem-Grid--12 > div.t001-header.aem-GridColumn > header.header__container.font-lato",
+              "clsShare": 0.0133,
+              "shifts": 13,
+              "grewEvents": 13
+            },
+            {
+              "node": "div.aem-Grid.aem-Grid--12 > div.t004-cookie.aem-GridColumn > section.cookies__container.font-lato > div.cookies__wrapper > div.cookies__foot",
+              "clsShare": 0.0106,
+              "shifts": 1,
+              "grewEvents": 1
+            },
+            {
+              "node": "div.cookies__wrapper > div.cookies__head > p.cookies__title.font-inter > span.icons__flag > ::before",
+              "clsShare": 0.0057,
+              "shifts": 1,
+              "grewEvents": 1
+            },
+            {
+              "node": "div#container-e9f5f640c2 > div.aem-Grid.aem-Grid--12 > div.container.responsivegrid",
+              "clsShare": 0.005,
+              "shifts": 1,
+              "grewEvents": 0
+            },
+            {
+              "node": "div#lottery-carousel-drag > ul.lottery-carousel__list > li.lottery-carousel__item",
+              "clsShare": 0.0039,
+              "shifts": 5,
+              "grewEvents": 0
+            },
+            {
+              "node": "div#capa_topo_header_1",
+              "clsShare": 0.0038,
+              "shifts": 1,
+              "grewEvents": 0
+            },
+            {
+              "node": "div#container-32e9778d0f > div.aem-Grid.aem-Grid--12 > div.popup-notificacao.aem-GridColumn > div.notification-modal.font-inter > div.notification-modal__wrapper",
+              "clsShare": 0.0016,
+              "shifts": 1,
+              "grewEvents": 0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "cwv": {
+        "cls": {
+          "value": 0.2197,
+          "shiftSources": [
+            {
+              "node": "div.tab__content--wrapper > div.tab__content--box > div.articles__content > ul.list__container.list__container--scroll > li.list__wrapper",
+              "clsShare": 0.1318,
+              "shifts": 3,
+              "grewEvents": 2
+            },
+            {
+              "node": "div.template-container > div.has-desktop-width > div > section.cmp-template-grid.cmp-template-grid__container__column-4x4x4 > article",
+              "clsShare": 0.0879,
+              "shifts": 2,
+              "grewEvents": 0
+            },
+            {
+              "node": "div#container-32e9778d0f > div.aem-Grid.aem-Grid--12 > div.t004-cookie.aem-GridColumn > section.cookies__container.font-lato",
+              "clsShare": 0.07,
+              "shifts": 7,
+              "grewEvents": 7
+            },
+            {
+              "node": "div.t004-cookie.aem-GridColumn > section.cookies__container.font-lato > div.cookies__wrapper > div.cookies__head > button.cookies__button--close.icons__close",
+              "clsShare": 0.0653,
+              "shifts": 5,
+              "grewEvents": 0
+            },
+            {
+              "node": "div#container-5fa379d63d > div.aem-Grid.aem-Grid--12 > div.t001-header.aem-GridColumn > header.header__container.font-lato",
+              "clsShare": 0.0152,
+              "shifts": 14,
+              "grewEvents": 14
+            },
+            {
+              "node": "div#container-e87494c30d > div.template-container",
+              "clsShare": 0.0141,
+              "shifts": 1,
+              "grewEvents": 0
+            },
+            {
+              "node": "section.cookies__container.font-lato > div.cookies__wrapper > div.cookies__head > p.cookies__title.font-inter > span.icons__flag",
+              "clsShare": 0.0067,
+              "shifts": 1,
+              "grewEvents": 0
+            },
+            {
+              "node": "div.cookies__wrapper > div.cookies__head > p.cookies__title.font-inter > span.icons__flag > ::before",
+              "clsShare": 0.0067,
+              "shifts": 1,
+              "grewEvents": 1
+            },
+            {
+              "node": "div#capa_topo_header_1",
+              "clsShare": 0.005,
+              "shifts": 2,
+              "grewEvents": 0
+            },
+            {
+              "node": "div#container-e9f5f640c2 > div.aem-Grid.aem-Grid--12 > div.container.responsivegrid",
+              "clsShare": 0.005,
+              "shifts": 1,
+              "grewEvents": 0
+            },
+            {
+              "node": "div#lottery-carousel-drag > ul.lottery-carousel__list > li.lottery-carousel__item",
+              "clsShare": 0.0045,
+              "shifts": 3,
+              "grewEvents": 0
+            },
+            {
+              "node": "div#container-32e9778d0f > div.aem-Grid.aem-Grid--12 > div.popup-notificacao.aem-GridColumn > div.notification-modal.font-inter > p.notification-modal__description",
+              "clsShare": 0.0015,
+              "shifts": 1,
+              "grewEvents": 0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "cwv": {
+        "cls": {
+          "value": 0.1947,
+          "shiftSources": [
+            {
+              "node": "div#container-32e9778d0f > div.aem-Grid.aem-Grid--12 > div.t004-cookie.aem-GridColumn > section.cookies__container.font-lato",
+              "clsShare": 0.0812,
+              "shifts": 5,
+              "grewEvents": 5
+            },
+            {
+              "node": "div.t004-cookie.aem-GridColumn > section.cookies__container.font-lato > div.cookies__wrapper > div.cookies__head > button.cookies__button--close.icons__close",
+              "clsShare": 0.0599,
+              "shifts": 3,
+              "grewEvents": 0
+            },
+            {
+              "node": "div#container-5fa379d63d > div.aem-Grid.aem-Grid--12 > div.t001-header.aem-GridColumn > header.header__container.font-lato",
+              "clsShare": 0.0145,
+              "shifts": 13,
+              "grewEvents": 13
+            },
+            {
+              "node": "div#container-e87494c30d > div.template-container",
+              "clsShare": 0.0136,
+              "shifts": 1,
+              "grewEvents": 0
+            },
+            {
+              "node": "section.cookies__container.font-lato > div.cookies__wrapper > div.cookies__head > p.cookies__title.font-inter > span.icons__flag",
+              "clsShare": 0.0078,
+              "shifts": 1,
+              "grewEvents": 0
+            },
+            {
+              "node": "div.cookies__wrapper > div.cookies__head > p.cookies__title.font-inter > span.icons__flag > ::before",
+              "clsShare": 0.0078,
+              "shifts": 1,
+              "grewEvents": 1
+            },
+            {
+              "node": "div#container-e9f5f640c2 > div.aem-Grid.aem-Grid--12 > div.container.responsivegrid",
+              "clsShare": 0.005,
+              "shifts": 1,
+              "grewEvents": 0
+            },
+            {
+              "node": "div#capa_topo_header_1",
+              "clsShare": 0.005,
+              "shifts": 2,
+              "grewEvents": 0
+            },
+            {
+              "node": "div#lottery-carousel-drag > ul.lottery-carousel__list > li.lottery-carousel__item",
+              "clsShare": 0.004,
+              "shifts": 6,
+              "grewEvents": 0
+            },
+            {
+              "node": "div#container-32e9778d0f > div.aem-Grid.aem-Grid--12 > div.popup-notificacao.aem-GridColumn > div.notification-modal.font-inter > p.notification-modal__description",
+              "clsShare": 0.0015,
+              "shifts": 1,
+              "grewEvents": 0
+            },
+            {
+              "node": "div#container-32e9778d0f > div.aem-Grid.aem-Grid--12 > div.popup-notificacao.aem-GridColumn > div.notification-modal.font-inter > div.notification-modal__actions",
+              "clsShare": 0.0015,
+              "shifts": 1,
+              "grewEvents": 1
+            },
+            {
+              "node": "section.header__submenu > div.header__submenu__content.has-desktop-width > div.header__submenu__content--item > a > h2",
+              "clsShare": 0.0012,
+              "shifts": 5,
+              "grewEvents": 0
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

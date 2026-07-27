@@ -1,197 +1,97 @@
-# Web Page Performance Analysis Agent
+# cwv-agent
 
-A comprehensive tool for analyzing Core Web Vitals (CWV) performance and generating actionable optimization suggestions with AI-powered insights.
+A Core Web Vitals performance-fixing toolkit for agentic CLIs (Claude Code,
+Codex, and friends): skills, a curated knowledge base, and a deterministic
+Puppeteer-based measurement harness that applies patch bundles at the CDP
+Fetch layer and proves every fix with a statistical oracle.
 
-## ✨ Features
+**V3** is a ground-up rework: the LangChain pipeline of V1/V2 is replaced by
+markdown skills your agentic CLI executes directly, and prose suggestions are
+replaced by reproduced, negative-controlled, oracle-validated findings with
+ready-to-land diffs.
 
-- 🔍 **Performance Data Collection**: Automated CrUX data, PSI audits, and HAR file generation
-- 🤖 **AI-Powered Analysis**: Generate detailed optimization recommendations using advanced LLM models
-- 📱 **Multi-Device Support**: Analyze both mobile and desktop performance
-- 🎯 **Interactive Review**: Built-in MCP reviewer for Cursor IDE integration
-- ☁️ **SpaceCat Integration**: Direct upload of approved suggestions to SpaceCat platform
-- 📊 **Flexible Caching**: Smart caching to avoid redundant API calls
+## The loop
 
-## 🚀 Quick Start
-
-### Installation
-
-```bash
-npm install
+```
+cwv-diagnose  →  cwv-fix  →  cwv-validate  →  cwv-report
 ```
 
-### Environment Setup
+1. **Diagnose** — measure the live URL under a fixed lab profile, attribute
+   the failing metric to a mechanism (reproduce + negative control before any
+   root-cause claim), and consult the per-issue-type playbooks.
+2. **Fix** — express the hypothesis as a `patches.json` the launcher applies
+   at the CDP Fetch layer (preloads, markup mutations, header rewrites,
+   blocking, body rewrites) and A/B it against baseline.
+3. **Validate** — N≥15-run baseline-vs-treatment comparison scored by a
+   numeric oracle (IQR overlap, minimum-impact floors, A/A reliability
+   gates) — the verdict is the oracle's, not the agent's.
+4. **Report** — assemble the handoff: unified diffs from `sourceEdits`, the
+   ownership verdict (platform, site code, or third party?), honest
+   validation claims, and the full artifact manifest.
 
-Create a `.env` file with your API keys:
+`cwv-triage` (optional, CrUX/PSI) picks the highest-leverage URLs first, and
+`cwv-orchestrate` runs the loop autonomously across ranked candidates.
 
-```env
-# Core APIs
-GOOGLE_CRUX_API_KEY=your_crux_api_key
-GOOGLE_PAGESPEED_INSIGHTS_API_KEY=your_psi_api_key
+## Quick start
 
-# For Gemini
-GOOGLE_APPLICATION_CREDENTIALS=path/to/credentials.json
-
-# OpenAI Models
-AZURE_OPENAI_API_DEPLOYMENT_NAME=...
-AZURE_OPENAI_API_INSTANCE_NAME=...
-AZURE_OPENAI_API_KEY=...
-AZURE_OPENAI_API_VERSION=...
+```
+# Use Node 20+; nvm users can run `nvm use`.
+npm ci
+npm run setup
+npm run doctor
+node .agents/scripts/launcher.js --help
+node .agents/scripts/launcher.js --url https://example.com --no-scroll --output /tmp/cwv-smoke.json
+npm run artifacts -- --progress progress/example-com --output progress/example-com/artifacts-manifest.json
 ```
 
-### Basic Usage
+This runs the default `local` profile: no `.env` and no API keys required.
+The first install downloads Puppeteer's pinned Chromium (~150MB); a portable
+`postinstall` script copies the web-vitals v4 attribution IIFE into
+`.agents/scripts/vendor/` so the harness can inject it into every page.
 
-```bash
-# Quick analysis with AI suggestions
-node index.js --action prompt --url "https://example.com"
+## Execution profiles
 
-# Collect raw performance data
-node index.js --action collect --url "https://example.com" --device mobile
+`local` is the default. Optional profiles add provider integrations without
+changing the local loop's contract; environment variables never activate a
+provider by themselves.
 
-# Start interactive MCP reviewer, but cursor should do it for you automatically
-node index.js --action mcp-reviewer
-```
+| Profile | Role | Prerequisites |
+|---------|------|---------------|
+| `local` | In-repo measurement, diagnosis, patching, oracle validation, and artifact handoff. | Node >=20, `npm ci`, target URL access. Optional local source checkout for source edits. |
+| `field-google` | CrUX + PageSpeed Insights triage. | `GOOGLE_CRUX_API_KEY`, `GOOGLE_PAGESPEED_INSIGHTS_API_KEY` in `.env`. |
+| `stealth-headful` | Headful Chrome measurement for bot-protected pages. | A local Chrome install; explicit opt-in. |
 
-## 📋 Available Actions
+`npm run doctor -- --profile <name>` reports readiness without writes;
+`npm run setup -- --profile <name>` adds safe local setup steps.
 
-| Action | Description | Example |
-|--------|-------------|---------|
-| `collect` | Collect raw performance data (CrUX, PSI, HAR) | `--action collect --url example.com` |
-| `prompt` | Generate AI-powered optimization suggestions | `--action prompt --url example.com` |
-| `rules` | Apply predefined performance rules | `--action rules --url example.com` |
-| `agent` | Run the full AI agent workflow (multi-agent) | `--action agent --url example.com` |
-| `mcp-reviewer` | Start interactive suggestion reviewer | `--action mcp-reviewer` |
+## What's inside
 
-## 🎛️ Command Line Options
+| Area | Contents |
+|------|----------|
+| `.agents/skills/` | The 8 skills (`cwv-setup`, `cwv-triage`, `cwv-analyze`, `cwv-diagnose`, `cwv-fix`, `cwv-validate`, `cwv-report`, `cwv-orchestrate`). |
+| `.agents/scripts/` | The harness: `launcher.js` (CDP patch engine), `oracle.js` (statistical verdicts), analyzers (coverage, images, HTML structure, waterfall, RUM correlation), `source-mapper.js` (patch → source edits), `fix-classifier.js`, `local-artifacts.js`. |
+| `.agents/references/playbooks/` | 19 per-issue-type remediation playbooks with enforceable front matter (`forbidden_techniques`, `required_validation`, typed `see_also` graph). |
+| `.agents/references/metrics/`, `topics/` | Per-metric runbooks and methodology docs. |
+| `.agents/references/stacks/` | Pluggable per-stack knowledge packs (ships with a WordPress example; see `_FORMAT.md`). |
 
-```bash
-node index.js [options]
+For the *why* behind each metric and technique, see the companion
+[performance-runbooks](https://github.com/ramboz/performance-runbooks).
 
-Options:
-  --action, -a     Action to perform [collect|prompt|rules|agent|mcp-reviewer]
-  --url, -u        URL to analyze
-  --urls           Path to JSON file with multiple URLs
-  --device, -d     Device type [mobile|desktop] (default: mobile)
-  --skip-cache, -s Skip cached data and force new collection
-  --model, -m      LLM model to use (default: gemini-2.5-pro-preview-05-06)
-  --output-suffix  Suffix for output files
-  --block-requests Block specific requests (comma-separated)
-  --help           Show help
-```
+## Design principles
 
-## 🤖 Supported AI Models
+- **Mechanism before fix.** No `rootCause: true` without reproduction, a
+  negative control, and a discriminating test.
+- **The oracle decides.** Verdicts come from a numeric comparison
+  (`VALIDATED` / `REGRESSION` / `INCONCLUSIVE` / `NO_OP` / `UNRELIABLE` /
+  `manual-review`), never from self-assessment.
+- **Field-faithful lab.** Cold cache by default, consent + scroll handling,
+  desktop viewport at 1350×940 (Lighthouse parity), and viewport
+  comparability gates so stale artifacts can't fake a win.
+- **Honest claims.** A lab delta is not a deployment. The validation-claim
+  ladder (`runtime` / `deployment`) keeps handoff language truthful.
+- **Local-first.** Everything runs from this repo against a public URL; the
+  handoff is files, branches, and diffs — no external service required.
 
-### Gemini Models (via Vertex AI)
-- `gemini-2.5-pro-preview-05-06` (default, recommended)
-- `gemini-2.5-flash-preview-05-20` (faster, less detailed)
+## License
 
-### OpenAI Models (via Azure)
-- `gpt-5` (latest GPT-5 model)
-- `gpt-4o` (GPT-4 model)
-- `gpt-4.1` (previous version)
-
-### Claude Models (via AWS Bedrock)
-- `claude-3-7-sonnet-20250219` (coming soon)
-
-## 🎯 Interactive MCP Reviewer
-
-The CWV Agent includes a powerful MCP (Model Context Protocol) reviewer for interactive suggestion management within Cursor IDE.
-
-**📖 For complete setup instructions, see: [MCP-REVIEWER-GUIDE.md](./MCP-REVIEWER-GUIDE.md)**
-
-## 📁 Workflow Examples
-
-### Single URL Analysis
-```bash
-# Complete analysis workflow
-node index.js --action prompt --url "https://www.qualcomm.com" --device mobile
-```
-
-### Agent Modes (multi-agent)
-```bash
-# Conditional multi-agent (PSI-gated; only runs heavy agents like HAR/Coverage/Code when needed)
-node index.js --action agent --url "https://example.com" --device mobile
-```
-
-### Batch Processing
-Create `urls.json`:
-```json
-[
-  "https://example.com",
-  "https://example.org",
-  "https://example.net"
-]
-```
-
-Run batch analysis:
-```bash
-node index.js --action prompt --urls urls.json --device mobile
-```
-
-### Force Fresh Data
-```bash
-# Skip cache and collect new data
-node index.js --action prompt --url "https://example.com" --skip-cache
-```
-
-## 📊 Output Files
-
-The tool generates files in the `.cache/` directory:
-
-| File Type | Description | Example |
-|-----------|-------------|---------|
-| `*.performance.json` | Raw performance data | `example-com.mobile.performance.json` |
-| `*.suggestions.*.json` | AI-generated suggestions | `example-com.mobile.suggestions.gemini25pro.json` |
-| `*.report.*.summary.md` | AI-generated markdown report | `example-com.mobile.report.agent.gpt5.summary.md` |
-| `*.har` | HTTP Archive files | `example-com.mobile.har` |
-| `*.report.json` | Complete analysis reports | `example-com.mobile.report.json` |
-
-## 🔧 Advanced Features
-
-### Custom Models
-```bash
-# Use different AI model
-node index.js --action prompt --url example.com --model gpt-4o
-```
-
-### Request Blocking
-```bash
-# Block analytics and ads during collection
-node index.js --action collect --url example.com --block-requests "google-analytics,facebook"
-```
-
-### Visualization
-```bash
-# Start local server for report visualization
-npx live-server --mount=/.cache:./.cache
-
-# Open visualization UI
-open http://127.0.0.1:8080/ui/index.html?report=/.cache/example-com.mobile.report.json
-```
-
-
-## 🔍 Data Collection Details
-
-### What Gets Collected
-- **CrUX Data**: Real user experience metrics from Chrome UX Report
-- **PSI Audit**: PageSpeed Insights performance audit
-- **HAR Files**: Complete HTTP archive of page load
-- **Performance Entries**: Browser performance API data
-- **First-Party Code**: JavaScript and CSS files for analysis
-
-### Cache Strategy
-- Results cached by URL and device type
-- Use `--skip-cache` to force fresh data collection
-- Cache files stored in `.cache/` directory
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/amazing-feature`
-3. Make your changes and test thoroughly
-4. Commit your changes: `git commit -m 'Add amazing feature'`
-5. Push to the branch: `git push origin feature/amazing-feature`
-6. Open a Pull Request
-
----
-
-**Built with ❤️ for better web performance**
+MIT

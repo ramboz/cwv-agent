@@ -1,0 +1,74 @@
+{
+  "schemaVersion": "1.0",
+  "skill": "cwv-diagnose",
+  "url": "https://news.example.com/",
+  "timestamp": "2026-06-09T12:00:00.000Z",
+  "findings": [
+    {
+      "schemaVersion": "1.0",
+      "id": "diagnose-cls-c6-1",
+      "timestamp": "2026-06-09T12:00:00.000Z",
+      "url": "https://news.example.com/",
+      "skill": "cwv-diagnose",
+      "source": "perf_observer",
+      "metric": ["CLS"],
+      "type": "opportunity",
+      "severity": "high",
+      "rootCause": true,
+      "cause": "Lab observed a 0.247 layout shift at 1180ms caused by \".cookies__container\"; \"main.template-container\" moved as a result, loadState=complete.",
+      "evidence": [
+        {
+          "kind": "cwv-attribution",
+          "metric": "CLS",
+          "data": {
+            "valueMs": 0,
+            "score": 0.247,
+            "startTime": 1180,
+            "target": ".cookies__container",
+            "previousRect": { "x": 0, "y": 560, "width": 360, "height": 0 },
+            "currentRect": { "x": 0, "y": 220, "width": 360, "height": 340 },
+            "movedTarget": "main.template-container",
+            "shiftWithoutGrowth": false,
+            "otherTargets": ["main.template-container", "div.t001-header"],
+            "loadState": "complete"
+          }
+        }
+      ],
+      "recommendation": "Reserve space for \".cookies__container\" before it grows. If it's an image, set explicit width/height or aspect-ratio. If it's a late-injected banner/ad/embed (header promo, cookie bar, alert), pre-render a placeholder of the final dimensions. If it's a web-font swap, use font-display: optional or preload the font.",
+      "patches": {
+        "markup": [
+          { "selector": ".cookies__container", "attrs": { "style": "min-height:340px" } }
+        ]
+      },
+      "confidence": 0.85,
+      "impactReduction": { "metric": "CLS", "score": 0.247 },
+      "status": "proposed",
+      "mergedSources": ["perf_observer"]
+    },
+    {
+      "schemaVersion": "1.0",
+      "id": "diagnose-lcp-c2-2",
+      "timestamp": "2026-06-09T12:00:00.000Z",
+      "url": "https://news.example.com/",
+      "skill": "cwv-diagnose",
+      "source": "rum",
+      "metric": ["LCP"],
+      "type": "bottleneck",
+      "severity": "high",
+      "rootCause": true,
+      "cause": "Render-blocking third-party script gtag/js from googletagmanager.com competes with the LCP image on the critical path.",
+      "evidence": [
+        {
+          "kind": "resource-timing",
+          "data": { "url": "https://www.googletagmanager.com/gtag/js?id=GTM-XXXX", "startTime": 120, "transferSize": 92000, "renderBlockingStatus": "blocking", "type": "script" }
+        }
+      ],
+      "recommendation": "Defer or async-load the tag manager bootstrap; move it off the critical path.",
+      "patches": { "markup": [ { "selector": "script[src*=\"googletagmanager.com\"]", "attrs": { "defer": "" } } ] },
+      "confidence": 0.85,
+      "impactReduction": { "metric": "LCP", "valueMs": 600 },
+      "status": "proposed",
+      "mergedSources": ["rum", "har"]
+    }
+  ]
+}

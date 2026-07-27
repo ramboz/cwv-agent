@@ -1,0 +1,10 @@
+{
+  "name": "cwv-agent",
+  "version": "3.0.0",
+  "description": "Core Web Vitals performance-fixing toolkit: diagnose, fix, validate, and report CWV issues with a deterministic lab harness and a statistical oracle.",
+  "author": { "name": "Julien Ramboz", "url": "https://github.com/ramboz" },
+  "homepage": "https://github.com/ramboz/cwv-agent",
+  "repository": "https://github.com/ramboz/cwv-agent",
+  "license": "MIT",
+  "keywords": ["core-web-vitals", "performance", "lcp", "cls", "inp", "puppeteer", "lighthouse"]
+}
